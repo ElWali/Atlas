@@ -1,9 +1,8 @@
 /*!
  * Atlas.js — MIT License
- * A civilized, high-performance, interactive mapping engine with inertia,
- * fractional zoom, full RTL support, popups, tiles, GeoJSON, and more.
+ * Atlas.js is a JavaScript library for map display and interaction.
  *
- * Author: Atlasian!
+ * Author: Atlasian! from Tarfaya.
  * License: MIT
  */
 
