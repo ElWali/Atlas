@@ -5,17 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Atlas: A Borderless Atlas of Earth</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
     body { margin: 0; padding: 0; }
     #map { height: 100vh; width: 100vw; }
+    .legend {
+      background: white;
+      padding: 8px;
+      line-height: 1.4;
+      font-size: 14px;
+      border-radius: 5px;
+    }
+    .legend span {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      margin-right: 6px;
+      border: 1px solid black;
+    }
+    .info {
+      background: white;
+      padding: 6px 8px;
+      font-size: 14px;
+      border-radius: 5px;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Leaflet library -->
+  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Your custom script -->
+  <!-- Geocoder Search -->
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <!-- Custom map logic -->
   <script src="atlas.js"></script>
 </body>
 </html>
