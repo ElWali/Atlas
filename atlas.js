@@ -8,7 +8,7 @@ const map = L.map('map', {
 // === ESRI Satellite Base Layer ===
 const esriLayer = L.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-  { maxZoom: 18, attribution: 'Tiles © Esri &mdash; Earthstar Geographics' }
+  { maxZoom: 20, attribution: 'Tiles © Esri &mdash; Earthstar Geographics' }
 ).addTo(map);
 
 // === Overlays (default off) ===
