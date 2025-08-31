@@ -1,88 +1,37 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Esri Imagery Map - Google Maps UX</title>
     <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no" />
-    <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+    <title>Basemap Gallery component | Sample | ArcGIS Maps SDK for JavaScript 4.33</title>
     <style>
-      html, body, #viewDiv {
+      html,
+      body {
         padding: 0;
         margin: 0;
         height: 100%;
         width: 100%;
       }
     </style>
-    <script src="https://js.arcgis.com/4.29/"></script>
+    <!-- Load Calcite components from CDN -->
+    <script type="module" src="https://js.arcgis.com/calcite-components/3.2.1/calcite.esm.js"></script>
+
+    <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.33/"></script>
+
+    <!-- Load Map components from CDN-->
+    <script type="module" src="https://js.arcgis.com/4.33/map-components/"></script>
   </head>
+
   <body>
-    <div id="viewDiv"></div>
-    <script>
-      require([
-        "esri/Map",
-        "esri/views/MapView",
-        "esri/widgets/BasemapToggle",
-        "esri/widgets/Search",
-        "esri/widgets/Locate",
-        "esri/widgets/Zoom",
-        "esri/widgets/ScaleBar"
-      ], function(Map, MapView, BasemapToggle, Search, Locate, Zoom, ScaleBar) {
-
-        // 1. Create the map with Esri's imagery basemap
-        var map = new Map({
-          basemap: "satellite" // Esri's imagery basemap
-        });
-
-        // 2. Create the view
-        var view = new MapView({
-          container: "viewDiv",
-          map: map,
-          center: [-98, 39], // USA center
-          zoom: 4
-        });
-
-        // 3. Add Google Maps-like UX widgets
-
-        // Search bar (like Google Maps)
-        var searchWidget = new Search({
-          view: view
-        });
-        view.ui.add(searchWidget, {
-          position: "top-right",
-          index: 0
-        });
-
-        // Locate button (find my location)
-        var locateWidget = new Locate({
-          view: view
-        });
-        view.ui.add(locateWidget, {
-          position: "top-left"
-        });
-
-        // Zoom in/out buttons
-        var zoomWidget = new Zoom({
-          view: view
-        });
-        view.ui.add(zoomWidget, "top-left");
-
-        // Basemap toggle (satellite <-> streets)
-        var basemapToggle = new BasemapToggle({
-          view: view,
-          nextBasemap: "streets-navigation-vector"
-        });
-        view.ui.add(basemapToggle, "bottom-right");
-
-        // Scale bar
-        var scaleBar = new ScaleBar({
-          view: view,
-          unit: "dual"
-        });
-        view.ui.add(scaleBar, {
-          position: "bottom-left"
-        });
-
-      });
-    </script>
+    <arcgis-scene
+      basemap="topo-3d"
+      camera-position="-74.034237, 40.691732, 1620"
+      camera-tilt="57"
+      camera-heading="57">
+      <arcgis-zoom position="top-left"></arcgis-zoom>
+      <arcgis-basemap-gallery position="top-right"></arcgis-basemap-gallery>
+    </arcgis-scene>
   </body>
 </html>
