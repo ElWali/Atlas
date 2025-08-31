@@ -1,5 +1,6 @@
 /*!
- * Atlas.js v3.5 — Advanced Modular Mapping Engine
+ * Lightweight JavaScript library for creating interactive maps 🇲🇦 
+ * Atlas.js v0.1
  * Author: ElWali ElAlaoui (Atlasian from Tarfaya)
  * License: MIT
  */
