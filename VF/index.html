@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Atlas.js Demo</title>
+  <style>
+    /* Give the map a size so it actually shows up */
+    #map {
+      width: 100%;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Load your Atlas.js script -->
+  <script src="atlas.js"></script>
+  <script>
+    // Create the map
+    const map = new Atlas.Map("map", {
+      center: [33.6, -7.6], // Casablanca 🇲🇦
+      zoom: 6
+    });
+
+    // Add a tile layer (OpenStreetMap)
+    const osmLayer = new Atlas.TileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    });
+    map.addLayer(osmLayer);
+
+    // Add a draggable marker
+    const marrakechMarker = new Atlas.Marker([31.63, -8.00], {
+      title: "Marrakech",
+      draggable: true,
+      popup: "Welcome to Marrakech! 🌴✨"
+    });
+    map.addMarker(marrakechMarker);
+
+    // Fit the bounds to Morocco-ish area
+    map.fitBounds([[27.6, -13.0], [35.9, -1.0]]);
+
+    // Hook example: log when tiles load
+    map.on("viewchange", e => {
+      console.log("View changed:", e.center, "Zoom:", e.zoom);
+    });
+  </script>
+</body>
+</html>
