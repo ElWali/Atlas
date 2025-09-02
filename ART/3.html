@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Zoomable Artworks – IIIF Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin:0; 
+      padding:0; 
+      background:#111; 
+      font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+      color:#eee;
+    }
+    #map { width:100vw; height:100vh; background:#000; }
+
+    .title-bar {
+      position: absolute;
+      top:20px;
+      left:50%;
+      transform: translateX(-50%);
+      background: rgba(15,15,15,0.82);
+      color:#f5f5f5;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 15px;
+      letter-spacing:0.3px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+      backdrop-filter: blur(6px);
+      z-index:9999;
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+    .title-bar label { font-size: 14px; }
+    .title-bar select {
+      background: #222;
+      color: #f5f5f5;
+      border: 1px solid #666;
+      border-radius: 4px;
+      font-size: 14px;
+      padding: 2px 6px;
+    }
+    .leaflet-popup-content-wrapper {
+      background: #faf8f3;
+      border-radius: 6px;
+      border: 1px solid #e0dfd8;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .leaflet-popup-tip { background: #faf8f3; }
+    .leaflet-popup-content {
+      font-size: 14px;
+      color:#333;
+      font-family: "Georgia", serif;
+    }
+    .leaflet-control-zoom a {
+      background: rgba(0,0,0,0.65);
+      color: #fafafa;
+      border:none;
+      border-radius:4px;
+    }
+    .leaflet-control-zoom a:hover {
+      background:#d2b48c;
+      color:#111;
+    }
+    .leaflet-control-attribution {
+      background: rgba(0,0,0,0.5);
+      color:#ccc;
+      font-size:11px;
+      border-radius:3px;
+      padding:2px 6px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="title-bar">
+    <label for="artSelect">Choose Artwork:</label>
+    <select id="artSelect">
+      <option value="cimabue" selected>
+        Cimabue Workshop – Madonna and Child Enthroned with Angels (ca. 1290)
+      </option>
+      <option value="seurat">
+        Seurat – Study for "A Sunday on La Grande Jatte" (ca. 1884)
+      </option>
+    </select>
+  </div>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+
+  <script>
+    // Artwork IIIF sources
+    const artworks = {
+      cimabue: {
+        title: "Cimabue Workshop – Madonna and Child Enthroned with Angels (ca. 1290)",
+        iiif: "https://images.metmuseum.org/CRDImages/ep/original/DP-18379-001.info.json",
+        annotations: [
+          {coords: [3000, 1500], text: "<b>Virgin Mary</b><br/>Byzantine halo, golden backdrop."},
+          {coords: [3600, 1550], text: "<b>Christ Child</b><br/>Tender gesture, Byzantine tradition."},
+          {polygon: [
+            [4200, 600],[4600, 600],[4600, 1100],[4200, 1100]
+          ], text: "<b>Angel detail</b><br/>Note gilded wing inscriptions."}
+        ]
+      },
+      seurat: {
+        title: "Georges Seurat – Study for A Sunday on La Grande Jatte (ca. 1884)",
+        iiif: "https://images.metmuseum.org/CRDImages/ep/original/DT1878.info.json",
+        annotations: [
+          {coords: [2000, 1400], text:"<b>Figure Study</b><br/>Pointillist stroke exploration."},
+          {coords: [2600, 2200], text:"<b>Trees</b><br/>Experiment with dappled light."}
+        ]
+      }
+    };
+
+    // Initialize map
+    const map = L.map('map', {
+      center: [0, 0],
+      crs: L.CRS.Simple,
+      zoom: 0,
+      minZoom: -3,
+      maxZoom: 8,
+      zoomControl: true
+    });
+
+    let iiifLayer, annotationLayer;
+
+    // Load selected artwork
+    function loadArtwork(key) {
+      const art = artworks[key];
+      if (!art) return;
+      
+      // Remove existing
+      if (iiifLayer) map.removeLayer(iiifLayer);
+      if (annotationLayer) annotationLayer.clearLayers();
+
+      // Load new IIIF layer
+      iiifLayer = L.tileLayer.iiif(art.iiif, {
+        fitBounds: true,
+        setMaxBounds: true
+      }).addTo(map);
+
+      annotationLayer = L.layerGroup().addTo(map);
+
+      iiifLayer.on("load", () => {
+        map.fitBounds(iiifLayer.getBounds());
+        map.setMaxBounds(iiifLayer.getBounds());
+        
+        // Add annotations
+        art.annotations.forEach(a => {
+          if (a.coords) {
+            L.marker(a.coords).bindPopup(a.text).addTo(annotationLayer);
+          } else if (a.polygon) {
+            L.polygon(a.polygon, {color:"gold",weight:2,fillOpacity:0.2})
+              .bindPopup(a.text).addTo(annotationLayer);
+          }
+        });
+      });
+    }
+
+    // Populate default
+    loadArtwork("cimabue");
+
+    // Listen to dropdown change
+    document.getElementById("artSelect").addEventListener("change", e => {
+      loadArtwork(e.target.value);
+    });
+
+    // Attribution
+    map.attributionControl.addAttribution(
+      'Images © <a href="https://www.metmuseum.org/art/collection" target="_blank">The Met</a>'
+    );
+
+  </script>
+</body>
+</html>
