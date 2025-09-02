@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Zoomable Artworks – IIIF Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin:0;
+      padding:0;
+      background:#f8f8f8;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      color:#222;
+    }
+    #map { width:100vw; height:100vh; background:#fff; }
+
+    .title-bar {
+      position:absolute;
+      top:20px;
+      left:50%;
+      transform:translateX(-50%);
+      background: rgba(255,255,255,0.95);
+      border:1px solid #ddd;
+      color:#222;
+      padding:10px 18px;
+      border-radius:6px;
+      font-size:14px;
+      box-shadow:0 2px 8px rgba(0,0,0,0.15);
+      z-index:9999;
+      display:flex;
+      align-items:center;
+      gap:15px;
+      backdrop-filter: blur(6px);
+    }
+    .title-bar strong {
+      display:block;
+      font-size:15px;
+      margin-bottom:3px;
+    }
+    .title-bar span {
+      font-size:12px;
+      opacity:0.7;
+    }
+    .title-bar select {
+      background:#fff;
+      border:1px solid #ccc;
+      font-size:14px;
+      padding:2px 6px;
+      border-radius:4px;
+    }
+
+    .leaflet-popup-content-wrapper {
+      background:#fff;
+      border:1px solid #ccc;
+      border-radius:6px;
+      box-shadow:0 2px 5px rgba(0,0,0,0.15);
+    }
+    .leaflet-popup-content {
+      font-size:13px;
+      color:#333;
+      font-family:"Georgia", serif;
+    }
+    .leaflet-control-zoom a {
+      background:#fff !important;
+      border:1px solid #ccc;
+      color:#222 !important;
+    }
+    .leaflet-control-zoom a:hover { background:#eee !important; }
+    .leaflet-control-attribution {
+      background:rgba(255,255,255,0.7);
+      color:#333;
+      border-radius:3px;
+      font-size:11px;
+      padding:2px 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="title-bar" id="titleBar">
+    <!-- dynamic metadata will be injected here -->
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+  <script>
+    // --- Artwork definitions ---
+    const artworks = {
+      cimabue: {
+        iiif: "https://images.metmuseum.org/CRDImages/ep/original/DP-18379-001.info.json",
+        objectID: 436121,
+        annotations: [
+          {coords: [3000, 1500], text: "<b>Virgin Mary</b><br/>Byzantine halo, golden backdrop."},
+          {coords: [3600, 1550], text: "<b>Christ Child</b><br/>Tender gesture, Byzantine tradition."}
+        ]
+      },
+      seurat: {
+        iiif: "https://images.metmuseum.org/CRDImages/ep/original/DT1878.info.json",
+        objectID: 437654,
+        annotations: [
+          {coords:[2000,1400], text:"<b>Figure Study</b><br/>Pointillist brushwork experiment."}
+        ]
+      },
+      vangogh: {
+        iiif: "https://images.metmuseum.org/CRDImages/ep/original/DT1567.info.json",
+        objectID: 436535,
+        annotations: [
+          {coords:[2500,1800], text:"<b>Cypresses</b><br/>Animated brushstrokes."},
+          {coords:[3200,2300], text:"<b>Wheat Field</b><br/>Dynamic motion conveyed."}
+        ]
+      }
+    };
+
+    const map = L.map('map',{crs:L.CRS.Simple,center:[0,0],zoom:0,zoomControl:true});
+    let iiifLayer, annotationLayer;
+
+    async function loadArtwork(key){
+      const art = artworks[key];
+      if(!art) return;
+
+      // Clear existing
+      if(iiifLayer) map.removeLayer(iiifLayer);
+      if(annotationLayer) annotationLayer.clearLayers();
+
+      // Load IIIF
+      iiifLayer = L.tileLayer.iiif(art.iiif,{fitBounds:true,setMaxBounds:true}).addTo(map);
+      annotationLayer = L.layerGroup().addTo(map);
+
+      iiifLayer.on("load", ()=>{
+        map.fitBounds(iiifLayer.getBounds());
+        map.setMaxBounds(iiifLayer.getBounds());
+        art.annotations.forEach(a=>{
+          L.marker(a.coords).bindPopup(a.text).addTo(annotationLayer);
+        });
+      });
+
+      // Fetch metadata from The Met API
+      try {
+        const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${art.objectID}`);
+        const data = await res.json();
+        renderTitleBar(key, data);
+      } catch(err){
+        console.error("Metadata fetch failed:", err);
+      }
+    }
+
+    function renderTitleBar(selectedKey, data){
+      const div = document.getElementById("titleBar");
+      div.innerHTML = `
+        <div>
+          <strong>${data.title}</strong>
+          ${data.artistDisplayName || "Unknown Artist"} (${data.objectDate || "n.d."})<br/>
+          <span>Accession #: ${data.accessionNumber}</span>
+        </div>
+        <div>
+          <label for="artSelect">Switch:</label>
+          <select id="artSelect">
+            <option value="cimabue" ${selectedKey==="cimabue"?"selected":""}>Cimabue</option>
+            <option value="seurat" ${selectedKey==="seurat"?"selected":""}>Seurat</option>
+            <option value="vangogh" ${selectedKey==="vangogh"?"selected":""}>Van Gogh</option>
+          </select>
+        </div>
+      `;
+      document.getElementById("artSelect").addEventListener("change", e=>loadArtwork(e.target.value));
+    }
+
+    // Initial load
+    loadArtwork("cimabue");
+
+    // Attribution
+    map.attributionControl.addAttribution(
+      'Data & Images © <a href="https://www.metmuseum.org/art/collection" target="_blank">The Met</a>'
+    );
+  </script>
+</body>
+</html>
