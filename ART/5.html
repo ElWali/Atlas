@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Starry Night Explorer City</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+    }
+    header {
+      padding: 1em;
+      text-align: center;
+      background: #222;
+    }
+    h1 {
+      margin: 0;
+      color: #ffcc00;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 1em;
+      padding: 1em;
+      background: #1a1a1a;
+    }
+    .controls button {
+      padding: 0.6em 1.2em;
+      border: none;
+      border-radius: 5px;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background 0.2s;
+    }
+    .controls button.active {
+      background: #ffcc00;
+      color: #000;
+    }
+    .controls button:hover {
+      background: #555;
+    }
+    #map {
+      height: 80vh;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  
+  <header>
+    <h1>Starry Night Explorer</h1>
+    <p>One painting, one city. Wander its districts!</p>
+  </header>
+  
+  <div class="controls">
+    <button class="active" id="overviewBtn">Overview</button>
+    <button id="skyBtn">Swirling Sky</button>
+    <button id="villageBtn">Village Square</button>
+    <button id="cypressBtn">Cypress Tower</button>
+  </div>
+
+  <div id="map"></div>
+  
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/es6-promise"></script>
+  <script src="https://unpkg.com/leaflet-iiif@latest/leaflet-iiif.js"></script>
+  <script>
+    // Create map
+    const map = L.map('map', {
+      center: [0,0],
+      zoom: 0,
+      crs: L.CRS.Simple
+    });
+
+    // Example IIIF info.json (Van Gogh at Harvard, replace with your chosen IIIF source)
+    const iiifUrl = "https://ids.lib.harvard.edu/ids/iiif/25286610/info.json";
+
+    let iiifLayer;
+
+    // Load IIIF
+    fetch(iiifUrl)
+      .then(res => res.json())
+      .then(data => {
+        iiifLayer = L.tileLayer.iiif(iiifUrl, {
+          setMaxBounds: true
+        }).addTo(map);
+
+        const width = data.width;   // image width in px
+        const height = data.height; // image height in px
+
+        // === Add POIs (markers) like city landmarks ===
+        const pointsOfInterest = [
+          {
+            coords: [height*0.25, width*0.7],
+            title: "Swirling Sky",
+            description: "The vibrant uptown sky—Van Gogh’s nightlife district."
+          },
+          {
+            coords: [height*0.75, width*0.3],
+            title: "Village Square",
+            description: "The quiet downtown where rooftops sleep beneath the stars."
+          },
+          {
+            coords: [height*0.6, width*0.1],
+            title: "Cypress Tower",
+            description: "A looming skyscraper of nature—our city’s green monument."
+          }
+        ];
+
+        pointsOfInterest.forEach(p => {
+          L.marker(p.coords).addTo(map)
+            .bindPopup(`<h3>${p.title}</h3><p>${p.description}</p>`);
+        });
+
+        // === Navigation Buttons (flyTo specific regions) ===
+        const buttons = {
+          overviewBtn: { coords: [height/2, width/2], zoom: 0 },
+          skyBtn:     { coords: [height*0.25, width*0.7], zoom: 2 },
+          villageBtn: { coords: [height*0.75, width*0.3], zoom: 2 },
+          cypressBtn: { coords: [height*0.6,  width*0.1], zoom: 3 }
+        };
+
+        Object.keys(buttons).forEach(id => {
+          document.getElementById(id).onclick = () => {
+            map.flyTo(buttons[id].coords, buttons[id].zoom, { duration: 2 });
+            document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+          };
+        });
+      });
+  </script>
+</body>
+</html>
