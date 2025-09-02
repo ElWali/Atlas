@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Zoomable Artwork with Leaflet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body { margin:0; padding:0; }
+    #map { width:100vw; height:100vh; background:#000; }
+    .leaflet-popup-content { font-family: sans-serif; font-size: 14px; }
+    .title-bar {
+      position: absolute;
+      top:10px; left:10px; 
+      background: rgba(30,30,30,0.75); 
+      color:#fff; 
+      padding:6px 12px; 
+      border-radius:4px;
+      font-family: sans-serif;
+      z-index:9999;
+    }
+    .leaflet-popup-content-wrapper {
+      background: rgba(255,250,240,0.95);
+      border-radius: 6px;
+    }
+    .leaflet-popup-tip {
+      background: rgba(255,250,240,0.95);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="title-bar">
+    🎨 Cimabue Workshop – <i>Madonna and Child Enthroned with Angels</i> (ca. 1290)  
+    (Data via The Met’s IIIF service)
+  </div>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- IIIF Plugin -->
+  <script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+
+  <script>
+    // Initialize Leaflet
+    const map = L.map('map', {
+      center: [0, 0],
+      crs: L.CRS.Simple,
+      zoom: 0,
+      minZoom: -2,
+      maxZoom: 8
+    });
+
+    // Correct IIIF info.json for the artwork (The Met)
+    const iiifUrl = 'https://images.metmuseum.org/CRDImages/ep/original/DP-18379-001.info.json';
+
+    // Add IIIF layer
+    L.tileLayer.iiif(iiifUrl, {
+      fitBounds: true
+    }).addTo(map);
+
+    // Add scale (purely decorative here—units remain abstract pixels)
+    L.control.scale({imperial: false, metric: true}).addTo(map);
+
+    // --- Interactive annotation helper ---
+    map.on('click', function(e) {
+      const coords = e.latlng; // pixel coords relative to image
+      console.log("Clicked at:", coords);
+
+      // Drop a marker where clicked, with popup showing coordinates
+      L.marker(coords).addTo(map)
+        .bindPopup("<b>New Annotation</b><br/>Coords: " + 
+                   coords.lat.toFixed(0) + ", " + coords.lng.toFixed(0))
+        .openPopup();
+    });
+
+    // --- Example overlays already placed ---
+    L.marker([3000, 1500]).addTo(map)
+      .bindPopup("<b>Virgin Mary</b><br/>Byzantine halo, golden backdrop.");
+    
+    L.marker([3600, 1550]).addTo(map)
+      .bindPopup("<b>Christ Child</b><br/>Tender gesture, Byzantine tradition.");
+
+    const angelLeft = [
+      [4200, 600],
+      [4600, 600],
+      [4600, 1100],
+      [4200, 1100]
+    ];
+    L.polygon(angelLeft, {color: 'gold', weight:2, fillOpacity:0.2})
+      .addTo(map)
+      .bindPopup("<b>Angel detail</b><br/>Note gilded wing inscriptions.");
+  </script>
+</body>
+</html>
