@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Immersive Artwork Explorer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    html, body { height:100%; margin:0; background:#000; }
+    #map { width:100%; height:100%; }
+
+    /* Overlay UI */
+    .ui-overlay { position:absolute; inset:0; pointer-events:none; }
+    .map-control, .legend { pointer-events:auto; transition:opacity 0.5s; }
+    .hidden { opacity:0; }
+
+    .map-control {
+      position:absolute; top:15px; left:15px;
+      display:flex; flex-direction:column; gap:10px;
+      z-index:9999;
+    }
+    .map-control button {
+      background:rgba(30,30,30,.85);
+      border:none; color:#fff; font-size:16px;
+      padding:8px 12px; border-radius:6px;
+      cursor:pointer; transition:.2s;
+    }
+    .map-control button:hover { background:#5a67d8; }
+
+    .legend {
+      position:absolute; bottom:15px; left:15px;
+      background:rgba(30,30,30,.85); padding:12px;
+      border-radius:6px; font-size:14px; color:#fff;
+      box-shadow:0 2px 6px rgba(0,0,0,.3); z-index:9999;
+    }
+    .legend h3 { margin:0 0 6px; color:#ffd700; font-size:1rem; }
+    .legend-item { display:flex; align-items:center; margin-bottom:6px; cursor:pointer; transition:opacity .3s; }
+    .legend-item:last-child { margin-bottom:0; }
+    .legend-color { width:18px; height:18px; margin-right:8px; border-radius:3px; }
+    .legend-item.inactive { opacity:.4; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="ui-overlay">
+  <div class="map-control">
+    <button id="resetView">↩ Reset</button>
+    <button id="startTour">▶ Tour</button>
+  </div>
+  <div class="legend">
+    <h3>Highlights</h3>
+    <div class="legend-item" data-target="Mary">
+      <div class="legend-color" style="background:#3388ff;"></div> Mary
+    </div>
+    <div class="legend-item" data-target="Child">
+      <div class="legend-color" style="background:#3388ff;"></div> Child
+    </div>
+    <div class="legend-item" data-target="Angel Detail">
+      <div class="legend-color" style="background:gold;"></div> Angel
+    </div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+<script>
+const map = L.map('map',{
+  center:[0,0], crs:L.CRS.Simple,
+  zoom:0, minZoom:-2, maxZoom:8,
+  zoomControl:true
+});
+
+// ✅ Correct IIIF info.json URL
+const iiifUrl='https://iiif-images.metmuseum.org/CRDImages/ep/original/DP-18379-001/info.json';
+
+const iiifLayer=L.tileLayer.iiif(iiifUrl,{fitBounds:false}).addTo(map);
+iiifLayer.on('load',()=>map.fitBounds(iiifLayer.getBounds()));
+
+// === Annotations ===
+const overlays = {
+  "Mary": L.marker([1500,3000]).addTo(map)
+    .bindPopup("<b>Virgin Mary</b><br/>Iconic halo and gilded background."),
+  "Child": L.marker([1550,3600]).addTo(map)
+    .bindPopup("<b>Christ Child</b><br/>Tender gesture, natural folds."),
+  "Angel Detail": L.polygon(
+      [[600,4200],[600,4600],[1100,4600],[1100,4200]],
+      {color:'gold',weight:2,fillOpacity:0.25}
+    ).addTo(map)
+    .bindPopup("<b>Angel Detail</b><br/>Shimmering feathers, decorative detail.")
+};
+
+// Legend toggles
+document.querySelectorAll('.legend-item').forEach(item=>{
+  const key=item.dataset.target;
+  const layer=overlays[key];
+  item.onclick=()=>{
+    if(map.hasLayer(layer)){
+      map.removeLayer(layer); item.classList.add('inactive');
+    } else {
+      map.addLayer(layer); item.classList.remove('inactive');
+    }
+  };
+});
+
+// Reset button
+document.getElementById('resetView').onclick=()=>map.fitBounds(iiifLayer.getBounds());
+
+// Guided tour
+function guidedTour(stops=[...Object.values(overlays)], delay=3000){
+  let i=0;
+  function step(){
+    const l=stops[i];
+    if('getLatLng' in l){map.flyTo(l.getLatLng(),5);} else {map.flyToBounds(l.getBounds(),{maxZoom:5});}
+    if(l.openPopup) l.openPopup();
+    i++;
+    if(i<stops.length) setTimeout(step,delay);
+  }
+  step();
+}
+document.getElementById('startTour').onclick=()=>guidedTour();
+
+// === Immersive auto-hide UI ===
+const ui = document.querySelector('.ui-overlay');
+let hideTimer;
+function showUI(){
+  clearTimeout(hideTimer);
+  ui.classList.remove('hidden');
+  hideTimer = setTimeout(()=>ui.classList.add('hidden'), 3000);
+}
+document.addEventListener('mousemove', showUI);
+document.addEventListener('touchstart', showUI);
+showUI(); // kick off
+</script>
+</body>
+</html>
