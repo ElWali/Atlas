@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Zoomable Artwork with Leaflet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body { margin:0; padding:0; }
+    #map { width:100vw; height:100vh; background:#000; }
+    .leaflet-popup-content { font-family: sans-serif; font-size: 14px; }
+    .title-bar {
+      position: absolute;
+      top:10px; left:10px; 
+      background: rgba(30,30,30,0.75); 
+      color:#fff; 
+      padding:6px 12px; 
+      border-radius:4px;
+      font-family: sans-serif;
+      z-index:9999;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="title-bar">
+    🎨 Cimabue Workshop – *Madonna and Child Enthroned with Angels* (ca. 1290)  
+    (Data via The Met’s IIIF service)
+  </div>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- IIIF Plugin -->
+  <script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+
+  <script>
+    // Initialize Leaflet
+    const map = L.map('map', {
+      center: [0, 0],
+      crs: L.CRS.Simple,
+      zoom: 0,
+      minZoom: -2,
+      maxZoom: 8
+    });
+
+    // Artwork IIIF info.json (The Met)
+    // Cimabue Workshop: Madonna and Child Enthroned with Angels
+    // IIIF manifest via Met API, extracting the "tiles/info.json"
+    const iiifUrl = 'https://images.metmuseum.org/CRDImages/ep/original/DP-18379-001.jpg/info.json';
+
+    // Add IIIF layer
+    L.tileLayer.iiif(iiifUrl, {
+      fitBounds: true
+    }).addTo(map);
+
+    // Example interactive overlays
+    // Marker on Madonna's head
+    const mary = L.marker([3000, 1500]).addTo(map)
+      .bindPopup("<b>Virgin Mary</b><br/>Note the iconic Byzantine style halo and gold background.");
+
+    // Marker on child
+    const child = L.marker([3600, 1550]).addTo(map)
+      .bindPopup("<b>The Christ Child</b><br/>Typical tender gesture borrowed from Byzantine models.");
+
+    // Polygon annotation (surrounding an angel on left side)
+    const angelLeft = [
+      [4200, 600],
+      [4600, 600],
+      [4600, 1100],
+      [4200, 1100]
+    ];
+    L.polygon(angelLeft, {color: 'gold', weight:2, fillOpacity:0.2})
+      .addTo(map)
+      .bindPopup("<b>Angel detail</b><br/>Notice the wings carefully inscribed with gilded highlights.");
+
+    // Add scale ruler (1 px → virtual cm just for demo)
+    L.control.scale({imperial: false, metric: true}).addTo(map);
+
+  </script>
+</body>
+</html>
