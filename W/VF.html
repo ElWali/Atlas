@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Atlas.js — Tarfaya Map</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  #map { width: 100%; height: 100%; position: relative; background: #f0f4f8; cursor: grab; touch-action: none; outline: none; }
+  #map.grabbing { cursor: grabbing; }
+
+  .pane { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; }
+  .tilePane { z-index: 100; }
+  .overlayPane { z-index: 200; pointer-events: none; }
+  .popupPane { z-index: 300; pointer-events: none; }
+
+  .tileLayer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; will-change: transform, opacity; transform-origin: 50% 50%; }
+  .tile { position: absolute; width: 256px; height: 256px; image-rendering: pixelated; opacity: 0; transition: opacity 0.2s ease; }
+  .tile.loaded { opacity: 1; }
+
+  .markerPane { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .marker {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    cursor: pointer;
+    font-size: 24px;
+    pointer-events: auto;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    transition: transform 0.2s ease;
+  }
+  .marker:hover { transform: translate(-50%, -105%) scale(1.1); }
+
+  .popup {
+    position: absolute;
+    background: white;
+    padding: 12px 16px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 14px;
+    transform: translate(-50%, -100%);
+    pointer-events: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-width: 280px;
+  }
+  .popup::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -8px;
+    transform: translateX(-50%);
+    border: 8px solid transparent;
+    border-top-color: #ccc;
+    z-index: -1;
+  }
+  .popup .close {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #999;
+    line-height: 18px;
+    text-align: center;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .control {
+    position: absolute;
+    z-index: 1100;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin: 10px;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .zoom-btn {
+    display: block;
+    width: 36px;
+    height: 36px;
+    text-align: center;
+    line-height: 36px;
+    font-weight: bold;
+    font-size: 20px;
+    border: 0;
+    background: none;
+  }
+  .zoom-btn:not(:last-child) { border-bottom: 1px solid #eee; }
+  .zoom-btn:hover { background: #f8f9fa; }
+
+  .attrib {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1100;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+</style>
+</head>
+<body>
+<div id="map" tabindex="0" aria-label="Interactive map"></div>
+
+<script>
+/* =============================
+   COORDINATE REFERENCE SYSTEM
+   ============================= */
+const CRS = {
+  EPSG3857: {
+    project: (lat, lon) => {
+      const x = lon * 20037508.34 / 180;
+      const y = Math.log(Math.tan((90 + lat) * Math.PI / 360)) / (Math.PI / 180);
+      return { x: x * 20037508.34 / 180, y: y * 20037508.34 / 180 };
+    },
+    unproject: (x, y) => {
+      const lon = x * 180 / 20037508.34;
+      let lat = y * 180 / 20037508.34;
+      lat = 180 / Math.PI * (2 * Math.atan(Math.exp(lat * Math.PI / 180)) - Math.PI / 2);
+      return { lat, lon };
+    },
+    scale: (zoom) => 256 * Math.pow(2, zoom),
+    tileSize: 256
+  }
+};
+
+/* ================
+   BASE CLASSES
+   ================ */
+class Layer {
+  onAdd() {}
+  onRemove() {}
+  render() {}
+}
+
+class Control {
+  onAdd() {}
+  onRemove() {}
+  render() {}
+}
+
+/* ===================
+   CORE MAP OBJECT
+   =================== */
+class AtlasMap {
+  constructor(el, { lat = 0, lon = 0, zoom = 2, minZoom = 1, maxZoom = 19 } = {}) {
+    this.container = el;
+    this.lat = lat;
+    this.lon = lon;
+    this.zoom = zoom;
+    this.minZoom = minZoom;
+    this.maxZoom = maxZoom;
+    this.crs = CRS.EPSG3857;
+    this.layers = [];
+    this._needRender = false;
+
+    this._initPanes();
+    this._bindHandlers();
+    this._setupResize();
+    this.invalidate();
+    this.loop();
+  }
+
+  _initPanes() {
+    ["tilePane", "overlayPane", "popupPane"].forEach(cls => {
+      const d = document.createElement("div");
+      d.className = "pane " + cls;
+      this.container.append(d);
+      this[cls] = d;
+    });
+    this.markerPane = document.createElement("div");
+    this.markerPane.className = "markerPane";
+    this.overlayPane.append(this.markerPane);
+  }
+
+  size() {
+    return {
+      width: this.container.clientWidth,
+      height: this.container.clientHeight
+    };
+  }
+
+  setView(lat, lon, z = this.zoom) {
+    // Clamp latitude
+    const maxLat = 85.0511;
+    lat = Math.max(Math.min(lat, maxLat), -maxLat);
+    // Normalize longitude
+    lon = ((lon + 180) % 360 + 360) % 360 - 180;
+    // Clamp zoom
+    z = Math.max(this.minZoom, Math.min(z, this.maxZoom));
+
+    if (lat !== this.lat || lon !== this.lon || z !== this.zoom) {
+      this.lat = lat;
+      this.lon = lon;
+      this.zoom = z;
+      this.invalidate();
+    }
+  }
+
+  panBy(dx, dy) {
+    const z = this.zoom;
+    const scale = this.crs.scale(z);
+    const center = this.crs.project(this.lat, this.lon);
+    let x = center.x + dx / scale;
+    let y = center.y + dy / scale;
+
+    // Wrap X (longitude)
+    const worldWidth = 40075016.686;
+    x = ((x % worldWidth) + worldWidth) % worldWidth;
+
+    const newCenter = this.crs.unproject(x, y);
+    this.setView(newCenter.lat, newCenter.lon, z);
+  }
+
+  pointToLatLng(px, py, z = this.zoom) {
+    const { width, height } = this.size();
+    const scale = this.crs.scale(z);
+    const center = this.crs.project(this.lat, this.lon);
+    const worldX = center.x + (px - width / 2) / scale;
+    const worldY = center.y + (py - height / 2) / scale;
+    return this.crs.unproject(worldX, worldY);
+  }
+
+  latLngToPoint(lat, lon, z = this.zoom) {
+    const { width, height } = this.size();
+    const scale = this.crs.scale(z);
+    const center = this.crs.project(this.lat, this.lon);
+    const p = this.crs.project(lat, lon);
+    return {
+      x: width / 2 + (p.x - center.x) * scale,
+      y: height / 2 + (p.y - center.y) * scale
+    };
+  }
+
+  zoomAt(px, py, newZ) {
+    const anchor = this.pointToLatLng(px, py, this.zoom);
+    newZ = Math.max(this.minZoom, Math.min(newZ, this.maxZoom));
+    const { width, height } = this.size();
+    const scale = this.crs.scale(newZ);
+    const anchorProj = this.crs.project(anchor.lat, anchor.lon);
+    let cx = anchorProj.x - (px - width / 2) / scale;
+    let cy = anchorProj.y - (py - height / 2) / scale;
+
+    // Wrap X
+    const worldWidth = 40075016.686;
+    cx = ((cx % worldWidth) + worldWidth) % worldWidth;
+
+    const newCenter = this.crs.unproject(cx, cy);
+    this.setView(newCenter.lat, newCenter.lon, newZ);
+  }
+
+  addLayer(layer) {
+    layer.onAdd(this);
+    this.layers.push(layer);
+    this.invalidate();
+    return this;
+  }
+
+  removeLayer(layer) {
+    layer.onRemove();
+    this.layers = this.layers.filter(l => l !== layer);
+    this.invalidate();
+    return this;
+  }
+
+  invalidate() {
+    this._needRender = true;
+  }
+
+  loop() {
+    if (this._needRender) {
+      this.layers.forEach(l => l.render?.());
+      this._needRender = false;
+    }
+    requestAnimationFrame(() => this.loop());
+  }
+
+  _setupResize() {
+    const ro = new ResizeObserver(() => this.invalidate());
+    ro.observe(this.container);
+  }
+
+  _bindHandlers() {
+    let dragging = false, lastX = 0, lastY = 0;
+    let pinching = false, pinchStartDist = 0, pinchStartZoom = 0, pinchAnchorLL = null;
+
+    this.container.addEventListener("mousedown", e => {
+      e.preventDefault();
+      this.container.focus();
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      this.container.classList.add("grabbing");
+    });
+
+    this.container.addEventListener("mousemove", e => {
+      if (!dragging) return;
+      const dx = lastX - e.clientX;
+      const dy = lastY - e.clientY;
+      this.panBy(dx, dy);
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+
+    window.addEventListener("mouseup", () => {
+      dragging = false;
+      this.container.classList.remove("grabbing");
+    });
+
+    // Touch support
+    this.container.addEventListener("touchstart", e => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        dragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        pinching = true;
+        dragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartDist = Math.hypot(dx, dy);
+        pinchStartZoom = this.zoom;
+        const rect = this.container.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        pinchAnchorLL = this.pointToLatLng(midX - rect.left, midY - rect.top, this.zoom);
+      }
+    }, { passive: false });
+
+    this.container.addEventListener("touchmove", e => {
+      e.preventDefault();
+      if (pinching && e.touches.length >= 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const scale = dist / pinchStartDist || 1;
+        const newZ = pinchStartZoom + Math.log2(scale);
+        const rect = this.container.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const px = midX - rect.left;
+        const py = midY - rect.top;
+        this.zoomAround(pinchAnchorLL, px, py, newZ);
+      } else if (dragging && e.touches.length === 1) {
+        const dx = lastX - e.touches[0].clientX;
+        const dy = lastY - e.touches[0].clientY;
+        this.panBy(dx, dy);
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      }
+    }, { passive: false });
+
+    this.container.addEventListener("touchend", e => {
+      if (e.touches.length < 2) pinching = false;
+      if (e.touches.length === 0) dragging = false;
+    });
+
+    // Wheel zoom
+    this.container.addEventListener("wheel", e => {
+      e.preventDefault();
+      const rect = this.container.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      const delta = -Math.sign(e.deltaY) * 0.5;
+      this.zoomAt(px, py, this.zoom + delta);
+    }, { passive: false });
+
+    // Double-click zoom
+    this.container.addEventListener("dblclick", e => {
+      e.preventDefault();
+      const rect = this.container.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      this.zoomAt(px, py, this.zoom + 1);
+    });
+
+    // Keyboard
+    this.container.addEventListener("keydown", e => {
+      const step = 150;
+      if (e.key === "ArrowLeft") this.panBy(-step, 0);
+      if (e.key === "ArrowRight") this.panBy(step, 0);
+      if (e.key === "ArrowUp") this.panBy(0, -step);
+      if (e.key === "ArrowDown") this.panBy(0, step);
+      if (e.key === "+" || e.key === "=") this.zoomAt(this.size().width/2, this.size().height/2, this.zoom + 1);
+      if (e.key === "-") this.zoomAt(this.size().width/2, this.size().height/2, this.zoom - 1);
+      if (e.key === "0") this.setView(27.9384, -12.9167, 12); // Reset to Tarfaya
+    });
+  }
+
+  zoomAround(anchorLL, px, py, newZ) {
+    newZ = Math.max(this.minZoom, Math.min(newZ, this.maxZoom));
+    const { width, height } = this.size();
+    const scale = this.crs.scale(newZ);
+    const anchor = this.crs.project(anchorLL.lat, anchorLL.lon);
+    let cx = anchor.x - (px - width / 2) / scale;
+    let cy = anchor.y - (py - height / 2) / scale;
+
+    const worldWidth = 40075016.686;
+    cx = ((cx % worldWidth) + worldWidth) % worldWidth;
+
+    const newCenter = this.crs.unproject(cx, cy);
+    this.setView(newCenter.lat, newCenter.lon, newZ);
+  }
+
+  openPopup(content, lat, lon) {
+    if (!this._popupLayer) {
+      this._popupLayer = new PopupLayer();
+      this.addLayer(this._popupLayer);
+    }
+    return this._popupLayer.open(lat, lon, content);
+  }
+
+  closeAllPopups() {
+    this._popupLayer?.closeAll();
+  }
+}
+
+/* ====================
+   TILE LAYER
+   ==================== */
+class TileLayer extends Layer {
+  constructor(url = "https://tile.openstreetmap.org/{z}/{x}/{y}.png") {
+    super();
+    this.urlTpl = url;
+    this.cache = new Map();
+    this._frameId = 0;
+  }
+
+  onAdd(map) {
+    this.map = map;
+    this.container = document.createElement("div");
+    this.container.className = "tileLayer";
+    map.tilePane.appendChild(this.container);
+  }
+
+  onRemove() {
+    if (this.container) this.container.remove();
+    this.cache.forEach(t => {
+      if (t.objectURL) URL.revokeObjectURL(t.objectURL);
+    });
+    this.cache.clear();
+  }
+
+  url(z, x, y) {
+    return this.urlTpl
+      .replace("{z}", z)
+      .replace("{x}", x)
+      .replace("{y}", y);
+  }
+
+  _getTile(key, url) {
+    let t = this.cache.get(key);
+    if (!t) {
+      const img = new Image();
+      img.className = "tile";
+      img.decoding = "async";
+      img.loading = "eager";
+      img.alt = "";
+
+      t = { key, url, img, loaded: false };
+      this.cache.set(key, t);
+
+      img.onload = () => {
+        img.classList.add("loaded");
+        t.loaded = true;
+      };
+
+      img.onerror = () => {
+        img.style.opacity = "0.5";
+        img.style.filter = "grayscale(1)";
+      };
+
+      // Try fetch first for abort support, fallback to direct
+      this._loadTile(t);
+    }
+    return t;
+  }
+
+  _loadTile(t) {
+    try {
+      const controller = new AbortController();
+      fetch(t.url, { signal: controller.signal }).then(r => {
+        if (!r.ok) throw new Error("Failed");
+        return r.blob();
+      }).then(blob => {
+        const url = URL.createObjectURL(blob);
+        t.img.src = url;
+      }).catch(() => {
+        t.img.src = t.url;
+      });
+    } catch (e) {
+      t.img.src = t.url;
+    }
+  }
+
+  render() {
+    this._frameId++;
+    const { width, height } = this.map.size();
+    const { lat, lon, zoom } = this.map;
+    const z = Math.floor(zoom);
+    const f = zoom - z;
+
+    this.container.style.transform = `scale(${Math.pow(2, f)})`;
+    this.container.style.opacity = "1";
+
+    const center = this.map.crs.project(lat, lon);
+    const scale = this.map.crs.scale(z);
+    const tilesX = Math.ceil(width / 256) + 2;
+    const tilesY = Math.ceil(height / 256) + 2;
+    const startX = Math.floor(center.x / scale - tilesX / 2);
+    const startY = Math.floor(center.y / scale - tilesY / 2);
+    const offX = width / 2 - (center.x / scale - startX) * 256;
+    const offY = height / 2 - (center.y / scale - startY) * 256;
+    const max = Math.pow(2, z);
+
+    for (let x = startX; x < startX + tilesX; x++) {
+      for (let y = startY; y < startY + tilesY; y++) {
+        if (y < 0 || y >= max) continue;
+        const wrappedX = ((x % max) + max) % max;
+        const key = `${z}/${wrappedX}/${y}`;
+        const url = this.url(z, wrappedX, y);
+        const t = this._getTile(key, url);
+
+        if (t.img.parentNode !== this.container) {
+          this.container.appendChild(t.img);
+        }
+
+        const posX = offX + (x - startX) * 256;
+        const posY = offY + (y - startY) * 256;
+        t.img.style.transform = `translate(${posX}px, ${posY}px)`;
+      }
+    }
+  }
+}
+
+/* ====================
+   MARKER LAYER
+   ==================== */
+class MarkerLayer extends Layer {
+  constructor() {
+    super();
+    this.markers = [];
+    this.nodes = [];
+  }
+
+  onAdd(map) {
+    this.map = map;
+    this.container = map.markerPane;
+  }
+
+  onRemove() {
+    this.nodes.forEach(n => n.remove());
+    this.nodes = [];
+  }
+
+  addMarker(lat, lon, text, emoji = "📍") {
+    const marker = { lat, lon, text, emoji };
+    this.markers.push(marker);
+    this.render();
+    return marker;
+  }
+
+  render() {
+    if (!this.container) return;
+
+    // Clear old nodes
+    this.nodes.forEach(n => n.remove());
+    this.nodes = [];
+
+    this.markers.forEach(m => {
+      const pt = this.map.latLngToPoint(m.lat, m.lon);
+      const node = document.createElement("div");
+      node.className = "marker";
+      node.textContent = m.emoji;
+      node.setAttribute("role", "button");
+      node.setAttribute("aria-label", m.text || "Marker");
+
+      node.addEventListener("click", e => {
+        e.stopPropagation();
+        this.map.openPopup(`<b>${m.text}</b>`, m.lat, m.lon);
+      });
+
+      node.style.left = pt.x + "px";
+      node.style.top = pt.y + "px";
+      this.container.appendChild(node);
+      this.nodes.push(node);
+    });
+  }
+}
+
+/* ====================
+   POPUP LAYER
+   ==================== */
+class PopupLayer extends Layer {
+  constructor() {
+    super();
+    this.popups = [];
+  }
+
+  onAdd(map) {
+    this.map = map;
+    this.container = map.popupPane;
+  }
+
+  onRemove() {
+    this.popups.forEach(p => p.node.remove());
+    this.popups = [];
+  }
+
+  open(lat, lon, html) {
+    const node = document.createElement("div");
+    node.className = "popup";
+
+    const content = document.createElement("div");
+    content.innerHTML = html;
+
+    const close = document.createElement("div");
+    close.className = "close";
+    close.textContent = "×";
+    close.onclick = e => {
+      e.stopPropagation();
+      node.remove();
+      this.popups = this.popups.filter(p => p.node !== node);
+    };
+
+    node.append(content, close);
+    node.addEventListener("click", e => e.stopPropagation());
+
+    this.container.appendChild(node);
+    this.popups.push({ lat, lon, node });
+
+    // Position it
+    this.renderOne(node, lat, lon);
+
+    // Auto-pan into view
+    setTimeout(() => {
+      const rect = this.map.container.getBoundingClientRect();
+      const b = node.getBoundingClientRect();
+      let dx = 0, dy = 0;
+      const margin = 20;
+      if (b.right > rect.right - margin) dx = b.right - (rect.right - margin);
+      if (b.left < rect.left + margin) dx = b.left - (rect.left + margin);
+      if (b.bottom > rect.bottom - margin) dy = b.bottom - (rect.bottom - margin);
+      if (b.top < rect.top + margin) dy = b.top - (rect.top + margin);
+      if (dx || dy) this.map.panBy(dx, dy);
+    }, 10);
+
+    return node;
+  }
+
+  closeAll() {
+    this.popups.forEach(p => p.node.remove());
+    this.popups = [];
+  }
+
+  render() {
+    this.popups.forEach(p => this.renderOne(p.node, p.lat, p.lon));
+  }
+
+  renderOne(node, lat, lon) {
+    const pt = this.map.latLngToPoint(lat, lon);
+    node.style.left = pt.x + "px";
+    node.style.top = pt.y + "px";
+  }
+}
+
+/* ====================
+   ZOOM CONTROL
+   ==================== */
+class ZoomControl extends Control {
+  onAdd(map) {
+    this.map = map;
+    const div = document.createElement("div");
+    div.className = "control";
+
+    const zoomIn = document.createElement("div");
+    zoomIn.className = "zoom-btn";
+    zoomIn.textContent = "+";
+    zoomIn.onclick = () => map.zoomAt(map.size().width/2, map.size().height/2, map.zoom + 1);
+
+    const zoomOut = document.createElement("div");
+    zoomOut.className = "zoom-btn";
+    zoomOut.textContent = "−";
+    zoomOut.onclick = () => map.zoomAt(map.size().width/2, map.size().height/2, map.zoom - 1);
+
+    div.append(zoomIn, zoomOut);
+    return div;
+  }
+}
+
+/* ====================
+   INIT
+   ==================== */
+document.addEventListener("DOMContentLoaded", () => {
+  const map = new AtlasMap(document.getElementById("map"), {
+    lat: 27.9384,  // Tarfaya, Morocco
+    lon: -12.9167,
+    zoom: 12,
+    minZoom: 3,
+    maxZoom: 18
+  });
+
+  const tiles = new TileLayer();
+  map.addLayer(tiles);
+
+  const markers = new MarkerLayer();
+  map.addLayer(markers);
+  markers.addMarker(27.9384, -12.9167, "Tarfaya, Morocco 🇲🇦");
+
+  map.addControl(new ZoomControl(), "top-left");
+
+  // Attribution
+  const attrib = document.createElement("div");
+  attrib.className = "attrib";
+  attrib.innerHTML = '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
+  document.getElementById("map").appendChild(attrib);
+
+  // Close popups on map click
+  map.container.addEventListener("click", e => {
+    if (!e.target.closest(".marker") && !e.target.closest(".popup")) {
+      map.closeAllPopups();
+    }
+  });
+});
+</script>
+</body>
+</html>
