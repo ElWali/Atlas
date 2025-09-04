@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Atlas.js v2 — Tarfaya Map (Fixed)</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  #map { width: 100%; height: 100%; position: relative; background: #f0f4f8; cursor: grab; touch-action: none; outline: none; }
+  #map.grabbing { cursor: grabbing; }
+
+  .pane { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: hidden; }
+  .tilePane { z-index: 100; }
+  .overlayPane { z-index: 200; pointer-events: none; }
+  .popupPane { z-index: 300; pointer-events: none; }
+
+  .tileLayer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; will-change: transform, opacity; transform-origin: 50% 50%; }
+  .tile { position: absolute; width: 256px; height: 256px; image-rendering: pixelated; opacity: 0; transition: opacity 0.2s ease; }
+  .tile.loaded { opacity: 1; }
+
+  .markerPane { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .marker {
+    position: absolute;
+    transform: translate(-50%, -100%);
+    cursor: pointer;
+    font-size: 24px;
+    pointer-events: auto;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+    transition: transform 0.2s ease;
+  }
+  .marker:hover { transform: translate(-50%, -105%) scale(1.1); }
+
+  .popup {
+    position: absolute;
+    background: white;
+    padding: 12px 16px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 14px;
+    transform: translate(-50%, -100%);
+    pointer-events: auto;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-width: 280px;
+  }
+  .popup::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -8px;
+    transform: translateX(-50%);
+    border: 8px solid transparent;
+    border-top-color: #ccc;
+    z-index: -1;
+  }
+  .popup .close {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid #999;
+    line-height: 18px;
+    text-align: center;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .control {
+    position: absolute;
+    z-index: 1100;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    margin: 10px;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .zoom-btn {
+    display: block;
+    width: 36px;
+    height: 36px;
+    text-align: center;
+    line-height: 36px;
+    font-weight: bold;
+    font-size: 20px;
+    border: 0;
+    background: none;
+  }
+  .zoom-btn:not(:last-child) { border-bottom: 1px solid #eee; }
+  .zoom-btn:hover { background: #f8f9fa; }
+
+  .attrib {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1100;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: rgba(255,255,255,0.9);
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  .control-top-left { top: 0; left: 0; }
+  .control-top-right { top: 0; right: 0; }
+  .control-bottom-left { bottom: 0; left: 0; }
+  .control-bottom-right { bottom: 0; right: 0; }
+</style>
+</head>
+<body>
+<div id="map" tabindex="0" aria-label="Interactive map"></div>
+
+<script>
+/* =============================
+   FIXED CRS (Web Mercator)
+   ============================= */
+const CRS = {
+  EPSG3857: {
+    MAX: 20037508.34,
+    project: (lat, lon) => {
+      const d = Math.PI / 180, R = 6378137;
+      const x = R * lon * d;
+      const y = R * Math.log(Math.tan(Math.PI / 4 + lat * d / 2));
+      return { x, y };
+    },
+    unproject: (x, y) => {
+      const d = 180 / Math.PI, R = 6378137;
+      const lon = x / R * d;
+      const lat = (2 * Math.atan(Math.exp(y / R)) - Math.PI/2) * d;
+      return { lat, lon };
+    },
+    scale: (z) => 256 * Math.pow(2, z),
+    tileSize: 256
+  }
+};
+
+/* ================
+   BASES
+   ================ */
+class Layer { onAdd(){} onRemove(){} render(){} }
+class Control { onAdd(){} onRemove(){} }
+
+/* ===================
+   CORE MAP
+   =================== */
+class AtlasMap {
+  constructor(el, { lat=0, lon=0, zoom=2, minZoom=1, maxZoom=19 } = {}) {
+    this.container = el;
+    this.lat = lat; this.lon = lon; this.zoom = zoom;
+    this.minZoom = minZoom; this.maxZoom = maxZoom;
+    this.crs = CRS.EPSG3857;
+    this.layers = []; this.controls = [];
+    this._needRender = false; this._isZooming = false;
+
+    this._initPanes();
+    this._bindHandlers();
+    this._setupResize();
+    this.invalidate();
+    this.loop();
+  }
+
+  _initPanes(){
+    ["tilePane","overlayPane","popupPane"].forEach(cls=>{
+      const d=document.createElement("div");
+      d.className="pane "+cls;
+      this.container.append(d);
+      this[cls]=d;
+    });
+    this.markerPane=document.createElement("div");
+    this.markerPane.className="markerPane";
+    this.overlayPane.append(this.markerPane);
+  }
+
+  size(){ return { width:this.container.clientWidth, height:this.container.clientHeight }; }
+
+  setView(lat,lon,z=this.zoom){
+    const maxLat=85.0511;
+    lat=Math.max(Math.min(lat,maxLat),-maxLat);
+    lon=((lon+180)%360+360)%360-180;
+    z=Math.max(this.minZoom,Math.min(z,this.maxZoom));
+    this.lat=lat; this.lon=lon; this.zoom=z;
+    this.invalidate();
+  }
+
+  panBy(dx,dy){
+    const z=this.zoom, scale=this.crs.scale(z);
+    const center=this.crs.project(this.lat,this.lon);
+    let x=center.x+dx/scale, y=center.y+dy/scale;
+    const ww=2*CRS.EPSG3857.MAX;
+    x=((x%ww)+ww)%ww;
+    const nc=this.crs.unproject(x,y);
+    this.setView(nc.lat,nc.lon,z);
+  }
+
+  latLngToPoint(lat,lon,z=this.zoom){
+    const {width,height}=this.size(), scale=this.crs.scale(z);
+    const center=this.crs.project(this.lat,this.lon);
+    const p=this.crs.project(lat,lon);
+    return {x:width/2+(p.x-center.x)*scale, y:height/2+(p.y-center.y)*scale};
+  }
+
+  pointToLatLng(px,py,z=this.zoom){
+    const {width,height}=this.size(), scale=this.crs.scale(z);
+    const center=this.crs.project(this.lat,this.lon);
+    const wx=center.x+(px-width/2)/scale;
+    const wy=center.y+(py-height/2)/scale;
+    return this.crs.unproject(wx,wy);
+  }
+
+  // SMOOTH ZOOM
+  zoomAt(px,py,newZ){
+    newZ=Math.max(this.minZoom,Math.min(newZ,this.maxZoom));
+    if(this._isZooming) return;
+    this._isZooming=true;
+    const startZoom=this.zoom, targetZoom=newZ;
+    const start=performance.now(), duration=180; // ms
+    const anchor=this.pointToLatLng(px,py,this.zoom);
+    const animate=(t)=>{
+      const k=Math.min(1,(t-start)/duration);
+      const z=startZoom+(targetZoom-startZoom)*k;
+      const {width,height}=this.size();
+      const proj=this.crs.project(anchor.lat,anchor.lon);
+      const scale=this.crs.scale(z);
+      let cx=proj.x-(px-width/2)/scale;
+      let cy=proj.y-(py-height/2)/scale;
+      const ww=2*CRS.EPSG3857.MAX;
+      cx=((cx%ww)+ww)%ww;
+      const nc=this.crs.unproject(cx,cy);
+      this.lat=nc.lat; this.lon=nc.lon; this.zoom=z;
+      this.invalidate();
+      if(k<1){ requestAnimationFrame(animate);} else { this._isZooming=false; }
+    };
+    requestAnimationFrame(animate);
+  }
+
+  addLayer(layer){ layer.onAdd(this); this.layers.push(layer); this.invalidate(); return this; }
+  addControl(control,pos="top-left"){ const el=control.onAdd(this); el.classList.add(`control-${pos}`); this.container.appendChild(el); this.controls.push(el); return this; }
+  invalidate(){ this._needRender=true; }
+  loop(){ if(this._needRender){ this.layers.forEach(l=>l.render()); this._needRender=false;} requestAnimationFrame(()=>this.loop()); }
+  _setupResize(){ new ResizeObserver(()=>this.invalidate()).observe(this.container); }
+
+  _bindHandlers(){
+    let dragging=false,lastX=0,lastY=0;
+    this.container.addEventListener("mousedown",e=>{
+      dragging=true; lastX=e.clientX; lastY=e.clientY; this.container.classList.add("grabbing");
+    });
+    this.container.addEventListener("mousemove",e=>{
+      if(!dragging) return;
+      this.panBy(lastX-e.clientX,lastY-e.clientY);
+      lastX=e.clientX; lastY=e.clientY;
+    });
+    window.addEventListener("mouseup",()=>{ dragging=false; this.container.classList.remove("grabbing"); });
+    // WHEEL
+    this.container.addEventListener("wheel",e=>{
+      e.preventDefault();
+      const rect=this.container.getBoundingClientRect();
+      this.zoomAt(e.clientX-rect.left,e.clientY-rect.top,this.zoom - Math.sign(e.deltaY)*0.5);
+    },{passive:false});
+    // DOUBLECLICK
+    this.container.addEventListener("dblclick",e=>{
+      const rect=this.container.getBoundingClientRect();
+      this.zoomAt(e.clientX-rect.left,e.clientY-rect.top,this.zoom+1);
+    });
+  }
+
+  openPopup(content,lat,lon){
+    if(!this._popupLayer){ this._popupLayer=new PopupLayer(); this.addLayer(this._popupLayer);}
+    return this._popupLayer.open(lat,lon,content);
+  }
+  closeAllPopups(){ this._popupLayer?.closeAll(); }
+}
+
+/* ====================
+   TILE LAYER with LRU
+   ==================== */
+class TileLayer extends Layer {
+  constructor(url="https://tile.openstreetmap.org/{z}/{x}/{y}.png",limit=300){
+    super(); this.urlTpl=url; this.cache=new Map(); this.limit=limit;
+  }
+  onAdd(map){ this.map=map; this.container=document.createElement("div"); this.container.className="tileLayer"; map.tilePane.appendChild(this.container);}
+  url(z,x,y){
+    return this.urlTpl.replace("{z}",z).replace("{x}",x).replace("{y}",y);
+  }
+  _getTile(key,url){
+    if(this.cache.has(key)){ const t=this.cache.get(key); this.cache.delete(key); this.cache.set(key,t); return t; }
+    const img=new Image(); img.className="tile"; img.src=url;
+    img.onload=()=>img.classList.add("loaded");
+    const t={key,img}; this.cache.set(key,t);
+    if(this.cache.size>this.limit){ // evict oldest
+      const oldestKey=this.cache.keys().next().value;
+      const oldest=this.cache.get(oldestKey);
+      oldest.img.remove();
+      this.cache.delete(oldestKey);
+    }
+    return t;
+  }
+  render(){
+    const {width,height}=this.map.size();
+    const {lat,lon,zoom}=this.map;
+    const z=Math.floor(zoom), f=zoom-z;
+    this.container.style.transform=`scale(${Math.pow(2,f)})`;
+    const center=this.map.crs.project(lat,lon);
+    const scale=this.map.crs.scale(z);
+    const tilesX=Math.ceil(width/256)+2, tilesY=Math.ceil(height/256)+2;
+    const startX=Math.floor(center.x/scale-tilesX/2), startY=Math.floor(center.y/scale-tilesY/2);
+    const offX=width/2-(center.x/scale-startX)*256, offY=height/2-(center.y/scale-startY)*256;
+    const max=Math.pow(2,z);
+    for(let x=startX;x<startX+tilesX;x++){
+      for(let y=startY;y<startY+tilesY;y++){
+        if(y<0||y>=max) continue;
+        const wx=((x%max)+max)%max;
+        const key=`${z}/${wx}/${y}`;
+        const url=this.url(z,wx,y);
+        const t=this._getTile(key,url);
+        if(t.img.parentNode!==this.container) this.container.appendChild(t.img);
+        t.img.style.transform=`translate(${offX+(x-startX)*256}px,${offY+(y-startY)*256}px)`;
+      }
+    }
+  }
+}
+
+/* ====================
+   MARKER LAYER, persistent nodes
+   ==================== */
+class MarkerLayer extends Layer {
+  constructor(){ super(); this.markers=[]; }
+  onAdd(map){ this.map=map; this.container=map.markerPane; this.markers.forEach(m=>this._ensureNode(m)); }
+  addMarker(lat,lon,text,emoji="📍"){ const m={lat,lon,text,emoji,node:null}; this.markers.push(m); if(this.container) this._ensureNode(m); return m; }
+  _ensureNode(m){
+    if(m.node) return;
+    const node=document.createElement("div");
+    node.className="marker"; node.textContent=m.emoji; node.setAttribute("aria-label",m.text);
+    node.addEventListener("click",e=>{ e.stopPropagation(); this.map.openPopup(`<b>${m.text}</b>`,m.lat,m.lon); });
+    m.node=node; this.container.appendChild(node);
+  }
+  render(){ this.markers.forEach(m=>{ this._ensureNode(m); const pt=this.map.latLngToPoint(m.lat,m.lon); m.node.style.left=pt.x+"px"; m.node.style.top=pt.y+"px"; }); }
+}
+
+/* ====================
+   POPUP LAYER
+   ==================== */
+class PopupLayer extends Layer {
+  constructor(){ super(); this.popups=[]; }
+  onAdd(map){ this.map=map; this.container=map.popupPane; }
+  open(lat,lon,html){
+    const node=document.createElement("div"); node.className="popup";
+    const content=document.createElement("div"); content.innerHTML=html;
+    const close=document.createElement("div"); close.className="close"; close.textContent="×";
+    close.onclick=()=>{ node.remove(); this.popups=this.popups.filter(p=>p.node!==node); };
+    node.append(content,close); this.container.appendChild(node);
+    this.popups.push({lat,lon,node});
+    this.renderOne({lat,lon,node});
+    return node;
+  }
+  closeAll(){ this.popups.forEach(p=>p.node.remove()); this.popups=[]; }
+  render(){ this.popups.forEach(p=>this.renderOne(p)); }
+  renderOne(p){ const pt=this.map.latLngToPoint(p.lat,p.lon); p.node.style.left=pt.x+"px"; p.node.style.top=pt.y+"px"; }
+}
+
+/* ====================
+   ZOOM CONTROL
+   ==================== */
+class ZoomControl extends Control {
+  onAdd(map){
+    const div=document.createElement("div");
+    div.className="control";
+    const zin=document.createElement("div"); zin.className="zoom-btn"; zin.textContent="+";
+    zin.onclick=()=>map.zoomAt(map.size().width/2,map.size().height/2,map.zoom+1);
+    const zout=document.createElement("div"); zout.className="zoom-btn"; zout.textContent="−";
+    zout.onclick=()=>map.zoomAt(map.size().width/2,map.size().height/2,map.zoom-1);
+    div.append(zin,zout); return div;
+  }
+}
+
+/* ====================
+   INIT
+   ==================== */
+document.addEventListener("DOMContentLoaded",()=>{
+  const map=new AtlasMap(document.getElementById("map"),{lat:27.9384,lon:-12.9167,zoom:12,minZoom:3,maxZoom:18});
+  map.addLayer(new TileLayer());
+  const markers=new MarkerLayer(); map.addLayer(markers);
+  markers.addMarker(27.9384,-12.9167,"Tarfaya, Morocco 🇲🇦");
+  map.addControl(new ZoomControl(),"top-left");
+  const attrib=document.createElement("div");
+  attrib.className="attrib"; attrib.innerHTML='© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
+  map.container.appendChild(attrib);
+  map.container.addEventListener("click",e=>{
+    if(!e.target.closest(".marker") && !e.target.closest(".popup")) map.closeAllPopups();
+  });
+});
+</script>
+</body>
+</html>
