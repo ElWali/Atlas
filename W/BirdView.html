@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BirdView.js v2.3 – Leaflet-Lite</title>
+<style>
+  html, body { height:100%; margin:0; font-family:sans-serif; background:#f0f0f0; }
+  .birdview-map-container { width:100%; height:100%; position:relative; overflow:hidden; background:#ddd; user-select:none; touch-action:none }
+  .birdview-pane { position:absolute; top:0; left:0; width:100%; height:100%; transform-origin: top left }
+  .birdview-tile-pane { will-change:transform; }
+  .birdview-tile { position:absolute; width:256px; height:256px; image-rendering: optimizeSpeed; }
+  .birdview-marker { position:absolute; width:28px; height:41px; transform:translate(-50%,-100%); background:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 41"><path fill="%23007AFF" d="M14 0C6.27 0 0 6.27 0 14a13.9 13.9 0 0 0 14 14c7.73 0 14-6.27 14-14S21.73 0 14 0z"/><circle cx="14" cy="14" r="10" fill="white"/><path fill="%23007AFF" d="M14 41l-7-7h14z"/></svg>') no-repeat center/contain; cursor:pointer; transition:.2s }
+  .birdview-marker:hover { transform:translate(-50%,-100%) scale(1.1) }
+  .birdview-popup { position:absolute; background:#fff; border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,.25); opacity:0; visibility:hidden; transform: translate(-50%,-110%); transition: opacity .2s, transform .2s; min-width:180px }
+  .birdview-popup.visible { opacity:1; visibility:visible; transform: translate(-50%,-120%) }
+  .birdview-popup-close-button { position:absolute; top:4px; right:6px; background:transparent; border:none; font-size:16px; cursor:pointer }
+  .birdview-control-container { position:absolute; z-index:1000 }
+  .birdview-control { background:#fff; border:1px solid #aaa; border-radius:4px; margin:4px; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+  .birdview-control a { display:block; width:28px; height:28px; text-align:center; line-height:28px; font-weight:bold; text-decoration:none; color:#333 }
+  .birdview-box-zoom { position:absolute; border:2px dashed #007AFF; background:rgba(0,122,255,.15); z-index:2000 }
+  .birdview-scale-control { position:absolute; bottom:4px; left:50%; transform:translateX(-50%); background:#fff; padding:2px 6px; border:1px solid #777; border-radius:3px; font-size:11px }
+  .birdview-attribution { position:absolute; bottom:2px; right:4px; background:rgba(255,255,255,.7); padding:2px 4px; border-radius:2px; font-size:11px }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<script>
+// BirdView.js v2.3
+(function(window){
+'use strict';
+const BirdView={TILE_SIZE:256};
+
+// === Utils & Events
+const Util={clamp:(v,min,max)=>Math.min(Math.max(v,min),max),
+ createEl:(tag,cls,parent)=>{const el=document.createElement(tag);if(cls)el.className=cls;if(parent)parent.appendChild(el);return el;}};
+const Events={on(t,f){(this._ev=this._ev||{})[t]=(this._ev[t]||[]).concat(f)},off(t,f){if(!this._ev||!this._ev[t])return;this._ev[t]=this._ev[t].filter(x=>x!==f)},fire(t,d){(this._ev&&this._ev[t]||[]).forEach(fn=>fn.call(this,{type:t,target:this,...d}))}};
+
+// === Map core
+BirdView.Map=class{constructor(id,opt={}){Object.assign(this,Events);this.container=document.getElementById(id);if(!this.container)throw"container not found";this.container.classList.add('birdview-map-container');this.container.tabIndex=0;
+this.options={center:[0,0],zoom:2,minZoom:1,maxZoom:19,inertia:true,...opt};
+this._layers=[];this._zoom=this.options.zoom;this._pixelOrigin={x:0,y:0};
+this._initPanes();this._initHandlers();
+this.setView(this.options.center,this._zoom);}
+_initPanes(){this.tilePane=Util.createEl('div','birdview-pane birdview-tile-pane',this.container);this.markerPane=Util.createEl('div','birdview-pane',this.container);this.popupPane=Util.createEl('div','birdview-pane',this.container);}
+getSize(){const r=this.container.getBoundingClientRect();return{x:r.width,y:r.height}}
+_latLonToWorldPixel(lat,lon,z=this._zoom){const scale=BirdView.TILE_SIZE*Math.pow(2,z);const x=(lon+180)/360*scale;const y=(0.5-Math.log(Math.tan(Math.PI/4+lat*Math.PI/360))/(2*Math.PI))*scale;return{x,y}}
+_worldPixelToLatLon(x,y,z=this._zoom){const scale=BirdView.TILE_SIZE*Math.pow(2,z);const lon=(x/scale)*360-180;const latRad=Math.atan(Math.sinh(Math.PI*(1-2*y/scale)));return[latRad*180/Math.PI,lon]}
+getCenter(){return this._worldPixelToLatLon(this._pixelOrigin.x+this.getSize().x/2,this._pixelOrigin.y+this.getSize().y/2)}
+setView(ll,z){this._zoom=Util.clamp(z,this.options.minZoom,this.options.maxZoom);const wp=this._latLonToWorldPixel(ll[0],ll[1],this._zoom),size=this.getSize();this._pixelOrigin.x=wp.x-size.x/2;this._pixelOrigin.y=wp.y-size.y/2;this._update();this.fire('moveend');this.fire('zoomend')}
+zoomIn(){this.setView(this.getCenter(),this._zoom+1)}
+zoomOut(){this.setView(this.getCenter(),this._zoom-1)}
+panBy(p){this._pixelOrigin.x+=p.x;this._pixelOrigin.y+=p.y;this._update();this.fire('moveend')}
+_update(){const t=`translate(${-this._pixelOrigin.x}px,${-this._pixelOrigin.y}px)`;this.tilePane.style.transform=t;this.markerPane.style.transform=t;this.popupPane.style.transform=t;this._layers.forEach(l=>l._update&&l._update());}
+addLayer(layer){this._layers.push(layer);layer._onAdd(this)}
+addControl(c){c.addTo(this)}
+_initHandlers(){new BirdView.Handler.Drag(this).enable();new BirdView.Handler.ScrollZoom(this).enable();new BirdView.Handler.DoubleClick(this).enable();new BirdView.Handler.Keyboard(this).enable();new BirdView.Handler.BoxZoom(this).enable();new BirdView.Handler.TouchZoom(this).enable();}
+};
+
+// === TileLayer
+BirdView.TileLayer=class{constructor(url,opt={}){Object.assign(this,Events);this.url=url;this.opts={subdomains:['a','b','c','d'],attribution:'',...opt};this.tiles={};this._i=0;}
+_onAdd(map){this._map=map;this._container=map.tilePane;this._attr=Util.createEl('div','birdview-attribution',map.container);this._attr.innerHTML=this.opts.attribution;map.on('moveend zoomend',()=>this._update());this._update();}
+_update(){const m=this._map,z=Math.floor(m._zoom),size=m.getSize(),s=256,po=m._pixelOrigin;const x0=Math.floor(po.x/s),x1=Math.ceil((po.x+size.x)/s),y0=Math.floor(po.y/s),y1=Math.ceil((po.y+size.y)/s);const needed={};for(let x=x0;x<x1;x++){for(let y=y0;y<y1;y++){const id=`${z}_${x}_${y}`;needed[id]=1;if(!this.tiles[id]){const img=Util.createEl('img','birdview-tile',this._container);const sd=this.opts.subdomains[this._i++%this.opts.subdomains.length];img.src=this.url.replace('{s}',sd).replace('{z}',z).replace('{x}',x).replace('{y}',y);img.style.left=x*s+'px';img.style.top=y*s+'px';this.tiles[id]=img;}}}for(const id in this.tiles){if(!needed[id]){this.tiles[id].remove();delete this.tiles[id];}}}
+};
+
+// === Marker & Popup
+BirdView.Marker=class{constructor(ll){this._ll=ll}
+addTo(m){m.addLayer(this);return this}
+bindPopup(html){this._popup=new BirdView.Popup(html,this);this._el.addEventListener('click',e=>{e.stopPropagation();this._popup.toggle()});return this;}
+_onAdd(map){this._map=map;this._el=Util.createEl('div','birdview-marker',map.markerPane);this._el.tabIndex=0;this._update()}
+_update(){const p=this._map._latLonToWorldPixel(this._ll[0],this._ll[1]);this._el.style.transform=`translate(${p.x}px,${p.y}px)`;if(this._popup)this._popup._update();}
+};
+BirdView.Popup=class{constructor(html,marker){this._marker=marker;this._el=Util.createEl('div','birdview-popup');this._el.innerHTML=`<button class="birdview-popup-close-button">&times;</button><div>${html}</div>`;this._el.querySelector('button').onclick=()=>this.close();}
+open(){if(this._open)return;this._open=true;this._marker._map.popupPane.appendChild(this._el);this._el.classList.add('visible');this._trapFocus();this._ensureVisible();}
+close(){if(!this._open)return;this._open=false;this._el.remove();this._releaseFocus();}
+toggle(){this._open?this.close():this.open();}
+_update(){const t=this._marker._el.style.transform;this._el.style.transform=t}
+_ensureVisible(){const map=this._marker._map;const mrect=map.container.getBoundingClientRect(),prect=this._el.getBoundingClientRect();let d={x:0,y:0};if(prect.right>mrect.right)d.x=prect.right-mrect.right+10;if(prect.left<mrect.left)d.x=prect.left-mrect.left-10;if(prect.bottom>mrect.bottom)d.y=prect.bottom-mrect.bottom+10;if(prect.top<mrect.top)d.y=prect.top-mrect.top-10;if(d.x||d.y)map.panBy(d);}
+_trapFocus(){const f=this._el.querySelectorAll('a[href],button');if(!f.length)return;this._first=f[0];this._last=f[f.length-1];this._el.addEventListener('keydown',e=>{if(e.key!=='Tab')return;if(e.shiftKey&&document.activeElement===this._first){this._last.focus();e.preventDefault()}else if(!e.shiftKey&&document.activeElement===this._last){this._first.focus();e.preventDefault()}});this._first.focus();}
+_releaseFocus(){this._marker._el.focus();}
+};
+
+// === Controls
+BirdView.Control=class{constructor(opt={}){this.opt={position:'top-left',...opt}}addTo(m){this._map=m;const c=this.onAdd(m);m.container.appendChild(c)}};
+BirdView.Control.Zoom=class extends BirdView.Control{onAdd(m){const c=Util.createEl('div','birdview-control');const mk=(lab,fn)=>{const a=Util.createEl('a','',c);a.innerHTML=lab;a.href='#';a.onclick=e=>{e.preventDefault();fn()}};mk('+',()=>m.zoomIn());mk('-',()=>m.zoomOut());return c}}
+BirdView.Control.Scale=class extends BirdView.Control{onAdd(m){this._el=Util.createEl('div','birdview-scale-control',m.container);m.on('zoomend moveend',()=>this._update());this._update();return this._el}_update(){const m=this._map;const lat=m.getCenter()[0];const mlen=40075017*Math.cos(lat*Math.PI/180)/Math.pow(2,m._zoom+8);this._el.innerHTML=(mlen>1000?Math.round(mlen/1000)+' km':Math.round(mlen)+' m')}};
+BirdView.Control.Fullscreen=class extends BirdView.Control{onAdd(m){const c=Util.createEl('div','birdview-control');const a=Util.createEl('a','',c);a.innerHTML='⤢';a.href='#';a.onclick=e=>{e.preventDefault();if(!document.fullscreenElement)m.container.requestFullscreen();else document.exitFullscreen()};return c}};
+BirdView.Control.Geolocation=class extends BirdView.Control{onAdd(m){const c=Util.createEl('div','birdview-control');const a=Util.createEl('a','',c);a.innerHTML='⌖';a.href='#';a.onclick=e=>{e.preventDefault();navigator.geolocation.getCurrentPosition(p=>{m.setView([p.coords.latitude,p.coords.longitude],15)},err=>alert("Loc error:"+err.message))};return c}};
+
+// === Handlers (with inertia & pinch)
+const hp={enable(){this._en=true},disable(){this._en=false}};
+BirdView.Handler.Drag=class{constructor(m){this._m=m;Object.assign(this,hp);this._start=this._st.bind(this);this._move=this._mv.bind(this);this._end=this._ed.bind(this);m.container.addEventListener('mousedown',this._start);document.addEventListener('mousemove',this._move);document.addEventListener('mouseup',this._end);}
+_st(e){if(!this._en||e.button!==0)return;this._dragging=true;this._last={x:e.clientX,y:e.clientY};this._vel={x:0,y:0};}
+_mv(e){if(!this._dragging)return;const d={x:e.clientX-this._last.x,y:e.clientY-this._last.y};this._m.panBy({x:-d.x,y:-d.y});this._vel={x:d.x,y:d.y};this._last={x:e.clientX,y:e.clientY};}
+_ed(){if(!this._dragging)return;this._dragging=false;if(this._m.options.inertia){const step=()=>{this._m.panBy({x:-this._vel.x,y:-this._vel.y});this._vel.x*=0.9;this._vel.y*=0.9;if(Math.abs(this._vel.x)+Math.abs(this._vel.y)>0.5)requestAnimationFrame(step)};requestAnimationFrame(step)}}};
+BirdView.Handler.ScrollZoom=class{constructor(m){this._m=m;Object.assign(this,hp);this._on=this._w.bind(this);m.container.addEventListener('wheel',this._on,{passive:false})}_w(e){if(!this._en)return;e.preventDefault();const d=-Math.sign(e.deltaY);this._m.setView(this._m.getCenter(),this._m._zoom+d)}};
+BirdView.Handler.DoubleClick=class{constructor(m){this._m=m;Object.assign(this,hp);m.container.addEventListener('dblclick',e=>{if(!this._en)return;this._m.zoomIn()})}};
+BirdView.Handler.Keyboard=class{constructor(m){this._m=m;Object.assign(this,hp);m.container.addEventListener('keydown',e=>{if(!this._en)return;let off={x:0,y:0};switch(e.key){case"ArrowRight":off.x=128;break;case"ArrowLeft":off.x=-128;break;case"ArrowUp":off.y=-128;break;case"ArrowDown":off.y=128;break;case"+":this._m.zoomIn();break;case"-":this._m.zoomOut();break}if(off.x||off.y){this._m.panBy(off);e.preventDefault()}})}};
+BirdView.Handler.BoxZoom=class{constructor(m){this._m=m;Object.assign(this,hp);this._down=this._d.bind(this);m.container.addEventListener('mousedown',this._down);} _d(e){if(!this._en||!e.shiftKey||e.button!==0)return;this._start={x:e.clientX,y:e.clientY};this._box=Util.createEl('div','birdview-box-zoom',this._m.container);this._mv=this._mve.bind(this);this._up=this._upEnd.bind(this);document.addEventListener('mousemove',this._mv);document.addEventListener('mouseup',this._up);} _mve(e){if(!this._box)return;this._box.style.left=Math.min(e.clientX,this._start.x)+'px';this._box.style.top=Math.min(e.clientY,this._start.y)+'px';this._box.style.width=Math.abs(e.clientX-this._start.x)+'px';this._box.style.height=Math.abs(e.clientY-this._start.y)+'px';}
+ _upEnd(e){if(!this._box)return;this._box.remove();this._box=null;document.removeEventListener('mousemove',this._mv);document.removeEventListener('mouseup',this._up);const rect=this._m.container.getBoundingClientRect();const p1=this._m._containerPixelToWorldPixel({x:this._start.x-rect.left,y:this._start.y-rect.top});const p2=this._m._containerPixelToWorldPixel({x:e.clientX-rect.left,y:e.clientY-rect.top});const ll1=this._m._worldPixelToLatLon(p1.x,p1.y);const ll2=this._m._worldPixelToLatLon(p2.x,p2.y);const cx=(ll1[0]+ll2[0])/2,cy=(ll1[1]+ll2[1])/2;this._m.setView([cx,cy],this._m._zoom+1);}};
+BirdView.Handler.TouchZoom=class{constructor(m){this._m=m;Object.assign(this,hp);this._s=this._st.bind(this);this._mv=this._mve.bind(this);this._e=this._ed.bind(this);m.container.addEventListener('touchstart',this._s,{passive:false});m.container.addEventListener('touchmove',this._mv,{passive:false});m.container.addEventListener('touchend',this._e);} _st(e){if(e.touches.length==2){this._startD=this._d(e);this._zoom=this._m._zoom}} _d(e){const dx=e.touches[0].clientX-e.touches[1].clientX,dy=e.touches[0].clientY-e.touches[1].clientY;return Math.sqrt(dx*dx+dy*dy)} _mve(e){if(e.touches.length!=2)return;const d=this._d(e),scale=d/this._startD;this._m.setView(this._m.getCenter(),this._zoom+Math.log2(scale))} _ed(e){}}; 
+})(window);
+
+// === Demo usage
+const map=new BirdView.Map('map',{center:[48.8584,2.2945],zoom:15});
+new BirdView.TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
+map.addControl(new BirdView.Control.Zoom());
+map.addControl(new BirdView.Control.Scale());
+map.addControl(new BirdView.Control.Fullscreen());
+map.addControl(new BirdView.Control.Geolocation());
+new BirdView.Marker([48.8584,2.2945]).bindPopup("<b>Eiffel Tower</b><p>The famous tower in Paris.</p><a href='https://en.wikipedia.org/wiki/Eiffel_Tower' target='_blank'>More info</a>").addTo(map);
+new BirdView.Marker([48.860,2.35]).bindPopup("<b>Louvre Museum</b><p>Another highlight of Paris.</p>").addTo(map);
+</script>
+</body>
+</html>
