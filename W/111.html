@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html style="height:100%; margin:0; padding:0; overflow:hidden;">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Professional OSM Map Viewer</title>
+    <style>
+        html, body { margin:0; padding:0; width:100%; height:100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        #map-container { position:relative; width:100%; height:100%; overflow:hidden; }
+        canvas { display:block; touch-action:none; user-select:none; }
+        
+        /* Controls */
+        .controls {
+            position: absolute;
+            background: rgba(255,255,255,0.9);
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            padding: 5px;
+            font-size: 14px;
+        }
+        
+        .zoom-controls {
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .zoom-btn {
+            width: 35px;
+            height: 35px;
+            border: none;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 18px;
+            transition: background 0.2s;
+        }
+        
+        .zoom-btn:hover { background: #f0f0f0; }
+        .zoom-btn:active { background: #e0e0e0; }
+        .zoom-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .scale-bar {
+            position: absolute;
+            bottom: 35px;
+            left: 10px;
+            background: rgba(255,255,255,0.8);
+            padding: 5px;
+            border-radius: 3px;
+            font-size: 11px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        
+        .scale-bar-inner {
+            border: 1px solid #333;
+            border-top: none;
+            height: 4px;
+            background: white;
+            margin-top: 3px;
+        }
+        
+        .coords {
+            bottom: 65px;
+            left: 10px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: #333;
+        }
+        
+        .attribution {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            font-size: 11px;
+            color: #666;
+            background: rgba(255,255,255,0.8);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .attribution a {
+            color: #0078A8;
+            text-decoration: none;
+        }
+        
+        .location-btn {
+            position: absolute;
+            top: 100px;
+            right: 10px;
+            width: 35px;
+            height: 35px;
+            border: none;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+        
+        .location-btn:hover { background: #f0f0f0; }
+        .location-btn.active { background: #0078A8; color: white; }
+        .location-btn.locating { animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .loading {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.9);
+            padding: 8px 16px;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 13px;
+            display: none;
+        }
+        
+        .marker {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            margin-left: -20px;
+            margin-top: -40px;
+            cursor: pointer;
+            z-index: 1000;
+            pointer-events: auto;
+        }
+        
+        .location-marker {
+            width: 24px;
+            height: 24px;
+            margin-left: -12px;
+            margin-top: -12px;
+        }
+        
+        .marker svg {
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .marker-popup {
+            position: absolute;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 5px;
+            font-size: 13px;
+            white-space: nowrap;
+            display: none;
+            z-index: 1001;
+            pointer-events: none;
+        }
+        
+        .marker:hover .marker-popup {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="map-container">
+        <canvas id="map"></canvas>
+        
+        <div class="controls zoom-controls">
+            <button class="zoom-btn" id="zoom-in" title="Zoom in">+</button>
+            <button class="zoom-btn" id="zoom-out" title="Zoom out">−</button>
+        </div>
+        
+        <button class="location-btn" id="location-btn" title="My location">📍</button>
+        
+        <div class="controls coords" id="coords">0.000000°, 0.000000° | Zoom: 2</div>
+        
+        <div class="scale-bar" id="scale-bar">
+            <div id="scale-text">0 km</div>
+            <div class="scale-bar-inner" id="scale-bar-inner"></div>
+        </div>
+        
+        <div class="attribution">
+            © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors
+        </div>
+        
+        <div class="loading" id="loading">
+            Loading tiles... <span id="loading-count">0</span>
+        </div>
+    </div>
+
+    <script>
+        // Constants for Web Mercator projection (EPSG:3857)
+        const EARTH_RADIUS = 6378137; // meters
+        const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS;
+        const MAX_LATITUDE = 85.05112878; // Web Mercator bounds
+        const MIN_LATITUDE = -85.05112878;
+        
+        // Configuration
+        const CONFIG = {
+            tileSize: 256,
+            maxCacheSize: 500,
+            minZoom: 0,
+            maxZoom: 19,
+            defaultZoom: 2,
+            defaultCenter: { lon: 0, lat: 0 },
+            tileServers: [
+                'https://a.tile.openstreetmap.org',
+                'https://b.tile.openstreetmap.org',
+                'https://c.tile.openstreetmap.org'
+            ],
+            userAgent: 'Professional OSM Viewer 2.0',
+            retryAttempts: 3,
+            retryDelay: 1000,
+            smoothZoom: true,
+            fractionalZoom: false, // Set to true for smooth zooming
+            zoomAnimationDuration: 250
+        };
+
+        // GIS utility functions
+        class GISUtils {
+            // Convert degrees to radians
+            static toRadians(degrees) {
+                return degrees * (Math.PI / 180);
+            }
+
+            // Convert radians to degrees
+            static toDegrees(radians) {
+                return radians * (180 / Math.PI);
+            }
+
+            // Clamp latitude to Web Mercator bounds
+            static clampLatitude(lat) {
+                return Math.max(MIN_LATITUDE, Math.min(MAX_LATITUDE, lat));
+            }
+
+            // Wrap longitude to [-180, 180]
+            static wrapLongitude(lon) {
+                while (lon > 180) lon -= 360;
+                while (lon < -180) lon += 360;
+                return lon;
+            }
+
+            // Convert lon/lat to Web Mercator coordinates
+            static lonLatToMercator(lon, lat) {
+                const x = EARTH_RADIUS * this.toRadians(lon);
+                const y = EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4 + this.toRadians(lat) / 2));
+                return { x, y };
+            }
+
+            // Convert Web Mercator to lon/lat
+            static mercatorToLonLat(x, y) {
+                const lon = this.toDegrees(x / EARTH_RADIUS);
+                const lat = this.toDegrees(2 * Math.atan(Math.exp(y / EARTH_RADIUS)) - Math.PI / 2);
+                return { lon: this.wrapLongitude(lon), lat: this.clampLatitude(lat) };
+            }
+
+            // Get resolution (meters per pixel) at given latitude and zoom
+            static getResolution(lat, zoom) {
+                return (EARTH_CIRCUMFERENCE * Math.cos(this.toRadians(lat))) / (Math.pow(2, zoom) * CONFIG.tileSize);
+            }
+
+            // Calculate ground distance for scale bar
+            static getGroundDistance(pixels, lat, zoom) {
+                const resolution = this.getResolution(lat, zoom);
+                return pixels * resolution;
+            }
+
+            // Format distance for display
+            static formatDistance(meters) {
+                if (meters < 1000) {
+                    return Math.round(meters) + ' m';
+                } else if (meters < 10000) {
+                    return (meters / 1000).toFixed(1) + ' km';
+                } else {
+                    return Math.round(meters / 1000) + ' km';
+                }
+            }
+
+            // Calculate great circle distance between two points (Haversine formula)
+            static calculateDistance(lon1, lat1, lon2, lat2) {
+                const R = EARTH_RADIUS;
+                const dLat = this.toRadians(lat2 - lat1);
+                const dLon = this.toRadians(lon2 - lon1);
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                          Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+                          Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            }
+        }
+
+        // Main map class
+        class ProfessionalOSMMap {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.container = document.getElementById('map-container');
+                
+                this.tileCache = new Map();
+                this.failedTiles = new Set();
+                this.markers = new Map();
+                
+                this.center = { ...CONFIG.defaultCenter };
+                this.zoom = CONFIG.defaultZoom;
+                this.targetZoom = CONFIG.defaultZoom;
+                this.offset = { x: 0, y: 0 };
+                this.isDragging = false;
+                this.dragStart = { x: 0, y: 0 };
+                this.lastDragTime = 0;
+                this.velocity = { x: 0, y: 0 };
+                this.momentumAnimationId = null;
+                
+                this.renderTimeout = null;
+                this.dpr = 1;
+                
+                this.locationWatchId = null;
+                this.userLocation = null;
+                this.locationMarker = null;
+                this.locationAccuracyCircle = null;
+                
+                this.loadingTiles = new Set();
+                this.visibleTiles = new Set();
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.resize();
+                this.updateCoordinateDisplay();
+                this.updateScaleBar();
+            }
+
+            resize() {
+                this.dpr = window.devicePixelRatio || 1;
+                const width = this.container.offsetWidth;
+                const height = this.container.offsetHeight;
+                
+                this.canvas.width = width * this.dpr;
+                this.canvas.height = height * this.dpr;
+                this.canvas.style.width = width + 'px';
+                this.canvas.style.height = height + 'px';
+                
+                this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+                this.ctx.imageSmoothingEnabled = true;
+                this.ctx.imageSmoothingQuality = 'high';
+                
+                this.render();
+            }
+
+            // Convert lon/lat to tile coordinates
+            lonLatToTile(lon, lat, zoom) {
+                lat = GISUtils.clampLatitude(lat);
+                lon = GISUtils.wrapLongitude(lon);
+                
+                const scale = Math.pow(2, zoom);
+                const x = (lon + 180) / 360 * scale;
+                
+                // Correct Web Mercator projection for Y
+                const latRad = GISUtils.toRadians(lat);
+                const y = (1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * scale;
+                
+                return { x, y };
+            }
+
+            // Convert tile coordinates to lon/lat
+            tileToLonLat(x, y, zoom) {
+                const scale = Math.pow(2, zoom);
+                const lon = x / scale * 360 - 180;
+                
+                // Correct inverse Web Mercator for latitude
+                const n = Math.PI - 2 * Math.PI * y / scale;
+                const lat = GISUtils.toDegrees(Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))));
+                
+                return { 
+                    lon: GISUtils.wrapLongitude(lon), 
+                    lat: GISUtils.clampLatitude(lat) 
+                };
+            }
+
+            // Convert screen coordinates to geographic coordinates
+            screenToLonLat(screenX, screenY) {
+                const centerTile = this.lonLatToTile(this.center.lon, this.center.lat, this.zoom);
+                const screenWidth = this.canvas.width / this.dpr;
+                const screenHeight = this.canvas.height / this.dpr;
+                
+                // Calculate tile position from screen position
+                const tileX = centerTile.x + (screenX - screenWidth / 2 - this.offset.x / this.dpr) / CONFIG.tileSize;
+                const tileY = centerTile.y + (screenY - screenHeight / 2 - this.offset.y / this.dpr) / CONFIG.tileSize;
+                
+                return this.tileToLonLat(tileX, tileY, this.zoom);
+            }
+
+            // Convert geographic coordinates to screen position
+            lonLatToScreen(lon, lat) {
+                const centerTile = this.lonLatToTile(this.center.lon, this.center.lat, this.zoom);
+                const targetTile = this.lonLatToTile(lon, lat, this.zoom);
+                const screenWidth = this.canvas.width / this.dpr;
+                const screenHeight = this.canvas.height / this.dpr;
+                
+                const x = (targetTile.x - centerTile.x) * CONFIG.tileSize + screenWidth / 2 + this.offset.x / this.dpr;
+                const y = (targetTile.y - centerTile.y) * CONFIG.tileSize + screenHeight / 2 + this.offset.y / this.dpr;
+                
+                return { x, y };
+            }
+
+            getTileUrl(x, y, z) {
+                // Ensure valid zoom level
+                z = Math.max(0, Math.min(CONFIG.maxZoom, Math.floor(z)));
+                
+                const scale = Math.pow(2, z);
+                
+                // Wrap X coordinate
+                x = ((x % scale) + scale) % scale;
+                
+                // Clamp Y coordinate
+                y = Math.max(0, Math.min(scale - 1, Math.floor(y)));
+                
+                // Distribute requests across tile servers
+                const serverIndex = (Math.floor(x) + Math.floor(y)) % CONFIG.tileServers.length;
+                const server = CONFIG.tileServers[serverIndex];
+                
+                return `${server}/${z}/${Math.floor(x)}/${Math.floor(y)}.png`;
+            }
+
+            async loadTile(key, url, retryCount = 0) {
+                if (this.tileCache.has(key)) {
+                    return this.tileCache.get(key);
+                }
+
+                if (this.failedTiles.has(key) && retryCount === 0) {
+                    return { img: null, loaded: false };
+                }
+
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                
+                const promise = new Promise((resolve, reject) => {
+                    img.onload = () => {
+                        // Manage cache size using LRU strategy
+                        if (this.tileCache.size >= CONFIG.maxCacheSize) {
+                            // Remove least recently used tiles not currently visible
+                            for (const [cacheKey, tile] of this.tileCache) {
+                                if (!this.visibleTiles.has(cacheKey)) {
+                                    this.tileCache.delete(cacheKey);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        const tileData = { img, loaded: true, lastUsed: Date.now() };
+                        this.tileCache.set(key, tileData);
+                        this.failedTiles.delete(key);
+                        this.loadingTiles.delete(key);
+                        resolve(img);
+                    };
+                    
+                    img.onerror = async () => {
+                        if (retryCount < CONFIG.retryAttempts) {
+                            await new Promise(resolve => setTimeout(resolve, CONFIG.retryDelay * (retryCount + 1)));
+                            try {
+                                const result = await this.loadTile(key, url, retryCount + 1);
+                                resolve(result.img);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        } else {
+                            this.failedTiles.add(key);
+                            this.loadingTiles.delete(key);
+                            reject(new Error('Tile load failed'));
+                        }
+                    };
+                });
+
+                img.src = url;
+                this.loadingTiles.add(key);
+                const tileData = { img, loaded: false, promise, lastUsed: Date.now() };
+                this.tileCache.set(key, tileData);
+                
+                return tileData;
+            }
+
+            render() {
+                if (this.renderTimeout) {
+                    cancelAnimationFrame(this.renderTimeout);
+                }
+                
+                this.renderTimeout = requestAnimationFrame(() => {
+                    this.ctx.clearRect(0, 0, this.canvas.width / this.dpr, this.canvas.height / this.dpr);
+                    
+                    const centerTile = this.lonLatToTile(this.center.lon, this.center.lat, this.zoom);
+                    const screenWidth = this.canvas.width / this.dpr;
+                    const screenHeight = this.canvas.height / this.dpr;
+                    
+                    // Calculate visible tile bounds with buffer
+                    const tilesX = Math.ceil(screenWidth / CONFIG.tileSize) + 2;
+                    const tilesY = Math.ceil(screenHeight / CONFIG.tileSize) + 2;
+                    
+                    const offsetX = this.offset.x / this.dpr;
+                    const offsetY = this.offset.y / this.dpr;
+                    
+                    const startTileX = Math.floor(centerTile.x - offsetX / CONFIG.tileSize - tilesX / 2);
+                    const startTileY = Math.floor(centerTile.y - offsetY / CONFIG.tileSize - tilesY / 2);
+                    
+                    this.visibleTiles.clear();
+                    
+                    // Use integer zoom for tile loading
+                    const tileZoom = Math.floor(this.zoom);
+                    
+                    for (let x = 0; x < tilesX; x++) {
+                        for (let y = 0; y < tilesY; y++) {
+                            const tileX = startTileX + x;
+                            const tileY = startTileY + y;
+                            
+                            const key = `${tileZoom}/${Math.floor(tileX)}/${Math.floor(tileY)}`;
+                            this.visibleTiles.add(key);
+                            
+                            const url = this.getTileUrl(tileX, tileY, tileZoom);
+                            const tile = this.loadTile(key, url);
+                            
+                            if (tile.loaded && tile.img) {
+                                const drawX = (tileX - centerTile.x) * CONFIG.tileSize + screenWidth / 2 + offsetX;
+                                const drawY = (tileY - centerTile.y) * CONFIG.tileSize + screenHeight / 2 + offsetY;
+                                
+                                // Update last used time
+                                tile.lastUsed = Date.now();
+                                
+                                this.ctx.drawImage(tile.img, 
+                                    Math.floor(drawX), 
+                                    Math.floor(drawY), 
+                                    CONFIG.tileSize, 
+                                    CONFIG.tileSize
+                                );
+                            } else if (tile.promise) {
+                                tile.promise.then(() => this.render()).catch(() => {});
+                            }
+                        }
+                    }
+                    
+                    // Update loading indicator
+                    const loadingEl = document.getElementById('loading');
+                    const loadingCount = document.getElementById('loading-count');
+                    if (this.loadingTiles.size > 0) {
+                        loadingEl.style.display = 'block';
+                        loadingCount.textContent = this.loadingTiles.size;
+                    } else {
+                        loadingEl.style.display = 'none';
+                    }
+                    
+                    // Update markers
+                    this.updateMarkers();
+                });
+            }
+
+            updateCenter() {
+                const centerTile = this.lonLatToTile(this.center.lon, this.center.lat, this.zoom);
+                
+                // Calculate new center based on offset
+                const offsetTileX = this.offset.x / this.dpr / CONFIG.tileSize;
+                const offsetTileY = this.offset.y / this.dpr / CONFIG.tileSize;
+                
+                const newCenterTileX = centerTile.x - offsetTileX;
+                const newCenterTileY = centerTile.y - offsetTileY;
+                
+                const newCenter = this.tileToLonLat(newCenterTileX, newCenterTileY, this.zoom);
+                this.center = newCenter;
+                this.offset = { x: 0, y: 0 };
+            }
+
+            setZoom(newZoom, centerX, centerY, animate = true) {
+                newZoom = Math.max(CONFIG.minZoom, Math.min(CONFIG.maxZoom, newZoom));
+                
+                if (Math.abs(newZoom - this.zoom) < 0.01) return;
+                
+                // Update zoom buttons state
+                document.getElementById('zoom-in').disabled = newZoom >= CONFIG.maxZoom;
+                document.getElementById('zoom-out').disabled = newZoom <= CONFIG.minZoom;
+                
+                if (centerX !== undefined && centerY !== undefined) {
+                    // Get the geographic coordinates at the zoom point
+                    const zoomPoint = this.screenToLonLat(centerX, centerY);
+                    
+                    // Update zoom
+                    const oldZoom = this.zoom;
+                    this.zoom = newZoom;
+                    
+                    // Calculate new offset to keep the zoom point fixed
+                    const newScreen = this.lonLatToScreen(zoomPoint.lon, zoomPoint.lat);
+                    this.offset.x = (newScreen.x - centerX) * this.dpr;
+                    this.offset.y = (newScreen.y - centerY) * this.dpr;
+                    
+                    // Update center to minimize offset
+                    if (Math.abs(this.offset.x) > CONFIG.tileSize * this.dpr || 
+                        Math.abs(this.offset.y) > CONFIG.tileSize * this.dpr) {
+                        this.updateCenter();
+                    }
+                } else {
+                    this.zoom = newZoom;
+                }
+                
+                this.updateCoordinateDisplay();
+                this.updateScaleBar();
+                this.render();
+            }
+
+            panTo(lon, lat, animate = true) {
+                lon = GISUtils.wrapLongitude(lon);
+                lat = GISUtils.clampLatitude(lat);
+                
+                if (!animate) {
+                    this.center = { lon, lat };
+                    this.offset = { x: 0, y: 0 };
+                    this.render();
+                    this.updateCoordinateDisplay();
+                    return;
+                }
+                
+                // Animated pan
+                const startLon = this.center.lon;
+                const startLat = this.center.lat;
+                
+                // Handle longitude wrapping for shortest path
+                let deltaLon = lon - startLon;
+                if (deltaLon > 180) deltaLon -= 360;
+                if (deltaLon < -180) deltaLon += 360;
+                
+                const duration = 500;
+                const startTime = Date.now();
+                
+                const animate = () => {
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min(elapsed / duration, 1);
+                    
+                    // Ease-in-out cubic
+                    const eased = progress < 0.5
+                        ? 4 * progress * progress * progress
+                        : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+                    
+                    this.center.lon = GISUtils.wrapLongitude(startLon + deltaLon * eased);
+                    this.center.lat = startLat + (lat - startLat) * eased;
+                    
+                    this.render();
+                    this.updateCoordinateDisplay();
+                    
+                    if (progress < 1) {
+                        requestAnimationFrame(animate);
+                    }
+                };
+                
+                animate();
+            }
+
+            addMarker(id, lon, lat, options = {}) {
+                const marker = {
+                    id,
+                    lon: GISUtils.wrapLongitude(lon),
+                    lat: GISUtils.clampLatitude(lat),
+                    color: options.color || '#FF0000',
+                    title: options.title || '',
+                    element: null,
+                    popup: null
+                };
+                
+                this.markers.set(id, marker);
+                this.createMarkerElement(marker);
+                this.updateMarkers();
+                
+                return marker;
+            }
+
+            createMarkerElement(marker) {
+                const markerDiv = document.createElement('div');
+                markerDiv.className = 'marker';
+                markerDiv.innerHTML = `
+                    <svg width="40" height="40" viewBox="0 0 40 40">
+                        <path d="M20 0C11.2 0 4 7.2 4 16c0 3.5 1.1 6.7 3 9.3L20 40l13-14.7c1.9-2.6 3-5.8 3-9.3 0-8.8-7.2-16-16-16zm0 22c-3.3 0-6-2.7-6-6s2.7-6 6-6 6 2.7 6 6-2.7 6-6 6z" 
+                              fill="${marker.color}" stroke="white" stroke-width="2"/>
+                    </svg>
+                `;
+                
+                if (marker.title) {
+                    const popup = document.createElement('div');
+                    popup.className = 'marker-popup';
+                    popup.textContent = marker.title;
+                    markerDiv.appendChild(popup);
+                    marker.popup = popup;
+                }
+                
+                markerDiv.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.panTo(marker.lon, marker.lat);
+                });
+                
+                this.container.appendChild(markerDiv);
+                marker.element = markerDiv;
+            }
+
+            updateMarkers() {
+                this.markers.forEach(marker => {
+                    if (marker.element) {
+                        const screen = this.lonLatToScreen(marker.lon, marker.lat);
+                        marker.element.style.left = screen.x + 'px';
+                        marker.element.style.top = screen.y + 'px';
+                        
+                        // Hide markers outside viewport
+                        const bounds = this.container.getBoundingClientRect();
+                        marker.element.style.display = 
+                            (screen.x > -40 && screen.x < bounds.width + 40 &&
+                             screen.y > -40 && screen.y < bounds.height + 40) ? 'block' : 'none';
+                    }
+                });
+                
+                // Update user location marker
+                if (this.userLocation && this.locationMarker) {
+                    const screen = this.lonLatToScreen(this.userLocation.lon, this.userLocation.lat);
+                    this.locationMarker.style.left = screen.x + 'px';
+                    this.locationMarker.style.top = screen.y + 'px';
+                    
+                    // Update accuracy circle if present
+                    if (this.locationAccuracyCircle && this.userLocation.accuracy) {
+                        const metersPerPixel = GISUtils.getResolution(this.userLocation.lat, this.zoom);
+                        const radiusPixels = this.userLocation.accuracy / metersPerPixel;
+                        
+                        this.locationAccuracyCircle.style.width = (radiusPixels * 2) + 'px';
+                        this.locationAccuracyCircle.style.height = (radiusPixels * 2) + 'px';
+                        this.locationAccuracyCircle.style.marginLeft = -radiusPixels + 'px';
+                        this.locationAccuracyCircle.style.marginTop = -radiusPixels + 'px';
+                        
+                        // Hide circle if it's too large
+                        this.locationAccuracyCircle.style.display = radiusPixels < 200 ? 'block' : 'none';
+                    }
+                }
+            }
+
+            updateCoordinateDisplay() {
+                const coords = document.getElementById('coords');
+                const centerCoords = this.screenToLonLat(
+                    this.canvas.width / this.dpr / 2,
+                    this.canvas.height / this.dpr / 2
+                );
+                
+                // Display in standard format: latitude, longitude
+                coords.textContent = `${centerCoords.lat.toFixed(6)}°, ${centerCoords.lon.toFixed(6)}° | Zoom: ${this.zoom.toFixed(1)}`;
+            }
+
+            updateScaleBar() {
+                const scaleBar = document.getElementById('scale-bar-inner');
+                const scaleText = document.getElementById('scale-text');
+                
+                // Calculate scale at current latitude
+                const centerLat = this.center.lat;
+                
+                // Find a nice round number for the scale bar
+                const targetPixels = 100; // Target width in pixels
+                const metersForTarget = GISUtils.getGroundDistance(targetPixels, centerLat, this.zoom);
+                
+                // Round to nice numbers
+                let scaleMeters;
+                const magnitude = Math.pow(10, Math.floor(Math.log10(metersForTarget)));
+                const normalized = metersForTarget / magnitude;
+                
+                if (normalized < 1.5) {
+                    scaleMeters = magnitude;
+                } else if (normalized < 3.5) {
+                    scaleMeters = 2 * magnitude;
+                } else if (normalized < 7.5) {
+                    scaleMeters = 5 * magnitude;
+                } else {
+                    scaleMeters = 10 * magnitude;
+                }
+                
+                // Calculate actual pixel width
+                const pixels = scaleMeters / GISUtils.getResolution(centerLat, this.zoom);
+                
+                scaleBar.style.width = pixels + 'px';
+                scaleText.textContent = GISUtils.formatDistance(scaleMeters);
+            }
+
+            toggleLocation() {
+                const btn = document.getElementById('location-btn');
+                
+                if (this.locationWatchId !== null) {
+                    // Stop tracking
+                    navigator.geolocation.clearWatch(this.locationWatchId);
+                    this.locationWatchId = null;
+                    btn.classList.remove('active', 'locating');
+                    
+                    if (this.locationMarker) {
+                        this.locationMarker.remove();
+                        this.locationMarker = null;
+                    }
+                    if (this.locationAccuracyCircle) {
+                        this.locationAccuracyCircle.remove();
+                        this.locationAccuracyCircle = null;
+                    }
+                } else {
+                    // Start tracking
+                    btn.classList.add('locating');
+                    
+                    if ('geolocation' in navigator) {
+                        const options = {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 0
+                        };
+                        
+                        this.locationWatchId = navigator.geolocation.watchPosition(
+                            (position) => {
+                                btn.classList.remove('locating');
+                                btn.classList.add('active');
+                                
+                                this.userLocation = {
+                                    lat: position.coords.latitude,
+                                    lon: position.coords.longitude,
+                                    accuracy: position.coords.accuracy,
+                                    heading: position.coords.heading
+                                };
+                                
+                                // Create or update location marker
+                                if (!this.locationMarker) {
+                                    // Create accuracy circle
+                                    this.locationAccuracyCircle = document.createElement('div');
+                                    this.locationAccuracyCircle.style.cssText = `
+                                        position: absolute;
+                                        border: 2px solid #0078A8;
+                                        border-radius: 50%;
+                                        background: rgba(0, 120, 168, 0.1);
+                                        pointer-events: none;
+                                        z-index: 999;
+                                    `;
+                                    this.container.appendChild(this.locationAccuracyCircle);
+                                    
+                                    // Create location dot
+                                    this.locationMarker = document.createElement('div');
+                                    this.locationMarker.className = 'marker location-marker';
+                                    this.locationMarker.innerHTML = `
+                                        <svg width="24" height="24" viewBox="0 0 24 24">
+                                            <circle cx="12" cy="12" r="10" fill="#0078A8" opacity="0.3"/>
+                                            <circle cx="12" cy="12" r="6" fill="#0078A8"/>
+                                            <circle cx="12" cy="12" r="3" fill="white"/>
+                                        </svg>
+                                    `;
+                                    this.container.appendChild(this.locationMarker);
+                                }
+                                
+                                // Pan to location on first fix
+                                const isFirstFix = !this.userLocation || btn.classList.contains('locating');
+                                if (isFirstFix) {
+                                    this.panTo(this.userLocation.lon, this.userLocation.lat);
+                                    if (this.zoom < 15) {
+                                        this.setZoom(15);
+                                    }
+                                }
+                                
+                                this.updateMarkers();
+                            },
+                            (error) => {
+                                btn.classList.remove('locating', 'active');
+                                console.error('Geolocation error:', error);
+                                
+                                let message = 'Unable to get your location.';
+                                switch (error.code) {
+                                    case error.PERMISSION_DENIED:
+                                        message = 'Location permission denied.';
+                                        break;
+                                    case error.POSITION_UNAVAILABLE:
+                                        message = 'Location information unavailable.';
+                                        break;
+                                    case error.TIMEOUT:
+                                        message = 'Location request timed out.';
+                                        break;
+                                }
+                                alert(message);
+                            },
+                            options
+                        );
+                    } else {
+                        btn.classList.remove('locating');
+                        alert('Geolocation is not supported by your browser.');
+                    }
+                }
+            }
+
+            handleMomentum() {
+                if (Math.abs(this.velocity.x) < 0.5 && Math.abs(this.velocity.y) < 0.5) {
+                    this.velocity = { x: 0, y: 0 };
+                    this.updateCenter();
+                    return;
+                }
+                
+                // Apply momentum
+                this.offset.x += this.velocity.x;
+                this.offset.y += this.velocity.y;
+                
+                // Apply friction
+                this.velocity.x *= 0.95;
+                this.velocity.y *= 0.95;
+                
+                // Update center if offset is large
+                if (Math.abs(this.offset.x) > CONFIG.tileSize * this.dpr || 
+                    Math.abs(this.offset.y) > CONFIG.tileSize * this.dpr) {
+                    this.updateCenter();
+                }
+                
+                this.render();
+                this.updateCoordinateDisplay();
+                
+                this.momentumAnimationId = requestAnimationFrame(() => this.handleMomentum());
+            }
+
+            setupEventListeners() {
+                // Window resize
+                window.addEventListener('resize', () => this.resize());
+                
+                // Prevent context menu on canvas
+                this.canvas.addEventListener('contextmenu', e => e.preventDefault());
+                
+                // Mouse events
+                this.canvas.addEventListener('mousedown', e => {
+                    if (e.button !== 0) return; // Only handle left click
+                    
+                    this.isDragging = true;
+                    this.dragStart = { x: e.clientX, y: e.clientY };
+                    this.lastDragTime = Date.now();
+                    this.velocity = { x: 0, y: 0 };
+                    
+                    if (this.momentumAnimationId) {
+                        cancelAnimationFrame(this.momentumAnimationId);
+                        this.momentumAnimationId = null;
+                    }
+                    
+                    this.canvas.style.cursor = 'grabbing';
+                });
+
+                this.canvas.addEventListener('mousemove', e => {
+                    if (!this.isDragging) {
+                        // Update coordinate display on hover
+                        const rect = this.canvas.getBoundingClientRect();
+                        const coords = this.screenToLonLat(e.clientX - rect.left, e.clientY - rect.top);
+                        // Could display hover coordinates
+                        return;
+                    }
+                    
+                    const currentTime = Date.now();
+                    const dt = Math.max(1, currentTime - this.lastDragTime);
+                    
+                    const dx = e.clientX - this.dragStart.x;
+                    const dy = e.clientY - this.dragStart.y;
+                    
+                    // Calculate velocity for momentum
+                    this.velocity.x = (dx * this.dpr) / dt * 16; // Normalize to ~60fps
+                    this.velocity.y = (dy * this.dpr) / dt * 16;
+                    
+                    this.offset.x += dx * this.dpr;
+                    this.offset.y += dy * this.dpr;
+                    
+                    this.dragStart = { x: e.clientX, y: e.clientY };
+                    this.lastDragTime = currentTime;
+                    
+                    // Update center if offset is too large
+                    if (Math.abs(this.offset.x) > CONFIG.tileSize * this.dpr || 
+                        Math.abs(this.offset.y) > CONFIG.tileSize * this.dpr) {
+                        this.updateCenter();
+                    }
+                    
+                    this.render();
+                    this.updateCoordinateDisplay();
+                });
+
+                this.canvas.addEventListener('mouseup', e => {
+                    if (!this.isDragging) return;
+                    
+                    this.isDragging = false;
+                    this.canvas.style.cursor = 'grab';
+                    
+                    // Start momentum if velocity is significant
+                    if (Math.abs(this.velocity.x) > 2 || Math.abs(this.velocity.y) > 2) {
+                        this.handleMomentum();
+                    } else {
+                        this.updateCenter();
+                        this.render();
+                    }
+                });
+
+                this.canvas.addEventListener('mouseleave', () => {
+                    if (this.isDragging) {
+                        this.isDragging = false;
+                        this.canvas.style.cursor = 'grab';
+                        this.velocity = { x: 0, y: 0 };
+                        this.updateCenter();
+                        this.render();
+                    }
+                });
+
+                this.canvas.addEventListener('wheel', e => {
+                    e.preventDefault();
+                    
+                    const rect = this.canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+                    
+                    // Use smaller zoom increments for smoother zooming
+                    let delta;
+                    if (e.deltaMode === WheelEvent.DOM_DELTA_PIXEL) {
+                        delta = -e.deltaY / 1000;
+                    } else if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+                        delta = -e.deltaY / 40;
+                    } else {
+                        delta = -e.deltaY / 100;
+                    }
+                    
+                    // Apply zoom speed factor
+                    delta = Math.max(-0.5, Math.min(0.5, delta));
+                    
+                    this.setZoom(this.zoom + delta, mouseX, mouseY, false);
+                });
+
+                // Touch events
+                let touches = [];
+                let lastDistance = 0;
+                let lastCenter = null;
+                
+                this.canvas.addEventListener('touchstart', e => {
+                    e.preventDefault();
+                    touches = Array.from(e.touches);
+                    
+                    if (this.momentumAnimationId) {
+                        cancelAnimationFrame(this.momentumAnimationId);
+                        this.momentumAnimationId = null;
+                    }
+                    
+                    if (touches.length === 1) {
+                        this.isDragging = true;
+                        this.dragStart = { x: touches[0].clientX, y: touches[0].clientY };
+                        this.lastDragTime = Date.now();
+                        this.velocity = { x: 0, y: 0 };
+                    } else if (touches.length === 2) {
+                        this.isDragging = false;
+                        
+                        // Calculate initial distance and center for pinch zoom
+                        const dx = touches[0].clientX - touches[1].clientX;
+                        const dy = touches[0].clientY - touches[1].clientY;
+                        lastDistance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        lastCenter = {
+                            x: (touches[0].clientX + touches[1].clientX) / 2,
+                            y: (touches[0].clientY + touches[1].clientY) / 2
+                        };
+                    }
+                });
+
+                this.canvas.addEventListener('touchmove', e => {
+                    e.preventDefault();
+                    const newTouches = Array.from(e.touches);
+                    
+                    if (newTouches.length === 1 && this.isDragging) {
+                        const currentTime = Date.now();
+                        const dt = Math.max(1, currentTime - this.lastDragTime);
+                        
+                        const dx = newTouches[0].clientX - this.dragStart.x;
+                        const dy = newTouches[0].clientY - this.dragStart.y;
+                        
+                        this.velocity.x = (dx * this.dpr) / dt * 16;
+                        this.velocity.y = (dy * this.dpr) / dt * 16;
+                        
+                        this.offset.x += dx * this.dpr;
+                        this.offset.y += dy * this.dpr;
+                        
+                        this.dragStart = { x: newTouches[0].clientX, y: newTouches[0].clientY };
+                        this.lastDragTime = currentTime;
+                        
+                        if (Math.abs(this.offset.x) > CONFIG.tileSize * this.dpr || 
+                            Math.abs(this.offset.y) > CONFIG.tileSize * this.dpr) {
+                            this.updateCenter();
+                        }
+                        
+                        this.render();
+                        this.updateCoordinateDisplay();
+                        this.updateScaleBar();
+                    } else if (newTouches.length === 2 && touches.length === 2) {
+                        // Pinch zoom and pan
+                        const dx = newTouches[0].clientX - newTouches[1].clientX;
+                        const dy = newTouches[0].clientY - newTouches[1].clientY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        const center = {
+                            x: (newTouches[0].clientX + newTouches[1].clientX) / 2,
+                            y: (newTouches[0].clientY + newTouches[1].clientY) / 2
+                        };
+                        
+                        if (lastDistance > 0 && lastCenter) {
+                            // Calculate zoom
+                            const scale = distance / lastDistance;
+                            const zoomDelta = Math.log2(scale);
+                            
+                            // Apply zoom at pinch center
+                            const rect = this.canvas.getBoundingClientRect();
+                            this.setZoom(
+                                this.zoom + zoomDelta, 
+                                center.x - rect.left, 
+                                center.y - rect.top,
+                                false
+                            );
+                            
+                            // Handle pan during pinch
+                            const panX = center.x - lastCenter.x;
+                            const panY = center.y - lastCenter.y;
+                            this.offset.x += panX * this.dpr;
+                            this.offset.y += panY * this.dpr;
+                            
+                            this.render();
+                        }
+                        
+                        lastDistance = distance;
+                        lastCenter = center;
+                    }
+                    
+                    touches = newTouches;
+                });
+
+                this.canvas.addEventListener('touchend', e => {
+                    e.preventDefault();
+                    
+                    if (this.isDragging && (Math.abs(this.velocity.x) > 2 || Math.abs(this.velocity.y) > 2)) {
+                        this.handleMomentum();
+                    } else {
+                        this.updateCenter();
+                        this.render();
+                    }
+                    
+                    this.isDragging = false;
+                    lastDistance = 0;
+                    lastCenter = null;
+                });
+
+                // Control buttons
+                document.getElementById('zoom-in').addEventListener('click', () => {
+                    this.setZoom(Math.floor(this.zoom) + 1);
+                });
+
+                document.getElementById('zoom-out').addEventListener('click', () => {
+                    this.setZoom(Math.ceil(this.zoom) - 1);
+                });
+
+                document.getElementById('location-btn').addEventListener('click', () => {
+                    this.toggleLocation();
+                });
+
+                // Keyboard controls
+                document.addEventListener('keydown', e => {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                    
+                    const step = e.shiftKey ? 100 : 50;
+                    
+                    switch(e.key) {
+                        case 'ArrowUp':
+                            e.preventDefault();
+                            this.offset.y += step * this.dpr;
+                            this.updateCenter();
+                            this.render();
+                            break;
+                        case 'ArrowDown':
+                            e.preventDefault();
+                            this.offset.y -= step * this.dpr;
+                            this.updateCenter();
+                            this.render();
+                            break;
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            this.offset.x += step * this.dpr;
+                            this.updateCenter();
+                            this.render();
+                            break;
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            this.offset.x -= step * this.dpr;
+                            this.updateCenter();
+                            this.render();
+                            break;
+                        case '+':
+                        case '=':
+                            e.preventDefault();
+                            this.setZoom(this.zoom + 1);
+                            break;
+                        case '-':
+                        case '_':
+                            e.preventDefault();
+                            this.setZoom(this.zoom - 1);
+                            break;
+                    }
+                });
+
+                // Initialize canvas cursor
+                this.canvas.style.cursor = 'grab';
+            }
+        }
+
+        // Initialize the map
+        const map = new ProfessionalOSMMap('map');
+
+        // Example usage with some cities
+        setTimeout(() => {
+            // Major world cities with proper coordinates
+            const cities = [
+                { id: 'london', lon: -0.1276, lat: 51.5074, name: 'London, UK', color: '#FF0000' },
+                { id: 'paris', lon: 2.3522, lat: 48.8566, name: 'Paris, France', color: '#0000FF' },
+                { id: 'newyork', lon: -74.0060, lat: 40.7128, name: 'New York, USA', color: '#00AA00' },
+                { id: 'tokyo', lon: 139.6503, lat: 35.6762, name: 'Tokyo, Japan', color: '#FF00FF' },
+                { id: 'sydney', lon: 151.2093, lat: -33.8688, name: 'Sydney, Australia', color: '#00AAAA' },
+                { id: 'capetown', lon: 18.4241, lat: -33.9249, name: 'Cape Town, South Africa', color: '#FFAA00' }
+            ];
+            
+            cities.forEach(city => {
+                map.addMarker(city.id, city.lon, city.lat, {
+                    color: city.color,
+                    title: city.name
+                });
+            });
+            
+            // Demonstrate distance calculation
+            const distance = GISUtils.calculateDistance(
+                cities[0].lon, cities[0].lat,
+                cities[1].lon, cities[1].lat
+            );
+            console.log(`Distance from London to Paris: ${GISUtils.formatDistance(distance)}`);
+        }, 2000);
+
+        // Expose map instance for debugging/testing
+        window.map = map;
+        window.GISUtils = GISUtils;
+    </script>
+</body>
+</html>
