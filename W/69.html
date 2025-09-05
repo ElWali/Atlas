@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Slippy OSM Map — Atlas.js Clean Version</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body, html {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #f8f8f8;
+    touch-action: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  }
+  #map {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform: translateZ(0);
+    transition: transform 0s;
+    cursor: grab;
+  }
+  #map.zooming { transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+
+  .tile {
+    position: absolute;
+    width: 256px;
+    height: 256px;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    transition: opacity 0.3s ease-out;
+    user-select: none;
+    pointer-events: none;
+    opacity: 0;
+    will-change: opacity;
+  }
+  .tile.visible { opacity: 1; }
+  .tile.loading { opacity: 0.7; }
+  .tile.error { opacity: 0.4; background: repeating-linear-gradient(45deg, #eee, #eee 10px, #ddd 10px, #ddd 20px); }
+
+  /* === UI CONTROLS === */
+  .map-controls {
+    position: fixed;
+    bottom: max(env(safe-area-inset-bottom), 16px);
+    right: max(env(safe-area-inset-right), 16px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    z-index: 200;
+    padding: 10px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(16px);
+    border-radius: 20px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    border: 1px solid rgba(255,255,255,0.5);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(0);
+  }
+
+  .zoom-btn, .pan-btn {
+    border: none;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    font-weight: 600;
+    color: #222;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    transition: all 0.15s ease, transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+    -webkit-tap-highlight-color: transparent;
+    border-radius: 50%;
+    font-size: 20px;
+    width: 48px;
+    height: 48px;
+    line-height: 1;
+  }
+  .pan-btn { border-radius: 8px; width: 40px; height: 40px; font-size: 18px; }
+
+  .zoom-btn:hover, .pan-btn:hover, .zoom-btn:focus-visible, .pan-btn:focus-visible {
+    background: white;
+    transform: scale(1.12);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    outline: 2px solid #007aff;
+    outline-offset: 2px;
+  }
+  .zoom-btn:active, .pan-btn:active { transform: scale(0.95); transition: transform 0.08s ease; }
+
+  .pan-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+
+  #coords {
+    position: fixed;
+    top: max(env(safe-area-inset-top), 12px);
+    left: max(env(safe-area-inset-left), 12px);
+    background: rgba(0,0,0,0.88);
+    color: #fff;
+    padding: 8px 14px;
+    font-family: ui-monospace, SFMono-Regular, 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 8px;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.95;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(0);
+    white-space: nowrap;
+  }
+
+  /* === SCALE BAR === */
+  #scale-bar {
+    position: fixed;
+    bottom: calc(max(env(safe-area-inset-bottom), 12px) + 44px);
+    left: max(env(safe-area-inset-left), 12px);
+    background: rgba(255,255,255,0.9);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    z-index: 95;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  /* === ATTRIBUTION FOOTER === */
+  #atlas-attribution {
+    position: fixed;
+    bottom: 6px;
+    right: 10px;
+    font-size: 11px;
+    background: rgba(255,255,255,0.7);
+    padding: 2px 6px;
+    border-radius: 3px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+    z-index: 9999;
+  }
+  #atlas-attribution:hover { opacity: 0.9; }
+  #atlas-attribution a { color: inherit; text-decoration: none; }
+  #atlas-attribution a:hover { text-decoration: underline; }
+
+  .fade { opacity: 0.2 !important; transform: translateY(8px); }
+  .fade:hover { opacity: 1 !important; transform: translateY(0); }
+
+  @media (max-width: 480px) {
+    .zoom-btn { width: 44px; height: 44px; font-size: 22px; }
+    .pan-btn { width: 36px; height: 36px; font-size: 16px; }
+    .map-controls { padding: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div id="coords">lat: 0.0000, lon: 0.0000, z: 2</div>
+<div id="scale-bar"></div>
+
+<div class="map-controls" role="region" aria-label="Map controls">
+  <div class="pan-group" role="group" aria-label="Pan controls">
+    <div></div>
+    <button class="pan-btn" id="panUp" aria-label="Pan Up">↑</button>
+    <div></div>
+    <button class="pan-btn" id="panLeft" aria-label="Pan Left">←</button>
+    <div></div>
+    <button class="pan-btn" id="panRight" aria-label="Pan Right">→</button>
+    <div></div>
+    <button class="pan-btn" id="panDown" aria-label="Pan Down">↓</button>
+    <div></div>
+  </div>
+  <button class="zoom-btn" id="zoomIn" aria-label="Zoom in">＋</button>
+  <button class="zoom-btn" id="zoomOut" aria-label="Zoom out">－</button>
+</div>
+
+<div id="atlas-attribution">
+  <a href="https://www.openstreetmap.org/copyright" target="_blank">© OpenStreetMap</a> — 
+  <a href="https://github.com/yourusername/atlas.js" target="_blank">Atlas.js</a>
+</div>
+
+<script>
+const TILE_SIZE = 256;
+let zoom = 3;
+let centerLat = 51.5;
+let centerLon = 0;
+const mapEl = document.getElementById('map');
+const coordsEl = document.getElementById('coords');
+const tilePool = {};
+let velocityX = 0, velocityY = 0, lastPanTime = 0, animationFrameId = null;
+const FRICTION = 0.92;
+
+function lonLatToTile(lon, lat, z) {
+  const x = Math.floor((lon + 180) / 360 * Math.pow(2, z));
+  const latRad = lat * Math.PI / 180;
+  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, z));
+  return { x, y };
+}
+
+function pixelOffsetToLonLat(deltaX, deltaY, z) {
+  const centerMercX = (centerLon * Math.PI / 180) * (TILE_SIZE * Math.pow(2, z) / (2 * Math.PI));
+  const centerMercY = -Math.log(Math.tan((Math.PI / 4) + (centerLat * Math.PI / 180) / 2)) * (TILE_SIZE * Math.pow(2, z) / (2 * Math.PI));
+  const newMercX = centerMercX + deltaX;
+  const newMercY = centerMercY + deltaY;
+  const newLon = (newMercX * (2 * Math.PI) / (TILE_SIZE * Math.pow(2, z))) * (180 / Math.PI);
+  const newLat = (2 * Math.atan(Math.exp(-newMercY * (2 * Math.PI) / (TILE_SIZE * Math.pow(2, z)))) - Math.PI / 2) * (180 / Math.PI);
+  return { deltaLon: newLon - centerLon, deltaLat: newLat - centerLat };
+}
+
+function acquireTile(z, x, y) {
+  const key = `${z}/${x}/${y}`;
+  let record = tilePool[key];
+  if (!record) {
+    const img = document.createElement('img');
+    img.className = 'tile loading';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.dataset.key = key;
+    img.alt = `Map tile at zoom ${z}, x: ${x}, y: ${y}`;
+    img.setAttribute('role', 'presentation');
+    img.addEventListener('load', () => { img.classList.remove('loading'); img.classList.add('visible'); }, { once:true });
+    img.addEventListener('error', () => { img.classList.remove('loading'); img.classList.add('error'); }, { once:true });
+    record = tilePool[key] = { element: img, lastUsed: Date.now(), currentSrc: null };
+    mapEl.appendChild(img);
+  }
+  const expectedSrc = `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+  if (record.currentSrc !== expectedSrc) {
+    record.element.classList.remove('visible', 'error');
+    record.element.classList.add('loading');
+    record.element.src = expectedSrc;
+    record.currentSrc = expectedSrc;
+  }
+  record.lastUsed = Date.now();
+  return record.element;
+}
+
+function cleanupOldTiles() {
+  const now = Date.now();
+  const MAX_AGE = 90000;
+  for (let key in tilePool) {
+    if (now - tilePool[key].lastUsed > MAX_AGE) {
+      tilePool[key].element.remove();
+      delete tilePool[key];
+    }
+  }
+}
+
+function updateScaleBar() {
+  const equatorCircumference = 40075017;
+  const metersPerPixel = equatorCircumference * Math.cos(centerLat * Math.PI / 180) / (256 * Math.pow(2, zoom));
+  const barWidthPx = 100;
+  let meters = metersPerPixel * barWidthPx;
+  let unit, value;
+  if (meters < 1000) { unit='m'; value=Math.round(meters/10)*10; }
+  else { unit='km'; value=Math.round(meters/100)/10; }
+  document.getElementById('scale-bar').innerHTML = `<div style="width:${barWidthPx}px;height:2px;background:#333;margin:2px 0;"></div><div>${value} ${unit}</div>`;
+}
+
+function updateMap() {
+  const centerTile = lonLatToTile(centerLon, centerLat, zoom);
+  const buffer = 2;
+  const tilesX = Math.ceil(window.innerWidth/TILE_SIZE)+buffer*2;
+  const tilesY = Math.ceil(window.innerHeight/TILE_SIZE)+buffer*2;
+  const offsetX = (window.innerWidth/2)-(TILE_SIZE/2);
+  const offsetY = (window.innerHeight/2)-(TILE_SIZE/2);
+  for (let dx=-Math.floor(tilesX/2); dx<=Math.floor(tilesX/2); dx++) {
+    for (let dy=-Math.floor(tilesY/2); dy<=Math.floor(tilesY/2); dy++) {
+      let tileX = centerTile.x+dx;
+      const tileY = centerTile.y+dy;
+      const maxTileX = Math.pow(2, zoom);
+      tileX = ((tileX%maxTileX)+maxTileX)%maxTileX;
+      if(tileY<0||tileY>=maxTileX) continue;
+      const tileEl = acquireTile(zoom, tileX, tileY);
+      tileEl.style.transform = `translate(${Math.round(offsetX+dx*TILE_SIZE)}px,${Math.round(offsetY+dy*TILE_SIZE)}px)`;
+    }
+  }
+  coordsEl.textContent = `lat: ${centerLat.toFixed(4)}, lon: ${centerLon.toFixed(4)}, z: ${zoom}`;
+  updateScaleBar();
+  if('requestIdleCallback' in window) requestIdleCallback(cleanupOldTiles,{timeout:2000});
+  else setTimeout(cleanupOldTiles,2000);
+  resetUIAutoHide();
+}
+
+function panByPixels(deltaX, deltaY, isRapid=false){
+  const now = Date.now();
+  const {deltaLon, deltaLat} = pixelOffsetToLonLat(deltaX, deltaY, zoom);
+  centerLon+=deltaLon; centerLat+=deltaLat;
+  centerLon = ((centerLon+180)%360+360)%360-180;
+  centerLat = Math.max(-85,Math.min(85,centerLat));
+  if(isRapid){ velocityX=deltaX*0.8; velocityY=deltaY*0.8; lastPanTime=now; if(!animationFrameId) animateInertia();}
+  else{ velocityX=velocityY=0; if(animationFrameId){cancelAnimationFrame(animationFrameId); animationFrameId=null;} }
+  updateMap();
+}
+
+function animateInertia(){
+  const now = Date.now();
+  const elapsed = (now-lastPanTime)/16;
+  lastPanTime=now;
+  velocityX*=Math.pow(FRICTION,elapsed);
+  velocityY*=Math.pow(FRICTION,elapsed);
+  if(Math.abs(velocityX)>0.5||Math.abs(velocityY)>0.5){
+    panByPixels(velocityX,velocityY,true);
+    animationFrameId=requestAnimationFrame(animateInertia);
+  }else{ velocityX=velocityY=0; animationFrameId=null; }
+}
+
+function zoomTo(newZoom){
+  if(newZoom<0||newZoom>19||newZoom===zoom) return;
+  const oldZoom=zoom; zoom=newZoom;
+  mapEl.classList.add('zooming');
+  const scale=Math.pow(2,zoom-oldZoom);
+  mapEl.style.transformOrigin='center center';
+  mapEl.style.transform=`scale(${1/scale})`;
+  void mapEl.offsetWidth;
+  requestAnimationFrame(()=>{ mapEl.style.transition='transform 0.25s cubic-bezier(0.25,0.46,0.45,0.94)'; mapEl.style.transform='scale(1)'; });
+  setTimeout(()=>{ updateMap(); mapEl.classList.remove('zooming'); mapEl.style.transition=''; mapEl.style.transform=''; mapEl.style.transformOrigin=''; },250);
+}
+
+// ================= TOUCH & MOUSE SUPPORT =================
+let touchStartX=0,touchStartY=0,isPanning=false;
+mapEl.addEventListener('touchstart', e=>{ if(e.touches.length===1){touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY; isPanning=true; velocityX=velocityY=0; if(animationFrameId){cancelAnimationFrame(animationFrameId); animationFrameId=null;} mapEl.style.cursor='grabbing'; }},{passive:true});
+mapEl.addEventListener('touchmove', e=>{ if(e.touches.length===1 && isPanning){ const deltaX=e.touches[0].clientX-touchStartX; const deltaY=e.touches[0].clientY-touchStartY; panByPixels(-deltaX,-deltaY,false); touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY; e.preventDefault(); }},{passive:false});
+mapEl.addEventListener('touchend', ()=>{ isPanning=false; mapEl.style.cursor='grab'; });
+
+let isMouseDown=false,lastMouseX=0,lastMouseY=0;
+mapEl.addEventListener('mousedown', e=>{ isMouseDown=true; lastMouseX=e.clientX; lastMouseY=e.clientY; mapEl.style.cursor='grabbing'; velocityX=velocityY=0; if(animationFrameId){cancelAnimationFrame(animationFrameId); animationFrameId=null;} });
+mapEl.addEventListener('mousemove', e=>{ if(isMouseDown){ const deltaX=e.clientX-lastMouseX; const deltaY=e.clientY-lastMouseY; panByPixels(-deltaX,-deltaY,false); lastMouseX=e.clientX; lastMouseY=e.clientY; }});
+mapEl.addEventListener('mouseup', e=>{ if(isMouseDown){ isMouseDown=false; mapEl.style.cursor='grab'; }});
+mapEl.addEventListener('mouseleave', ()=>{ if(isMouseDown){ isMouseDown=false; mapEl.style.cursor='grab'; }});
+mapEl.addEventListener('wheel', e=>{ zoomTo(zoom + (e.deltaY>0?-1:1)); e.preventDefault(); },{passive:false});
+
+// ================= BUTTON EVENTS =================
+document.getElementById('zoomIn').addEventListener('click', ()=>zoomTo(zoom+1));
+document.getElementById('zoomOut').addEventListener('click', ()=>zoomTo(zoom-1));
+document.getElementById('panUp').addEventListener('click', ()=>panByPixels(0,100,true));
+document.getElementById('panDown').addEventListener('click', ()=>panByPixels(0,-100,true));
+document.getElementById('panLeft').addEventListener('click', ()=>panByPixels(100,0,true));
+document.getElementById('panRight').addEventListener('click', ()=>panByPixels(-100,0,true));
+
+// ================= RESIZE =================
+window.addEventListener('resize', updateMap);
+
+// ================= AUTO-HIDE UI =================
+let uiTimeout;
+function resetUIAutoHide(){
+  const controls = document.querySelector('.map-controls');
+  controls.classList.remove('fade');
+  clearTimeout(uiTimeout);
+  uiTimeout=setTimeout(()=>{controls.classList.add('fade');},5000);
+}
+
+// ================= INITIALIZE =================
+updateMap();
+resetUIAutoHide();
+</script>
+
+</body>
+</html>
