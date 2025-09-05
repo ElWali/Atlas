@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Atlas.js — Smooth UX OSM Map</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif; touch-action:none; -webkit-text-size-adjust:100%; background:#f8f8f8;}
+#map { position:relative; width:100%; height:100%; transform:translateZ(0); transition:transform 0s;}
+#map.zooming { transition: transform 0.25s cubic-bezier(0.25,0.46,0.45,0.94);}
+.tile { position:absolute; width:256px; height:256px; image-rendering:-webkit-optimize-contrast; image-rendering:crisp-edges; transition: opacity 0.3s ease-out; user-select:none; pointer-events:none; opacity:0; will-change:opacity;}
+.tile.visible { opacity:1;}
+.tile.loading { opacity:0.7;}
+.tile.error { opacity:0.4; background:repeating-linear-gradient(45deg,#eee,#eee 10px,#ddd 10px,#ddd 20px);}
+
+#coords { position:fixed; top:12px; left:12px; background:rgba(0,0,0,0.88); color:#fff; padding:6px 12px; font-family:ui-monospace,SFMono-Regular,'Courier New',monospace; font-size:13px; border-radius:6px; pointer-events:none; z-index:100; opacity:0.95;}
+#help { display:none; } /* optional hidden help text */
+#attribution { position:fixed; bottom:6px; left:6px; background:rgba(0,0,0,0.7); color:#fff; padding:4px 8px; font-size:11px; border-radius:4px; z-index:90; opacity:0.95;}
+#attribution a { color:#a0d8ff; text-decoration:none; border-bottom:1px dotted rgba(255,255,255,0.6);}
+#attribution a:hover { color:#fff;}
+#scale-bar { position:fixed; bottom:30px; left:6px; background:rgba(255,255,255,0.9); padding:4px 8px; border-radius:4px; font-size:12px; z-index:95; display:flex; flex-direction:column; align-items:center; gap:2px; }
+
+.map-controls { position:fixed; bottom:16px; right:16px; display:flex; flex-direction:column; gap:6px; z-index:200; padding:8px; background:rgba(255,255,255,0.85); backdrop-filter:blur(12px); border-radius:16px; box-shadow:0 6px 20px rgba(0,0,0,0.15);}
+.zoom-btn, .pan-btn { border:none; background:rgba(255,255,255,0.92); font-weight:600; color:#222; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.1); transition:all 0.15s ease, transform 0.2s cubic-bezier(0.2,0.8,0.3,1); border-radius:50%; font-size:20px; width:48px; height:48px; line-height:1; -webkit-tap-highlight-color:transparent;}
+.pan-btn { border-radius:8px; width:40px; height:40px; font-size:18px;}
+.zoom-btn:hover,.pan-btn:hover,.zoom-btn:focus-visible,.pan-btn:focus-visible { background:white; transform:scale(1.12); box-shadow:0 4px 12px rgba(0,0,0,0.2); outline:2px solid #007aff; outline-offset:2px;}
+.zoom-btn:active,.pan-btn:active { transform:scale(0.95); transition:transform 0.08s ease;}
+.pan-group { display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:4px; margin-bottom:4px; }
+
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="coords">lat: 0.0000, lon: 0.0000, z:3</div>
+<div id="attribution">© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OSM</a> contributors | Tiles © OSM</div>
+<div id="scale-bar"></div>
+
+<div class="map-controls" role="region" aria-label="Map controls">
+    <div class="pan-group" role="group" aria-label="Pan controls">
+        <div></div><button class="pan-btn" id="panUp" aria-label="Pan Up">↑</button><div></div>
+        <button class="pan-btn" id="panLeft" aria-label="Pan Left">←</button><div></div>
+        <button class="pan-btn" id="panRight" aria-label="Pan Right">→</button><div></div>
+        <button class="pan-btn" id="panDown" aria-label="Pan Down">↓</button><div></div>
+    </div>
+    <button class="zoom-btn" id="zoomIn" aria-label="Zoom in">＋</button>
+    <button class="zoom-btn" id="zoomOut" aria-label="Zoom out">－</button>
+    <button class="zoom-btn" id="locateMe" aria-label="Locate me">📍</button>
+</div>
+
+<script>
+// ================= CONFIG =================
+const TILE_SIZE = 256;
+let zoom = 3, centerLat = 51.5, centerLon = 0;
+const mapEl = document.getElementById('map');
+const coordsEl = document.getElementById('coords');
+const tilePool = {};
+let velocityX=0, velocityY=0, lastPanTime=0, animationFrameId=null, FRICTION=0.92;
+
+// ================= TILE MANAGER =================
+function acquireTile(z,x,y){
+    const key=`${z}/${x}/${y}`;
+    let record=tilePool[key];
+    if(!record){
+        const img=document.createElement('img');
+        img.className='tile loading'; img.loading='lazy'; img.decoding='async'; img.dataset.key=key;
+        img.alt=`Map tile at zoom ${z}, x:${x}, y:${y}`; img.setAttribute('role','presentation');
+        img.addEventListener('load',()=>{img.classList.remove('loading'); img.classList.add('visible');},{once:true});
+        img.addEventListener('error',()=>{img.classList.remove('loading'); img.classList.add('error'); img.src='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="256" height="256"%3E%3Crect width="256" height="256" fill="%23eee"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="16" fill="%23999"%3ETILE ERROR%3C/text%3E%3C/svg%3E';},{once:true});
+        record={element:img,lastUsed:Date.now(),currentSrc:null};
+        mapEl.appendChild(img); tilePool[key]=record;
+    }
+    const expectedSrc=`https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+    if(record.currentSrc!==expectedSrc){record.element.classList.remove('visible','error'); record.element.classList.add('loading'); record.element.src=expectedSrc; record.currentSrc=expectedSrc;}
+    record.lastUsed=Date.now(); return record.element;
+}
+function cleanupOldTiles(){
+    const now=Date.now(), MAX_AGE=90000;
+    for(let key in tilePool){if(now-tilePool[key].lastUsed>MAX_AGE){tilePool[key].element.remove(); delete tilePool[key];}}
+}
+
+// ================= CORE MATH =================
+function lonLatToTile(lon,lat,z){const x=Math.floor((lon+180)/360*Math.pow(2,z)); const latRad=lat*Math.PI/180; const y=Math.floor((1-Math.log(Math.tan(latRad)+1/Math.cos(latRad))/Math.PI)/2*Math.pow(2,z)); return {x,y};}
+function pixelOffsetToLonLat(deltaX,deltaY,z){const centerMercX=(centerLon*Math.PI/180)*(TILE_SIZE*Math.pow(2,z)/(2*Math.PI)); const centerMercY=-Math.log(Math.tan(Math.PI/4+(centerLat*Math.PI/180)/2))*(TILE_SIZE*Math.pow(2,z)/(2*Math.PI));
+const newMercX=centerMercX+deltaX; const newMercY=centerMercY+deltaY; const newLon=(newMercX*(2*Math.PI)/(TILE_SIZE*Math.pow(2,z)))*(180/Math.PI);
+const newLat=(2*Math.atan(Math.exp(-newMercY*(2*Math.PI)/(TILE_SIZE*Math.pow(2,z))))-Math.PI/2)*(180/Math.PI); return {deltaLon:newLon-centerLon, deltaLat:newLat-centerLat};}
+
+// ================= RENDERING =================
+function updateMap(){
+    const centerTile=lonLatToTile(centerLon,centerLat,zoom); const buffer=2;
+    const tilesX=Math.ceil(window.innerWidth/TILE_SIZE)+buffer*2; const tilesY=Math.ceil(window.innerHeight/TILE_SIZE)+buffer*2;
+    const offsetX=(window.innerWidth/2)-(TILE_SIZE/2); const offsetY=(window.innerHeight/2)-(TILE_SIZE/2);
+    for(let dx=-Math.floor(tilesX/2);dx<=Math.floor(tilesX/2);dx++){
+        for(let dy=-Math.floor(tilesY/2);dy<=Math.floor(tilesY/2);dy++){
+            let tileX=centerTile.x+dx, tileY=centerTile.y+dy, maxTileX=Math.pow(2,zoom);
+            tileX=((tileX%maxTileX)+maxTileX)%maxTileX; if(tileY<0||tileY>=maxTileX) continue;
+            const tileEl=acquireTile(zoom,tileX,tileY);
+            const left=offsetX+dx*TILE_SIZE; const top=offsetY+dy*TILE_SIZE;
+            tileEl.style.transform=`translate(${Math.round(left)}px,${Math.round(top)}px)`;
+        }
+    }
+    coordsEl.textContent=`lat: ${centerLat.toFixed(4)}, lon: ${centerLon.toFixed(4)}, z:${zoom}`;
+    updateScaleBar();
+    if('requestIdleCallback' in window){requestIdleCallback(cleanupOldTiles,{timeout:2000});}else{setTimeout(cleanupOldTiles,2000);}
+}
+function updateScaleBar(){
+    const equatorCircumference=40075017; const metersPerPixel=equatorCircumference*Math.cos(centerLat*Math.PI/180)/(256*Math.pow(2,zoom)); const barWidthPx=100;
+    let meters=metersPerPixel*barWidthPx, unit,value;
+    if(meters<1000){unit='m'; value=Math.round(meters/10)*10;}else{unit='km'; value=Math.round(meters/100)/10;}
+    document.getElementById('scale-bar').innerHTML=`<div style="width:${barWidthPx}px;height:2px;background:#333;margin:2px 0;"></div><div>${value} ${unit}</div>`;
+}
+
+// ================= PAN / INERTIA =================
+function panByPixels(deltaX,deltaY,isRapid=false){
+    const now=Date.now();
+    const {deltaLon,deltaLat}=pixelOffsetToLonLat(deltaX,deltaY,zoom);
+    centerLon+=deltaLon; centerLat+=deltaLat;
+    centerLon=((centerLon+180)%360+360)%360-180; centerLat=Math.max(-85,Math.min(85,centerLat));
+    if(isRapid){velocityX=deltaX*0.8; velocityY=deltaY*0.8; lastPanTime=now; if(!animationFrameId) animateInertia();}
+    else{velocityX=velocityY=0; if(animationFrameId){cancelAnimationFrame(animationFrameId); animationFrameId=null;}}
+    updateMap();
+}
+function animateInertia(){const now=Date.now(); const elapsed=(now-lastPanTime)/16; lastPanTime=now; velocityX*=Math.pow(FRICTION,elapsed); velocityY*=Math.pow(FRICTION,elapsed);
+if(Math.abs(velocityX)>0.5||Math.abs(velocityY)>0.5){panByPixels(velocityX,velocityY,true); animationFrameId=requestAnimationFrame(animateInertia);}else{velocityX=velocityY=0; animationFrameId=null;}}
+
+// ================= ZOOM =================
+function zoomTo(newZoom){if(newZoom<0||newZoom>19||newZoom===zoom) return;
+const oldZoom=zoom; zoom=newZoom; mapEl.classList.add('zooming'); const scale=Math.pow(2,zoom-oldZoom); mapEl.style.transformOrigin='center center'; mapEl.style.transform=`scale(${1/scale})`; void mapEl.offsetWidth;
+requestAnimationFrame(()=>{mapEl.style.transition='transform 0.25s cubic-bezier(0.25,0.46,0.45,0.94)'; mapEl.style.transform='scale(1)';});
+setTimeout(()=>{updateMap(); mapEl.classList.remove('zooming'); mapEl.style.transition=''; mapEl.style.transform=''; mapEl.style.transformOrigin='';},250);}
+
+// ================= MOUSE / TOUCH =================
+let isMouseDown=false,lastMouseX=0,lastMouseY=0,touchStartX=0,touchStartY=0,isPanning=false;
+mapEl.addEventListener('mousedown',e=>{isMouseDown=true; lastMouseX=e.clientX; lastMouseY=e.clientY; mapEl.style.cursor='grabbing'; velocityX=velocityY=0; if(animationFrameId){cancelAnimationFrame(animationFrameId); animationFrameId=null;}});
+mapEl.addEventListener('mousemove',e=>{if(isMouseDown){const dx=e.clientX-lastMouseX, dy=e.clientY-lastMouseY; panByPixels(-dx,-dy,false); lastMouseX=e.clientX; lastMouseY=e.clientY;}});
+mapEl.addEventListener('mouseup',()=>{isMouseDown=false; mapEl.style.cursor='grab';});
+mapEl.addEventListener('mouseleave',()=>{if(isMouseDown){isMouseDown=false; mapEl.style.cursor='grab';}});
+mapEl.style.cursor='grab';
+
+mapEl.addEventListener('touchstart',e=>{if(e.touches.length===1){touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY; isPanning=true; velocityX=velocityY=0; if(animationFrameId){cancelAnimationFrame(animationFrameId); animationFrameId=null;} mapEl.style.cursor='grabbing';}}, {passive:true});
+mapEl.addEventListener('touchmove',e=>{if(e.touches.length===1 && isPanning){const dx=e.touches[0].clientX-touchStartX, dy=e.touches[0].clientY-touchStartY; panByPixels(-dx,-dy,false); touchStartX=e.touches[0].clientX; touchStartY=e.touches[0].clientY; e.preventDefault();}}, {passive:false});
+mapEl.addEventListener('touchend',()=>{isPanning=false; mapEl.style.cursor='grab';});
+
+// ================= BUTTONS =================
+const bindButton=(id,action,isPan=false)=>{const btn=document.getElementById(id); const handler=()=>{action(); btn.blur(); coordsEl.style.opacity='1'; coordsEl.style.transform='translateY(0)'; clearTimeout(window.coordFade); window.coordFade=setTimeout(()=>{coordsEl.style.opacity='0.7'; coordsEl.style.transform='translateY(4px)';},2500);}; btn.addEventListener('click',handler); btn.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){handler(); e.preventDefault();}});};
+const panStepX=()=>window.innerWidth/4; const panStepY=()=>window.innerHeight/4;
+bindButton('panUp',()=>panByPixels(0,-panStepY(),true),true);
+bindButton('panDown',()=>panByPixels(0,panStepY(),true),true);
+bindButton('panLeft',()=>panByPixels(-panStepX(),0,true),true);
+bindButton('panRight',()=>panByPixels(panStepX(),0,true),true);
+bindButton('zoomIn',()=>zoomTo(zoom+1));
+bindButton('zoomOut',()=>zoomTo(zoom-1));
+bindButton('locateMe',()=>{if(navigator.geolocation){coordsEl.textContent='📍 Locating...'; navigator.geolocation.getCurrentPosition(pos=>{centerLat=pos.coords.latitude; centerLon=pos.coords.longitude; zoom=Math.max(zoom,12); updateMap(); coordsEl.textContent=`lat: ${centerLat.toFixed(4)}, lon: ${centerLon.toFixed(4)}, z:${zoom}`;},err=>{coordsEl.textContent='⛔ Location denied'; setTimeout(updateMap,2000);},{enableHighAccuracy:true,timeout:10000,maximumAge:60000});}else{coordsEl.textContent='⚠️ Geolocation unsupported'; setTimeout(updateMap,2000);}});
+
+// ================= KEYBOARD =================
+window.addEventListener('keydown',e=>{switch(e.key){case'ArrowUp':panByPixels(0,-panStepY(),true); e.preventDefault(); break; case'ArrowDown':panByPixels(0,panStepY(),true); e.preventDefault(); break; case'ArrowLeft':panByPixels(-panStepX(),0,true); e.preventDefault(); break; case'ArrowRight':panByPixels(panStepX(),0,true); e.preventDefault(); break; case'+': zoomTo(zoom+1); e.preventDefault(); break; case'-': zoomTo(zoom-1); e.preventDefault(); break;}});
+
+// ================= INIT =================
+updateMap();
+</script>
+</body>
+</html>
