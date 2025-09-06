@@ -1,0 +1,176 @@
+/*
+Atlas.js - Reference HTML/CSS structure
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas.js Map</title>
+<style>
+  html, body, #atlasMap {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  #atlasMap {
+    position: relative;
+  }
+  .tile {
+    position: absolute;
+    will-change: transform;
+    image-rendering: crisp-edges;
+  }
+</style>
+</head>
+<body>
+<div id="atlasMap"></div>
+<script src="Atlas.js"></script>
+</body>
+</html>
+*/
+
+class AtlasMap {
+    constructor(containerId, options = {}) {
+        this.container = document.getElementById(containerId);
+        if (!this.container) throw new Error("Map container not found");
+
+        // Map state
+        this.zoom = options.zoom || 2;
+        this.center = options.center || { lat: 0, lon: 0 };
+        this.tileSize = 256;
+        this.tiles = new Map();
+        this.maxLat = 85.05112878; // Polar clamp
+        this.minLat = -85.05112878;
+        this.minZoom = 0;
+        this.maxZoom = 19;
+
+        // Tile provider
+        this.tileUrl = options.tileUrl || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+
+        // Event handling
+        this.isDragging = false;
+        this.lastMousePos = null;
+
+        // Initialize
+        this._setupContainer();
+        this._bindEvents();
+        this._render();
+    }
+
+    _setupContainer() {
+        this.container.style.position = "relative";
+        this.container.style.overflow = "hidden";
+    }
+
+    _bindEvents() {
+        // Mouse drag
+        this.container.addEventListener("mousedown", (e) => this._startDrag(e));
+        document.addEventListener("mousemove", (e) => this._drag(e));
+        document.addEventListener("mouseup", () => this._endDrag());
+
+        // Touch drag
+        this.container.addEventListener("touchstart", (e) => this._startDrag(e.touches[0]));
+        this.container.addEventListener("touchmove", (e) => { this._drag(e.touches[0]); e.preventDefault(); });
+        this.container.addEventListener("touchend", () => this._endDrag());
+
+        // Wheel zoom
+        this.container.addEventListener("wheel", (e) => this._onWheel(e));
+    }
+
+    _startDrag(e) {
+        this.isDragging = true;
+        this.lastMousePos = { x: e.clientX, y: e.clientY };
+    }
+
+    _drag(e) {
+        if (!this.isDragging) return;
+        const dx = e.clientX - this.lastMousePos.x;
+        const dy = e.clientY - this.lastMousePos.y;
+        this.lastMousePos = { x: e.clientX, y: e.clientY };
+        this._pan(dx, dy);
+    }
+
+    _endDrag() {
+        this.isDragging = false;
+    }
+
+    _onWheel(e) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -1 : 1;
+        this._zoom(delta, e.clientX, e.clientY);
+    }
+
+    _pan(dx, dy) {
+        const scale = (this.tileSize * Math.pow(2, this.zoom)) / (2 * Math.PI);
+        const dLon = (dx / scale) * 360;
+        const dLat = (dy / scale) * 360; // Approximate for small moves
+        this.center.lon -= dLon;
+        this.center.lat += dLat;
+        this.center.lat = Math.max(this.minLat, Math.min(this.maxLat, this.center.lat));
+        this._render();
+    }
+
+    _zoom(delta, px, py) {
+        const newZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.zoom + delta));
+        if (newZoom === this.zoom) return;
+        this.zoom = newZoom;
+        this._render();
+    }
+
+    _render() {
+        const zoom = this.zoom;
+        const center = this.center;
+        const tileCount = Math.pow(2, zoom);
+        const containerWidth = this.container.clientWidth;
+        const containerHeight = this.container.clientHeight;
+
+        // Convert lat/lon to tile numbers
+        const centerXTile = ((center.lon + 180) / 360) * tileCount;
+        const centerYTile = ((1 - Math.log(Math.tan(center.lat * Math.PI / 180) + 1 / Math.cos(center.lat * Math.PI / 180)) / Math.PI) / 2) * tileCount;
+
+        const startXTile = Math.floor(centerXTile - containerWidth / (2 * this.tileSize));
+        const startYTile = Math.floor(centerYTile - containerHeight / (2 * this.tileSize));
+        const endXTile = Math.ceil(centerXTile + containerWidth / (2 * this.tileSize));
+        const endYTile = Math.ceil(centerYTile + containerHeight / (2 * this.tileSize));
+
+        // Remove tiles outside current view
+        this.tiles.forEach((tile, key) => {
+            const [x, y, z] = key.split(",").map(Number);
+            if (z !== zoom || x < startXTile || x > endXTile || y < startYTile || y > endYTile) {
+                this.container.removeChild(tile);
+                this.tiles.delete(key);
+            }
+        });
+
+        // Add new tiles
+        for (let x = startXTile; x <= endXTile; x++) {
+            for (let y = startYTile; y <= endYTile; y++) {
+                const wrappedX = ((x % tileCount) + tileCount) % tileCount; // Horizontal wrap
+                if (y < 0 || y >= tileCount) continue; // Skip vertical wrap
+                const key = `${wrappedX},${y},${zoom}`;
+                if (!this.tiles.has(key)) {
+                    const img = document.createElement("img");
+                    img.className = "tile";
+                    img.src = this.tileUrl.replace("{z}", zoom).replace("{x}", wrappedX).replace("{y}", y);
+                    img.style.width = `${this.tileSize}px`;
+                    img.style.height = `${this.tileSize}px`;
+                    img.style.position = "absolute";
+                    this.container.appendChild(img);
+                    this.tiles.set(key, img);
+                }
+                // Position tiles
+                const tile = this.tiles.get(key);
+                const tileX = (wrappedX - centerXTile) * this.tileSize + containerWidth / 2;
+                const tileY = (y - centerYTile) * this.tileSize + containerHeight / 2;
+                tile.style.transform = `translate(${tileX}px, ${tileY}px)`;
+            }
+        }
+    }
+}
+
+// Usage example
+// new AtlasMap("atlasMap", { zoom: 2, center: { lat: 0, lon: 0 } });
