@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="origin">
+  <title>Atlas - Custom OSM Viewer</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: sans-serif;
+    }
+    #map-container {
+      position: relative; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6;
+      touch-action: none; /* ✅ 5. Prevent mobile browser interference */
+    }
+    #map {
+      width: 100%; height: 100%; display: block;
+    }
+    .zoom-controls {
+      position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 5px; z-index: 10;
+    }
+    .zoom-btn {
+      background: white; border: 1px solid #ccc; font-size: 16px; padding: 4px 8px; cursor: pointer;
+      border-radius: 3px; user-select: none;
+    }
+    /* ✅ 1. Button Visual Feedback */
+    .zoom-btn:hover {
+      background: #f0f0f0;
+    }
+    .zoom-btn:active {
+      background: #e0e0e0;
+      transform: scale(0.95);
+      transition: transform 0.05s;
+    }
+    .zoom-btn:focus {
+      outline: 2px solid #0078A8;
+      outline-offset: 2px;
+    }
+    /* ✅ New: Disabled Button State */
+    .zoom-btn:disabled {
+      background: #f5f5f5;
+      color: #aaa;
+      cursor: not-allowed;
+      transform: none; /* Reset active transform */
+      border-color: #ddd;
+    }
+
+    #loading {
+      position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9); padding: 4px 8px;
+      border-radius: 3px; font-size: 12px; display: none;
+    }
+    #loading.visible { display: block; }
+    #coords {
+      position: absolute; bottom: 25px; left: 5px; background: rgba(255,255,255,0.7); font-size: 12px;
+      padding: 2px 6px; border-radius: 2px;
+    }
+    #zoom-overlay {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(255,255,255,0.8); font-size: 20px; padding: 6px 12px; border-radius: 4px;
+      opacity: 0; transition: opacity 0.25s; pointer-events: none;
+    }
+    .scale-bar-container {
+      position: absolute; bottom: 5px; right: 10px; text-align: center; font-size: 11px; color: #333;
+    }
+    .scale-bar {
+      height: 4px; background: black; margin-bottom: 2px;
+    }
+    #attribution {
+      position: absolute; bottom: 5px; left: 10px; background: rgba(255,255,255,0.8); font-size: 11px;
+      padding: 2px 6px; border-radius: 3px; font-family: sans-serif;
+    }
+    #attribution a {
+      text-decoration: none; color: #0078A8;
+    }
+
+    /* ✅ 3. Zoom Indicator Animation */
+    @keyframes zoom-indicator {
+      0% { transform: scale(0.2); opacity: 0.8; }
+      100% { transform: scale(1.2); opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map-container">
+    <canvas id="map"></canvas>
+    <div class="zoom-controls">
+      <button id="zoom-in" class="zoom-btn">+</button>
+      <button id="zoom-out" class="zoom-btn">−</button>
+    </div>
+    <div id="loading">Loading: <span id="loading-count">0</span></div>
+    <div id="zoom-overlay"></div>
+    <div id="coords"></div>
+    <div class="scale-bar-container">
+      <div class="scale-bar"></div>
+      <div id="scale-text"></div>
+    </div>
+    <div id="attribution">
+      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>
+    </div>
+  </div>
+
+<script>
+const EARTH_RADIUS = 6378137;
+const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS;
+const MAX_LATITUDE = 85.05112878;
+const MIN_LATITUDE = -85.05112878;
+const TILE_SIZE = 256;
+const TILE_BUFFER = 3;
+const TILE_TTL = 1000 * 60 * 60 * 24;
+const SCALE_BAR_TARGET_PX = 120;
+
+const INERTIA_DECEL = 0.0025;
+const INERTIA_STOP_SPEED = 0.02;
+const VELOCITY_WINDOW_MS = 120;
+
+const DOUBLE_TAP_MAX_DELAY = 300;
+const DOUBLE_TAP_MAX_MOVE = 16;
+const TWO_FINGER_TAP_MAX_DELAY = 250;
+const TWO_FINGER_TAP_MOVE_THRESH = 10;
+const ROTATE_MOVE_THRESH_RAD = 0.08;
+const WHEEL_ZOOM_STEP = 0.25;
+const WHEEL_ZOOM_DURATION = 220;
+const TAP_ZOOM_DURATION = 280;
+const SNAP_DURATION = 300;
+const FLYTO_DURATION = 800;
+
+// ✅ 1. Increased default zoom and set minimum zoom
+const CONFIG = {
+  minZoom: 2, // Prevent extreme low zoom distortion
+  maxZoom: 19,
+  defaultZoom: 3, // Start at a more standard zoom level
+  defaultCenter: { lon: 0, lat: 0 },
+  tileServers: [
+    "https://a.tile.openstreetmap.org",
+    "https://b.tile.openstreetmap.org",
+    "https://c.tile.openstreetmap.org"
+  ],
+  maxCacheSize: 800,
+  retina: "auto",
+  retinaSuffix: "@2x"
+};
+
+const EASING = {
+  easeInOutCubic: t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3)/2,
+  easeOutCubic: t => 1 - Math.pow(1 - t, 3),
+  linear: t => t
+};
+const RAD2DEG = 180 / Math.PI;
+const DEG2RAD = Math.PI / 180;
+
+function normalizeAngle(rad) {
+  return Math.atan2(Math.sin(rad), Math.cos(rad));
+}
+function shortestAngleDiff(from, to) {
+  return normalizeAngle(to - from);
+}
+function wrapDeltaLon(delta) {
+  delta = ((delta + 180) % 360 + 360) % 360 - 180;
+  return delta;
+}
+function rot(x, y, ang) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  return { x: x*c - y*s, y: x*s + y*c };
+}
+
+class GISUtils {
+  static toRadians(d) { return d * Math.PI/180; }
+  static toDegrees(r) { return r * 180/Math.PI; }
+  static wrapLongitude(l) {
+    while (l > 180) l -= 360;
+    while (l < -180) l += 360;
+    return l;
+  }
+  static clampLatitude(lat) {
+    return Math.max(MIN_LATITUDE, Math.min(MAX_LATITUDE, lat));
+  }
+  static getResolution(lat, z) {
+    return (EARTH_CIRCUMFERENCE * Math.cos(this.toRadians(lat))) / (Math.pow(2, z) * TILE_SIZE);
+  }
+  static formatDistance(m) {
+    return m < 1000 ? Math.round(m) + " m" : (m/1000).toFixed(1) + " km";
+  }
+  static tileToLonLat(x, y, z) {
+    const scale = Math.pow(2, z);
+    const lon = x / scale * 360 - 180;
+    const n = Math.PI - 2 * Math.PI * y / scale;
+    const lat = this.toDegrees(Math.atan(Math.sinh(n)));
+    return { lon, lat };
+  }
+}
+
+class Atlas {
+  constructor(id) {
+    this.canvas = document.getElementById(id);
+    this.ctx = this.canvas.getContext("2d");
+    this.container = document.getElementById("map-container");
+
+    this.tileCache = new Map();
+    this.loadingTiles = new Set();
+
+    // ✅ 2. Robustly clamp initial center coordinates
+    this.center = {
+        lon: GISUtils.wrapLongitude(CONFIG.defaultCenter.lon),
+        lat: GISUtils.clampLatitude(CONFIG.defaultCenter.lat)
+    };
+    this.zoom = CONFIG.defaultZoom;
+    this.bearing = 0;
+
+    this.isDragging = false; this.dragStart = null;
+    this.renderScheduled = false;
+
+    this.zoomOverlay = document.getElementById("zoom-overlay");
+    this.loadingEl = document.getElementById("loading");
+    this.loadingCountEl = document.getElementById("loading-count");
+    this.coordsEl = document.getElementById("coords");
+    this.scaleBarEl = document.querySelector(".scale-bar");
+    this.scaleTextEl = document.getElementById("scale-text");
+    this.attributionEl = document.getElementById("attribution");
+
+    this._retinaAvailable = true;
+    this._inertiaRAF = null;
+    this._moveSamples = [];
+
+    this.isPinching = false;
+    this.pinchStartDist = 0;
+    this.pinchStartAngle = 0;
+    this.pinchStartZoom = this.zoom;
+    this.pinchStartBearing = this.bearing;
+    this.pinchStartTime = 0;
+    this.pinchLastCenter = null;
+    this._pinchMoved = false;
+    this._pinchAnchorLL = null;
+    this._pinchAnchorVec = null;
+
+    this._lastTapTime = 0;
+    this._lastTapPos = {x:0, y:0};
+    this._singleTouchStart = null;
+    this._singleTouchMoved = false;
+
+    this._zoomAnim = null;
+    this._flyAnim = null;
+
+    // ✅ 3. Zoom Indicator
+    this._zoomIndicator = null;
+
+    // ✅ Show OSM Tile Usage Policy Warning
+    console.warn(
+      `%c[Atlas] You are using OpenStreetMap's tile servers.
+%cPlease comply with Tile Usage Policy: https://operations.osmfoundation.org/policies/tiles/
+%c- No heavy automated usage
+%c- Consider your own tile server for production apps`,
+      "font-weight:bold;color:#e74c3c;",
+      "color:#3498db;",
+      "color:#2ecc71;",
+      "color:#f39c12;"
+    );
+
+    this.resize();
+    this.setupEvents();
+    this.initControls();
+    this.render();
+    // ✅ 6. Ensure controls reflect initial state
+    this.updateControlsUI();
+  }
+
+  resize() {
+    const w = this.container.offsetWidth, h = this.container.offsetHeight;
+    this.dpr = window.devicePixelRatio || 1;
+    this.canvas.width = w * this.dpr; this.canvas.height = h * this.dpr;
+    this.canvas.style.width = w + "px"; this.canvas.style.height = h + "px";
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.render();
+  }
+
+  lonLatToTile(lon, lat, z) {
+    // ✅ Clamping is done here, ensuring input is valid for projection formulas
+    lat = GISUtils.clampLatitude(lat); lon = GISUtils.wrapLongitude(lon);
+    const scale = Math.pow(2, z);
+    const x = (lon + 180) / 360 * scale;
+    const y = (1 - Math.log(Math.tan(GISUtils.toRadians(lat)) + 1 / Math.cos(GISUtils.toRadians(lat))) / Math.PI) / 2 * scale;
+    return { x, y };
+  }
+
+  shouldRequestRetina() {
+    const mode = CONFIG.retina;
+    const want = (mode === true) || (mode === "auto" && (window.devicePixelRatio || 1) > 1.5);
+    return want && this._retinaAvailable;
+  }
+
+  getTileUrl(x, y, z) {
+    const scale = Math.pow(2, z);
+    // ✅ Robust horizontal wrapping
+    x = ((x % scale) + scale) % scale;
+    // ✅ Robust vertical clamping to valid tile range
+    y = Math.max(0, Math.min(scale - 1, y));
+    const idx = (x + y) % CONFIG.tileServers.length;
+    let url = `${CONFIG.tileServers[idx]}/${z}/${x}/${y}.png`;
+    if (this.shouldRequestRetina()) url += CONFIG.retinaSuffix;
+    return url;
+  }
+
+  async loadTile(key, url) {
+    if (this.tileCache.has(key)) return this.tileCache.get(key);
+    const img = new Image(); img.crossOrigin = "anonymous";
+    const tile = { img, loaded: false, loadedAt: Date.now(), lastUsed: Date.now() };
+    this.tileCache.set(key, tile);
+    this.loadingTiles.add(key);
+
+    img.onload = () => {
+      tile.loaded = true; tile.loadedAt = Date.now();
+      this.loadingTiles.delete(key); this.scheduleRender();
+    };
+    img.onerror = () => {
+      if (url.includes(CONFIG.retinaSuffix)) {
+        this._retinaAvailable = false;
+        img.src = url.replace(CONFIG.retinaSuffix, "");
+        return;
+      }
+      this.loadingTiles.delete(key);
+    };
+    img.src = url;
+    return tile;
+  }
+
+  reloadTile(key, url) {
+    const existing = this.tileCache.get(key);
+    if (!existing) return;
+    const token = key + "#r";
+    if (this.loadingTiles.has(token)) return;
+
+    const img = new Image(); img.crossOrigin = "anonymous";
+    this.loadingTiles.add(token);
+    img.onload = () => {
+      existing.img = img;
+      existing.loaded = true;
+      existing.loadedAt = Date.now();
+      this.loadingTiles.delete(token);
+      this.scheduleRender();
+    };
+    img.onerror = () => {
+      this.loadingTiles.delete(token);
+    };
+    img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+  }
+
+  evict() {
+    if (this.tileCache.size <= CONFIG.maxCacheSize) return;
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => this._performEviction());
+    } else {
+      setTimeout(() => this._performEviction(), 100);
+    }
+  }
+
+  _performEviction() {
+    const entries = Array.from(this.tileCache.entries());
+    entries.sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+    const removeCount = this.tileCache.size - CONFIG.maxCacheSize;
+    for (let i = 0; i < removeCount; i++) {
+      this.tileCache.delete(entries[i][0]);
+    }
+  }
+
+  scheduleRender() {
+    if (this.renderScheduled) return;
+    this.renderScheduled = true;
+    requestAnimationFrame(() => {
+      this.renderScheduled = false;
+      this._draw();
+    });
+  }
+
+  render() { this.scheduleRender(); }
+
+  preloadAdjacentZoomTiles() {
+    const zInt = Math.floor(this.zoom);
+    const nextZoom = Math.min(CONFIG.maxZoom, zInt + 1);
+    const prevZoom = Math.max(CONFIG.minZoom, zInt - 1);
+
+    if (Math.abs(this.zoom - zInt) > 0.3) return;
+
+    const ct = this.lonLatToTile(this.center.lon, this.center.lat, zInt);
+    const ts = TILE_SIZE;
+    const w = this.canvas.width / this.dpr;
+    const h = this.canvas.height / this.dpr;
+
+    const viewportTiles = Math.ceil(Math.max(w, h) / ts) + TILE_BUFFER;
+
+    for (let dz of [prevZoom, nextZoom]) {
+      if (dz === zInt) continue;
+      const scaleDiff = Math.pow(2, Math.abs(dz - zInt));
+      const startX = Math.floor(ct.x * (dz > zInt ? scaleDiff : 1/scaleDiff) - viewportTiles/2);
+      const startY = Math.floor(ct.y * (dz > zInt ? scaleDiff : 1/scaleDiff) - viewportTiles/2);
+
+      for (let dx = 0; dx < viewportTiles; dx++) {
+        for (let dy = 0; dy < viewportTiles; dy++) {
+          const X = startX + dx, Y = startY + dy;
+          const key = `${dz}/${X}/${Y}`;
+          if (!this.tileCache.has(key) && !this.loadingTiles.has(key)) {
+            const url = this.getTileUrl(X, Y, dz);
+            this.loadTile(key, url);
+          }
+        }
+      }
+    }
+  }
+
+  _draw() {
+    const w = this.canvas.width / this.dpr, h = this.canvas.height / this.dpr;
+    this.ctx.fillStyle = "#e6e6e6"; this.ctx.fillRect(0, 0, w, h);
+
+    const zInt = Math.floor(this.zoom);
+    const scaleFactor = Math.pow(2, this.zoom - zInt);
+    const ts = TILE_SIZE;
+    const ct = this.lonLatToTile(this.center.lon, this.center.lat, zInt);
+
+    const absCos = Math.abs(Math.cos(this.bearing)), absSin = Math.abs(Math.sin(this.bearing));
+    const needW = w * absCos + h * absSin;
+    const needH = w * absSin + h * absCos;
+
+    const cols = Math.ceil(needW / (ts * scaleFactor)) + TILE_BUFFER;
+    const rows = Math.ceil(needH / (ts * scaleFactor)) + TILE_BUFFER;
+    const startX = Math.floor(ct.x - cols/2);
+    const startY = Math.floor(ct.y - rows/2);
+
+    this.ctx.save();
+    this.ctx.translate(w/2, h/2);
+    this.ctx.rotate(this.bearing);
+    this.ctx.scale(scaleFactor, scaleFactor);
+
+    for (let dx = 0; dx < cols; dx++) {
+      for (let dy = 0; dy < rows; dy++) {
+        const X = startX + dx, Y = startY + dy;
+        const key = `${zInt}/${X}/${Y}`;
+        const url = this.getTileUrl(X, Y, zInt);
+        const trX = (X - ct.x) * ts;
+        const trY = (Y - ct.y) * ts;
+
+        let tile = this.tileCache.get(key);
+        if (!tile) {
+          this.loadTile(key, url);
+        } else if (tile.loaded) {
+          this.ctx.drawImage(tile.img, trX, trY, ts, ts);
+          tile.lastUsed = Date.now();
+          if (tile.loadedAt && (Date.now() - tile.loadedAt > TILE_TTL)) {
+            this.reloadTile(key, url);
+          }
+        }
+      }
+    }
+
+    this.ctx.restore();
+    this.evict();
+    this.preloadAdjacentZoomTiles();
+
+    this.loadingEl.classList.toggle("visible", this.loadingTiles.size > 0);
+    this.loadingCountEl.textContent = this.loadingTiles.size;
+    this.coordsEl.textContent =
+      `${this.center.lat.toFixed(6)}°, ${this.center.lon.toFixed(6)}° | Z: ${this.zoom.toFixed(2)} | Bearing: ${(this.bearing*RAD2DEG).toFixed(1)}°`;
+    this.updateScaleBar();
+    this.updateControlsUI();
+  }
+
+  updateScaleBar() {
+    if (!this.scaleBarEl || !this.scaleTextEl) return;
+
+    const mPerPx = GISUtils.getResolution(this.center.lat, this.zoom);
+    const targetMeters = mPerPx * SCALE_BAR_TARGET_PX;
+    const pow = Math.pow(10, Math.floor(Math.log10(targetMeters)));
+    const base = targetMeters / pow;
+    const niceBase = base >= 5 ? 5 : base >= 2 ? 2 : 1;
+    const niceMeters = niceBase * pow;
+    const widthPx = Math.max(20, Math.min(300, niceMeters / mPerPx));
+
+    this.scaleBarEl.style.width = `${widthPx}px`;
+
+    // ✅ 4. Toggle Scale Units
+    if (!this.scaleTextEl.dataset.unit) this.scaleTextEl.dataset.unit = "metric";
+
+    let displayText;
+    if (this.scaleTextEl.dataset.unit === "metric") {
+      displayText = GISUtils.formatDistance(niceMeters);
+    } else {
+      const feet = niceMeters * 3.28084;
+      displayText = feet < 5280 ? Math.round(feet) + " ft" : (feet/5280).toFixed(1) + " mi";
+    }
+
+    this.scaleTextEl.textContent = displayText;
+
+    if (!this.scaleTextEl._hasClickListener) {
+      this.scaleTextEl.addEventListener("click", () => {
+        this.scaleTextEl.dataset.unit = this.scaleTextEl.dataset.unit === "metric" ? "imperial" : "metric";
+        this.updateScaleBar();
+      });
+      this.scaleTextEl._hasClickListener = true;
+    }
+  }
+
+  // ✅ 5. Updated setZoom to respect min/max and update UI
+  setZoom(z) {
+    const nz = Math.max(CONFIG.minZoom, Math.min(CONFIG.maxZoom, z));
+    if (nz === this.zoom) return;
+    this.zoom = nz;
+    this.render();
+    this.showZoomOverlay();
+    this.updateControlsUI(); // Update button states
+  }
+
+  setBearing(rad) {
+    const nr = normalizeAngle(rad);
+    if (Math.abs(nr - this.bearing) < 1e-6) return;
+    this.bearing = nr;
+    this.render();
+  }
+
+  showZoomOverlay() {
+    const overlay = this.zoomOverlay;
+    overlay.textContent = `Zoom: ${this.zoom.toFixed(2)}`;
+    overlay.style.opacity = 1;
+    clearTimeout(this._zTimer);
+    this._zTimer = setTimeout(() => overlay.style.opacity = 0, 500);
+  }
+
+  stopInertia() {
+    if (this._inertiaRAF) cancelAnimationFrame(this._inertiaRAF);
+    this._inertiaRAF = null;
+  }
+
+  stopAnimations() {
+    this.stopInertia();
+    if (this._zoomAnim?.raf) cancelAnimationFrame(this._zoomAnim.raf);
+    this._zoomAnim = null;
+    if (this._flyAnim?.raf) cancelAnimationFrame(this._flyAnim.raf);
+    this._flyAnim = null;
+  }
+
+  resetVelocitySamples() { this._moveSamples = []; }
+
+  pushVelocitySample(x, y) {
+    const t = performance.now();
+    this._moveSamples.push({ t, x, y });
+    const cutoff = t - VELOCITY_WINDOW_MS;
+    while (this._moveSamples.length && this._moveSamples[0].t < cutoff) {
+      this._moveSamples.shift();
+    }
+  }
+
+  computeVelocity() {
+    if (this._moveSamples.length < 2) return { vx: 0, vy: 0 };
+    const last = this._moveSamples[this._moveSamples.length - 1];
+    let i = this._moveSamples.length - 2;
+    while (i > 0 && last.t - this._moveSamples[i].t < VELOCITY_WINDOW_MS * 0.5) i--;
+    const ref = this._moveSamples[i];
+    const dt = Math.max(1, last.t - ref.t);
+    return { vx: (last.x - ref.x) / dt, vy: (last.y - ref.y) / dt };
+  }
+
+  // ✅ 7. Ensure latitude is clamped during panning
+  panByPixels(dx, dy) {
+    const res = GISUtils.getResolution(this.center.lat, this.zoom);
+    const lonDx = (dx * res) * 360 / EARTH_CIRCUMFERENCE;
+    const latDy = (dy * res) * 360 / EARTH_CIRCUMFERENCE;
+    this.center = {
+      lon: GISUtils.wrapLongitude(this.center.lon - lonDx),
+      lat: GISUtils.clampLatitude(this.center.lat + latDy) // Clamp here too
+    };
+  }
+
+  startInertia(vx, vy) {
+    const speed = Math.hypot(vx, vy);
+    if (speed < INERTIA_STOP_SPEED) return;
+    this.stopInertia();
+    let lastT = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const dt = now - lastT; lastT = now;
+      const dx = vx * dt, dy = vy * dt;
+      this.panByPixels(dx, dy);
+      const vmag = Math.hypot(vx, vy);
+      const newVmag = Math.max(0, vmag - INERTIA_DECEL * dt);
+      if (newVmag <= INERTIA_STOP_SPEED) {
+        this.render();
+        this._inertiaRAF = null;
+        return;
+      }
+      const s = newVmag / (vmag || 1);
+      vx *= s; vy *= s;
+      this.render();
+      this._inertiaRAF = requestAnimationFrame(step);
+    };
+    this._inertiaRAF = requestAnimationFrame(step);
+  }
+
+  screenToLatLon(ax, ay, zoom = this.zoom, bearing = this.bearing, center = this.center) {
+    const w = this.canvas.width / this.dpr;
+    const h = this.canvas.height / this.dpr;
+    const zInt = Math.floor(zoom);
+    const ts = TILE_SIZE * Math.pow(2, zoom - zInt);
+    const ct = this.lonLatToTile(center.lon, center.lat, zInt);
+    const anchorVec = { x: ax - w/2, y: ay - h/2 };
+    const v = rot(anchorVec.x/ts, anchorVec.y/ts, -bearing);
+    const tpt = { x: ct.x + v.x, y: ct.y + v.y };
+    return GISUtils.tileToLonLat(tpt.x, tpt.y, zInt);
+  }
+
+  applyZoomRotateAbout(ax, ay, newZoom, newBearing, anchorLL = null) {
+    newZoom = Math.max(CONFIG.minZoom, Math.min(CONFIG.maxZoom, newZoom));
+    const w = this.canvas.width / this.dpr;
+    const h = this.canvas.height / this.dpr;
+    const anchorVec = { x: ax - w/2, y: ay - h/2 };
+    const currAnchorLL = anchorLL || this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
+    const zInt = Math.floor(newZoom);
+    const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
+    const Ptile = this.lonLatToTile(currAnchorLL.lon, currAnchorLL.lat, zInt);
+    const v = rot(anchorVec.x/ts, anchorVec.y/ts, -newBearing);
+    const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
+    const newCenter = GISUtils.tileToLonLat(ctNew.x, ctNew.y, zInt);
+    this.center = {
+      lon: GISUtils.wrapLongitude(newCenter.lon),
+      lat: GISUtils.clampLatitude(newCenter.lat) // Clamp new center
+    };
+    this.zoom = newZoom;
+    this.bearing = normalizeAngle(newBearing);
+  }
+
+  // ✅ 3. Show Zoom Indicator
+  showZoomIndicator(x, y) {
+    if (this._zoomIndicator) {
+      this.container.removeChild(this._zoomIndicator);
+    }
+
+    const indicator = document.createElement("div");
+    indicator.style.position = "absolute";
+    indicator.style.left = (x - 15) + "px";
+    indicator.style.top = (y - 15) + "px";
+    indicator.style.width = "30px";
+    indicator.style.height = "30px";
+    indicator.style.borderRadius = "50%";
+    indicator.style.border = "2px solid #333";
+    indicator.style.opacity = "0.8";
+    indicator.style.pointerEvents = "none";
+    indicator.style.zIndex = "100";
+    indicator.style.animation = "zoom-indicator 0.6s ease-out forwards";
+
+    this.container.appendChild(indicator);
+    this._zoomIndicator = indicator;
+
+    setTimeout(() => {
+      if (this._zoomIndicator && this._zoomIndicator.parentNode) {
+        this.container.removeChild(this._zoomIndicator);
+        this._zoomIndicator = null;
+      }
+    }, 600);
+  }
+
+  animateZoomRotateAbout(ax, ay, toZoom, toBearing = this.bearing, duration = WHEEL_ZOOM_DURATION, easing = EASING.easeInOutCubic) {
+    this.showZoomIndicator(ax, ay); // ✅ Show tap feedback
+    this.stopAnimations();
+    const startT = performance.now();
+    const sZoom = this.zoom;
+    const sBear = this.bearing;
+    const deltaBear = shortestAngleDiff(sBear, toBearing);
+    const anchorLL = this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
+    const step = () => {
+      const t = (performance.now() - startT) / Math.max(1, duration);
+      const p = t >= 1 ? 1 : easing(Math.max(0, Math.min(1, t)));
+      const z = sZoom + (toZoom - sZoom) * p;
+      const b = sBear + deltaBear * p;
+      this.applyZoomRotateAbout(ax, ay, z, b, anchorLL);
+      this.render();
+      if (t < 1) {
+        this._zoomAnim = { raf: requestAnimationFrame(step) };
+      } else {
+        this._zoomAnim = null;
+        this.updateControlsUI(); // Update button states after animation
+      }
+    };
+    this._zoomAnim = { raf: requestAnimationFrame(step) };
+  }
+
+  smoothZoomAt(ax, ay, deltaZ) {
+    const target = Math.max(CONFIG.minZoom, Math.min(CONFIG.maxZoom, this.zoom + deltaZ));
+    this.animateZoomRotateAbout(ax, ay, target, this.bearing, WHEEL_ZOOM_DURATION, EASING.easeInOutCubic);
+  }
+
+  flyTo({ center = this.center, zoom = this.zoom, bearing = this.bearing, duration = FLYTO_DURATION, easing = EASING.easeInOutCubic } = {}) {
+    this.stopAnimations();
+    const startT = performance.now();
+    const sC = {...this.center}; const eC = {...center};
+    const dLon = wrapDeltaLon(eC.lon - sC.lon);
+    const dLat = eC.lat - sC.lat;
+    const sZ = this.zoom, eZ = Math.max(CONFIG.minZoom, Math.min(CONFIG.maxZoom, zoom));
+    const sB = this.bearing, dB = shortestAngleDiff(sB, bearing);
+    const step = () => {
+      const t = (performance.now() - startT) / Math.max(1, duration);
+      const p = t >= 1 ? 1 : easing(Math.max(0, Math.min(1, t)));
+      this.center = {
+        lon: GISUtils.wrapLongitude(sC.lon + dLon * p),
+        lat: GISUtils.clampLatitude(sC.lat + dLat * p) // Clamp during fly
+      };
+      this.zoom = sZ + (eZ - sZ) * p;
+      this.bearing = normalizeAngle(sB + dB * p);
+      this.render();
+      if (t < 1) {
+        this._flyAnim = { raf: requestAnimationFrame(step) };
+      } else {
+        this._flyAnim = null;
+        this.updateControlsUI(); // Update button states after animation
+      }
+    };
+    this._flyAnim = { raf: requestAnimationFrame(step) };
+  }
+
+  setupEvents() {
+    window.addEventListener("resize", () => this.resize());
+
+    this.canvas.addEventListener("mousedown", (e) => {
+      this.stopAnimations();
+      this.isDragging = true;
+      this.dragStart = { x: e.clientX, y: e.clientY, center: {...this.center} };
+      this.resetVelocitySamples();
+      this.pushVelocitySample(e.clientX, e.clientY);
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!this.isDragging) return;
+      const dx = e.clientX - this.dragStart.x, dy = e.clientY - this.dragStart.y;
+      const res = GISUtils.getResolution(this.center.lat, this.zoom);
+      const lonDx = (dx * res) * 360 / EARTH_CIRCUMFERENCE;
+      const latDy = (dy * res) * 360 / EARTH_CIRCUMFERENCE;
+      this.center = {
+        lon: GISUtils.wrapLongitude(this.dragStart.center.lon - lonDx),
+        lat: GISUtils.clampLatitude(this.dragStart.center.lat + latDy) // Clamp
+      };
+      this.pushVelocitySample(e.clientX, e.clientY);
+      this.render();
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (!this.isDragging) return;
+      this.isDragging = false;
+      const {vx, vy} = this.computeVelocity();
+      this.startInertia(vx, vy);
+    });
+
+    this.canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const dz = (e.deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP);
+      this.smoothZoomAt(e.clientX, e.clientY, dz);
+    }, { passive: false });
+
+    this.canvas.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      this.animateZoomRotateAbout(e.clientX, e.clientY, this.zoom + 1, this.bearing, TAP_ZOOM_DURATION);
+    });
+
+    // ✅ 5. Updated control click handlers to call setZoom (respects limits/UI)
+    document.getElementById("zoom-in").onclick = () => {
+        this.stopAnimations();
+        this.setZoom(this.zoom + 1);
+    };
+    document.getElementById("zoom-out").onclick = () => {
+        this.stopAnimations();
+        this.setZoom(this.zoom - 1);
+    };
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "+" || e.key === "=") { this.stopAnimations(); this.setZoom(this.zoom + 1); }
+      else if (e.key === "-") { this.stopAnimations(); this.setZoom(this.zoom - 1); }
+      else if (e.key === "ArrowUp") { this.stopAnimations(); this.center.lat = GISUtils.clampLatitude(this.center.lat + 1); this.render(); }
+      else if (e.key === "ArrowDown") { this.stopAnimations(); this.center.lat = GISUtils.clampLatitude(this.center.lat - 1); this.render(); }
+      else if (e.key === "ArrowLeft") { this.stopAnimations(); this.center.lon = GISUtils.wrapLongitude(this.center.lon - 1); this.render(); }
+      else if (e.key === "ArrowRight") { this.stopAnimations(); this.center.lon = GISUtils.wrapLongitude(this.center.lon + 1); this.render(); }
+      else if (e.key.toLowerCase() === "n") {
+        const w = this.canvas.width/this.dpr, h = this.canvas.height/this.dpr;
+        this.animateZoomRotateAbout(w/2, h/2, this.zoom, 0, SNAP_DURATION);
+      }
+    });
+
+    const onTouchStart = (e) => {
+      if (!e.touches.length) return;
+      e.preventDefault();
+      this.stopAnimations();
+
+      if (e.touches.length === 1) {
+        this.isPinching = false;
+        const t = e.touches[0];
+        this.isDragging = true;
+        this.dragStart = { x: t.clientX, y: t.clientY, center: {...this.center} };
+        this.resetVelocitySamples();
+        this.pushVelocitySample(t.clientX, t.clientY);
+        this._singleTouchStart = { x: t.clientX, y: t.clientY, t: performance.now() };
+        this._singleTouchMoved = false;
+      } else if (e.touches.length === 2) {
+        this.isDragging = false;
+        this.isPinching = true;
+        const t1 = e.touches[0], t2 = e.touches[1];
+        this.pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        this.pinchStartAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
+        this.pinchStartZoom = this.zoom;
+        this.pinchStartBearing = this.bearing;
+        this.pinchStartTime = performance.now();
+        this.pinchLastCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+        this._pinchAnchorLL = this.screenToLatLon(this.pinchLastCenter.x, this.pinchLastCenter.y, this.zoom, this.bearing, this.center);
+        this._pinchAnchorVec = null;
+        this.resetVelocitySamples();
+        this.pushVelocitySample(this.pinchLastCenter.x, this.pinchLastCenter.y);
+        this._pinchMoved = false;
+      }
+    };
+
+    const onTouchMove = (e) => {
+      if (!e.touches.length) return;
+      e.preventDefault();
+
+      if (this.isPinching && e.touches.length >= 2) {
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const angle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
+        const center = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+        const targetZoom = this.pinchStartZoom + Math.log2(dist / Math.max(1, this.pinchStartDist));
+        const deltaAngle = normalizeAngle(angle - this.pinchStartAngle);
+        const targetBearing = normalizeAngle(this.pinchStartBearing + deltaAngle);
+
+        if (Math.abs(Math.log(dist / Math.max(1, this.pinchStartDist))) > Math.log(1 + TWO_FINGER_TAP_MOVE_THRESH/Math.max(1, this.pinchStartDist)) ||
+            Math.abs(deltaAngle) > ROTATE_MOVE_THRESH_RAD) {
+          this._pinchMoved = true;
+        }
+
+        this.applyZoomRotateAbout(center.x, center.y, targetZoom, targetBearing, this._pinchAnchorLL);
+        this.pinchLastCenter = center;
+        this.pushVelocitySample(center.x, center.y);
+        this.render();
+      } else if (this.isDragging && e.touches.length === 1) {
+        const t = e.touches[0];
+        const dx = t.clientX - this.dragStart.x, dy = t.clientY - this.dragStart.y;
+        if (this._singleTouchStart) {
+          const md = Math.hypot(t.clientX - this._singleTouchStart.x, t.clientY - this._singleTouchStart.y);
+          if (md > DOUBLE_TAP_MAX_MOVE) this._singleTouchMoved = true;
+        }
+        const res = GISUtils.getResolution(this.center.lat, this.zoom);
+        const lonDx = (dx * res) * 360 / EARTH_CIRCUMFERENCE;
+        const latDy = (dy * res) * 360 / EARTH_CIRCUMFERENCE;
+        this.center = {
+          lon: GISUtils.wrapLongitude(this.dragStart.center.lon - lonDx),
+          lat: GISUtils.clampLatitude(this.dragStart.center.lat + latDy) // Clamp
+        };
+        this.pushVelocitySample(t.clientX, t.clientY);
+        this.render();
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (this.isPinching && e.touches.length === 0) {
+        const dt = performance.now() - this.pinchStartTime;
+        if (dt <= TWO_FINGER_TAP_MAX_DELAY && !this._pinchMoved) {
+          const ax = this.pinchLastCenter ? this.pinchLastCenter.x : (this.canvas.width/this.dpr)/2;
+          const ay = this.pinchLastCenter ? this.pinchLastCenter.y : (this.canvas.height/this.dpr)/2;
+          this.animateZoomRotateAbout(ax, ay, this.zoom - 1, this.bearing, TAP_ZOOM_DURATION);
+        }
+        this.isPinching = false;
+      }
+
+      if (this.isDragging && e.touches.length === 0) {
+        const now = performance.now();
+        const s = this._singleTouchStart;
+        if (s && !this._singleTouchMoved) {
+          const dt = now - s.t;
+          const distFromLast = Math.hypot(s.x - this._lastTapPos.x, s.y - this._lastTapPos.y);
+          if (now - this._lastTapTime <= DOUBLE_TAP_MAX_DELAY && distFromLast <= DOUBLE_TAP_MAX_MOVE) {
+            this.animateZoomRotateAbout(s.x, s.y, this.zoom + 1, this.bearing, TAP_ZOOM_DURATION);
+            this._lastTapTime = 0;
+          } else {
+            this._lastTapTime = now;
+            this._lastTapPos = { x: s.x, y: s.y };
+          }
+        }
+        this.isDragging = false;
+        const {vx, vy} = this.computeVelocity();
+        this.startInertia(vx, vy);
+      }
+    };
+
+    this.canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    this.canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    this.canvas.addEventListener("touchend", onTouchEnd, { passive: false });
+    this.canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
+  }
+
+  initControls() {
+    const stack = this.container.querySelector(".zoom-controls");
+    if (!stack) return;
+
+    const compass = document.createElement("button");
+    compass.className = "zoom-btn";
+    compass.title = "Reset North";
+    compass.setAttribute("aria-label", "Reset North");
+    compass.textContent = "N";
+    compass.style.display = "none";
+    compass.onclick = () => {
+      const w = this.canvas.width/this.dpr, h = this.canvas.height/this.dpr;
+      this.animateZoomRotateAbout(w/2, h/2, this.zoom, 0, SNAP_DURATION);
+    };
+    stack.appendChild(compass);
+    this._compassBtn = compass;
+
+    // ✅ 1. Button Visual Feedback for Compass
+    compass.onmouseenter = () => { compass.style.background = "#f0f0f0"; };
+    compass.onmouseleave = () => { compass.style.background = "white"; };
+    compass.onmousedown = () => { compass.style.transform = "scale(0.95) rotate(" + (-this.bearing*RAD2DEG) + "deg)"; };
+    compass.onmouseup = () => { compass.style.transform = "rotate(" + (-this.bearing*RAD2DEG) + "deg)"; };
+
+    const resetZoom = document.createElement("button");
+    resetZoom.className = "zoom-btn";
+    resetZoom.title = "Reset Zoom";
+    resetZoom.setAttribute("aria-label", "Reset Zoom");
+    resetZoom.textContent = "⤢";
+    resetZoom.onclick = () => {
+      const w = this.canvas.width/this.dpr, h = this.canvas.height/this.dpr;
+      this.animateZoomRotateAbout(w/2, h/2, CONFIG.defaultZoom, this.bearing, SNAP_DURATION);
+    };
+    stack.appendChild(resetZoom);
+    this._resetZoomBtn = resetZoom;
+
+    // ✅ 1. Button Visual Feedback for Reset Zoom
+    resetZoom.onmouseenter = () => { resetZoom.style.background = "#f0f0f0"; };
+    resetZoom.onmouseleave = () => { resetZoom.style.background = "white"; };
+    resetZoom.onmousedown = () => { resetZoom.style.transform = "scale(0.95)"; };
+    resetZoom.onmouseup = () => { resetZoom.style.transform = "scale(1)"; };
+  }
+
+  // ✅ 8. Updated updateControlsUI to manage button states and compass
+  updateControlsUI() {
+    const zoomInBtn = document.getElementById("zoom-in");
+    const zoomOutBtn = document.getElementById("zoom-out");
+
+    if (zoomInBtn) {
+        zoomInBtn.disabled = this.zoom >= CONFIG.maxZoom;
+    }
+    if (zoomOutBtn) {
+        zoomOutBtn.disabled = this.zoom <= CONFIG.minZoom;
+    }
+
+
+    if (this._compassBtn) {
+      const visible = Math.abs(this.bearing) > 0.001;
+      this._compassBtn.style.display = visible ? "block" : "none";
+      // ✅ 2. Smooth Compass Rotation
+      this._compassBtn.style.transition = "transform 0.3s ease-out";
+      this._compassBtn.style.transform = `rotate(${-this.bearing*RAD2DEG}deg)`;
+    }
+  }
+}
+
+const atlas = new Atlas("map");
+</script>
+</body>
+</html>
