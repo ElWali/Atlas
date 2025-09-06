@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="origin">
+  <title>Atlas.js - Professional Interaction Model</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      background: #f0f0f0;
+    }
+    #map-container {
+      position: relative; width: 100%; height: 100%; overflow: hidden;
+      touch-action: none; /* Critical for smooth touch handling on mobile */
+      cursor: grab;
+    }
+    #map-container:active {
+      cursor: grabbing;
+    }
+    #map {
+      width: 100%; height: 100%; display: block;
+    }
+    .atlas-control-container {
+      position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 8px; z-index: 10;
+    }
+    .atlas-control-group {
+        background: white; border-radius: 4px; box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+        display: flex; flex-direction: column;
+    }
+    .atlas-control-button {
+      background: white; border: none; font-size: 1.2rem; font-weight: bold;
+      width: 30px; height: 30px; cursor: pointer; color: #333;
+      display: flex; align-items: center; justify-content: center;
+      transition: background-color 0.15s ease;
+      -webkit-tap-highlight-color: transparent; /* Disable tap flash on mobile */
+    }
+    .atlas-control-button:first-of-type { border-radius: 4px 4px 0 0; }
+    .atlas-control-button:last-of-type { border-radius: 0 0 4px 4px; }
+    .atlas-control-button:not(:last-child) { border-bottom: 1px solid #ddd; }
+    .atlas-control-button:hover { background: #f4f4f4; }
+    .atlas-control-button:active { background: #e8e8e8; transform: scale(0.97); }
+    .atlas-control-button:focus-visible {
+        outline: 2px solid #0078A8; outline-offset: 2px;
+    }
+    #compass-container {
+        position: absolute; top: 10px; right: 10px; z-index: 10;
+        perspective: 200px;
+    }
+    #compass {
+        width: 30px; height: 30px; background: white;
+        border-radius: 50%; box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+        cursor: pointer; transition: transform 0.2s ease-out, opacity 0.2s;
+        transform: rotateX(0deg) rotateZ(0deg); /* Start with Z rotation for JS */
+        opacity: 0;
+        display: flex; align-items: center; justify-content: center;
+    }
+    #compass.visible { opacity: 1; }
+    #compass-arrow {
+        width: 0; height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-bottom: 12px solid #e74c3c; /* Red part of arrow */
+    }
+    #compass-arrow::after {
+        content: ''; position: absolute;
+        top: 15px; left: 9px;
+        width: 0; height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 12px solid #333; /* Black part of arrow */
+    }
+    .ui-overlay {
+      position: absolute; background: rgba(255,255,255,0.8); backdrop-filter: blur(2px);
+      font-size: 12px; padding: 4px 8px; border-radius: 4px;
+      color: #333; pointer-events: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    #coords { bottom: 30px; left: 10px; }
+    #attribution {
+      bottom: 10px; left: 10px; padding: 2px 6px; font-size: 11px;
+      pointer-events: auto;
+    }
+    #attribution a { text-decoration: none; color: #0078A8; }
+    .scale-bar-container {
+      position: absolute; bottom: 10px; right: 10px;
+      font-size: 11px; color: #333;
+    }
+    .scale-bar {
+      height: 2px; background: #333; border: 1px solid white;
+      border-top: none; padding: 0 2px; margin-bottom: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map-container">
+    <canvas id="map"></canvas>
+    <div class="atlas-control-container">
+        <div class="atlas-control-group">
+            <button id="zoom-in" class="atlas-control-button" title="Zoom in" aria-label="Zoom in">+</button>
+            <button id="zoom-out" class="atlas-control-button" title="Zoom out" aria-label="Zoom out">−</button>
+        </div>
+    </div>
+    <div id="compass-container">
+        <div id="compass" title="Reset North" aria-label="Reset North">
+            <div id="compass-arrow"></div>
+        </div>
+    </div>
+    <div id="coords" class="ui-overlay"></div>
+    <div class="scale-bar-container">
+      <div id="scale-text" style="text-align: center;"></div>
+      <div class="scale-bar"></div>
+    </div>
+    <div id="attribution" class="ui-overlay">
+      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors
+    </div>
+  </div>
+
+<script>
+// --- CORE CONSTANTS & CONFIGURATION ---
+const TILE_SIZE = 256;
+const MIN_ZOOM = 0;
+const MAX_ZOOM = 19;
+const EARTH_RADIUS = 6378137;
+const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS;
+const MAX_LATITUDE = 85.05112878;
+
+const TILE_SERVERS = [
+  "https://a.tile.openstreetmap.org",
+  "https://b.tile.openstreetmap.org",
+  "https://c.tile.openstreetmap.org"
+];
+
+// --- UX & ANIMATION TUNING ---
+const INERTIA_DECEL = 0.92;          // Lower is faster deceleration
+const INERTIA_MIN_SPEED = 0.05;      // Speed (px/ms) to stop at
+const VELOCITY_WINDOW_MS = 100;      // Time window to calculate drag velocity
+const WHEEL_ZOOM_STEP = 0.5;         // How much to zoom per wheel tick
+const ZOOM_ANIM_DUR = 250;           // Duration for wheel/tap zoom animations
+const BEARING_SNAP_DUR = 350;        // Duration for compass click animation
+const DOUBLE_TAP_MAX_DELAY = 300;    // Max ms between taps for a double tap
+const DOUBLE_TAP_MAX_MOVE = 15;      // Max pixels moved for a double tap
+
+const EASING = {
+  easeOutCubic: t => 1 - Math.pow(1 - t, 3),
+};
+const RAD2DEG = 180 / Math.PI;
+
+// --- UTILITY FUNCTIONS ---
+function normalizeAngle(rad) {
+  return Math.atan2(Math.sin(rad), Math.cos(rad));
+}
+function shortestAngleDiff(from, to) {
+  return normalizeAngle(to - from);
+}
+function rot(x, y, ang) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  return { x: x * c - y * s, y: x * s + y * c };
+}
+
+/**
+ * Main Atlas Map Class
+ * Manages state, rendering, and user interactions.
+ */
+class Atlas {
+  constructor(id) {
+    this.canvas = document.getElementById(id);
+    this.ctx = this.canvas.getContext("2d", { alpha: false }); // Perf: disable alpha
+    this.container = document.getElementById("map-container");
+
+    this.tileCache = new Map();
+    this.loadingTiles = new Set();
+
+    this.center = { lon: 0, lat: 0 };
+    this.zoom = 2;
+    this.bearing = 0; // in radians
+
+    this.dpr = 1;
+    this.width = 0;
+    this.height = 0;
+
+    this.isInteracting = false;
+    this.isDragging = false;
+    this.isPinching = false;
+    this.dragStart = null;
+    this.pinchStart = null;
+    this._moveSamples = [];
+
+    this._raf = null;
+    this._animation = null;
+
+    this._lastTap = { time: 0, x: 0, y: 0 };
+
+    this.initUI();
+    this.resize();
+    this.bindEvents();
+    this.render();
+  }
+
+  // --- LIFECYCLE & RENDERING ---
+
+  resize() {
+    this.width = this.container.offsetWidth;
+    this.height = this.container.offsetHeight;
+    this.dpr = window.devicePixelRatio || 1;
+    this.canvas.width = this.width * this.dpr;
+    this.canvas.height = this.height * this.dpr;
+    this.canvas.style.width = this.width + "px";
+    this.canvas.style.height = this.height + "px";
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    this.render();
+  }
+
+  render() {
+    if (this._raf) return;
+    this._raf = requestAnimationFrame(() => {
+      this._draw();
+      this._raf = null;
+    });
+  }
+
+  /**
+   * The core drawing logic. Implements a dual-plane rendering strategy for smooth fractional zoom.
+   * It draws base tiles from a parent zoom level and overlays sharper, overzoomed
+   * tiles from the child zoom level as they become available.
+   */
+  _draw() {
+    this.ctx.fillStyle = "#e6e6e6";
+    this.ctx.fillRect(0, 0, this.width, this.height);
+
+    const z = this.zoom;
+    const parentZ = Math.floor(z);
+    const childZ = parentZ + 1;
+    const scaleFactor = Math.pow(2, z - parentZ);
+    const tileFade = z - parentZ;
+
+    const centerTile = this.lonLatToTile(this.center.lon, this.center.lat, parentZ);
+
+    this.ctx.save();
+    this.ctx.translate(this.width / 2, this.height / 2);
+    this.ctx.rotate(this.bearing);
+    this.ctx.scale(scaleFactor, scaleFactor);
+
+    // Draw parent tiles (the base layer)
+    this._drawTilePlane(parentZ, centerTile, 1.0);
+    // Draw child tiles (overzoomed layer) on top with a fade effect
+    if (childZ <= MAX_ZOOM) {
+        this._drawTilePlane(childZ, centerTile, tileFade);
+    }
+
+    this.ctx.restore();
+
+    this.updateUI();
+  }
+
+  _drawTilePlane(z, centerTileParent, opacity) {
+    const ts = TILE_SIZE;
+    const zScale = Math.pow(2, z - Math.floor(this.zoom));
+    const centerTile = { x: centerTileParent.x * zScale, y: centerTileParent.y * zScale };
+    
+    // Calculate required tile range based on viewport and rotation
+    const absCos = Math.abs(Math.cos(this.bearing)), absSin = Math.abs(Math.sin(this.bearing));
+    const viewWidth = (this.width * absCos + this.height * absSin) / (Math.pow(2, this.zoom - z) * ts);
+    const viewHeight = (this.width * absSin + this.height * absCos) / (Math.pow(2, this.zoom - z) * ts);
+
+    const startX = Math.floor(centerTile.x - viewWidth / 2);
+    const startY = Math.floor(centerTile.y - viewHeight / 2);
+    const endX = Math.ceil(centerTile.x + viewWidth / 2);
+    const endY = Math.ceil(centerTile.y + viewHeight / 2);
+
+    for (let y = startY; y <= endY; y++) {
+      for (let x = startX; x <= endX; x++) {
+        const key = `${z}/${x}/${y}`;
+        const url = this.getTileUrl(x, y, z);
+        let tile = this.tileCache.get(key);
+
+        if (!tile || !tile.loaded) {
+          if (!this.loadingTiles.has(key)) this.loadTile(key, url);
+        } else {
+            const tileX = (x - centerTile.x) * ts;
+            const tileY = (y - centerTile.y) * ts;
+            if (opacity < 1.0) this.ctx.globalAlpha = opacity;
+            this.ctx.drawImage(tile.img, Math.round(tileX), Math.round(tileY), ts, ts);
+            if (opacity < 1.0) this.ctx.globalAlpha = 1.0;
+        }
+      }
+    }
+  }
+
+  // --- TILE MANAGEMENT ---
+
+  getTileUrl(x, y, z) {
+    const scale = 1 << z;
+    const wrappedX = ((x % scale) + scale) % scale;
+    const idx = (wrappedX + y) % TILE_SERVERS.length;
+    return `${TILE_SERVERS[idx]}/${z}/${wrappedX}/${y}.png`;
+  }
+
+  loadTile(key, url) {
+    this.loadingTiles.add(key);
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = url;
+
+    const tile = { img, loaded: false };
+    this.tileCache.set(key, tile);
+
+    img.onload = () => {
+      tile.loaded = true;
+      this.loadingTiles.delete(key);
+      this.render();
+    };
+    img.onerror = () => {
+      this.loadingTiles.delete(key);
+      this.tileCache.delete(key); // Don't cache failed tiles
+    };
+  }
+
+  // --- MAP MANIPULATION & ANIMATION ---
+
+  stopAllMovement() {
+    this.isInteracting = this.isDragging = this.isPinching = false;
+    if (this._animation) cancelAnimationFrame(this._animation.raf);
+    this._animation = null;
+  }
+
+  animate(duration, easing, stepFn) {
+    this.stopAllMovement();
+    const start = performance.now();
+    const anim = () => {
+      const t = Math.min(1, (performance.now() - start) / duration);
+      const progress = easing(t);
+      stepFn(progress);
+      this.render();
+      if (t < 1) {
+        this._animation = { raf: requestAnimationFrame(anim) };
+      } else {
+        this._animation = null;
+        this.isInteracting = false;
+      }
+    };
+    this.isInteracting = true;
+    this._animation = { raf: requestAnimationFrame(anim) };
+  }
+
+  smoothZoom(ax, ay, targetZoom) {
+    targetZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
+    const startZoom = this.zoom;
+    const startBearing = this.bearing;
+    const anchorLL = this.screenToLatLon(ax, ay);
+
+    this.animate(ZOOM_ANIM_DUR, EASING.easeOutCubic, (p) => {
+      const z = startZoom + (targetZoom - startZoom) * p;
+      this.applyZoomRotateAbout(ax, ay, z, startBearing, anchorLL);
+    });
+  }
+
+  snapToNorth() {
+      const sB = this.bearing;
+      const dB = shortestAngleDiff(sB, 0);
+      this.animate(BEARING_SNAP_DUR, EASING.easeOutCubic, (p) => {
+          this.bearing = normalizeAngle(sB + dB * p);
+      });
+  }
+
+  // --- EVENT BINDING & HANDLERS ---
+
+  bindEvents() {
+    window.addEventListener("resize", () => this.resize());
+    
+    // Mouse Events
+    this.canvas.addEventListener("mousedown", this.onMouseDown.bind(this));
+    window.addEventListener("mousemove", this.onMouseMove.bind(this));
+    window.addEventListener("mouseup", this.onMouseUp.bind(this));
+    this.canvas.addEventListener("wheel", this.onWheel.bind(this), { passive: false });
+    
+    // Touch Events
+    this.canvas.addEventListener("touchstart", this.onTouchStart.bind(this), { passive: false });
+    this.canvas.addEventListener("touchmove", this.onTouchMove.bind(this), { passive: false });
+    this.canvas.addEventListener("touchend", this.onTouchEnd.bind(this));
+  }
+
+  onMouseDown(e) {
+    e.preventDefault();
+    this.stopAllMovement();
+    this.isDragging = true;
+    this.dragStart = { x: e.clientX, y: e.clientY, center: { ...this.center } };
+    this._moveSamples = [{ t: performance.now(), x: e.clientX, y: e.clientY }];
+  }
+
+  onMouseMove(e) {
+    if (!this.isDragging) return;
+    const dx = e.clientX - this.dragStart.x;
+    const dy = e.clientY - this.dragStart.y;
+    const { lon: dLon, lat: dLat } = this.pixelsToLonLatDelta(dx, dy);
+    this.center = {
+        lon: this.dragStart.center.lon - dLon,
+        lat: this.dragStart.center.lat - dLat,
+    };
+    this.pushVelocitySample(e.clientX, e.clientY);
+    this.render();
+  }
+
+  onMouseUp(e) {
+    if (!this.isDragging) return;
+    this.isDragging = false;
+    this.startInertia();
+  }
+
+  onTouchStart(e) {
+    e.preventDefault();
+    this.stopAllMovement();
+
+    if (e.touches.length === 1) {
+      this.isDragging = true;
+      const t = e.touches[0];
+      this.dragStart = { x: t.clientX, y: t.clientY, center: { ...this.center } };
+      this._moveSamples = [{ t: performance.now(), x: t.clientX, y: t.clientY }];
+
+      // Double tap detection
+      const now = performance.now();
+      const dist = Math.hypot(t.clientX - this._lastTap.x, t.clientY - this._lastTap.y);
+      if (now - this._lastTap.time < DOUBLE_TAP_MAX_DELAY && dist < DOUBLE_TAP_MAX_MOVE) {
+        this.smoothZoom(t.clientX, t.clientY, this.zoom + 1);
+        this._lastTap.time = 0; // Reset tap
+      } else {
+        this._lastTap = { time: now, x: t.clientX, y: t.clientY };
+      }
+
+    } else if (e.touches.length >= 2) {
+      this.isDragging = false;
+      this.isPinching = true;
+      const t1 = e.touches[0], t2 = e.touches[1];
+      const cx = (t1.clientX + t2.clientX) / 2;
+      const cy = (t1.clientY + t2.clientY) / 2;
+      this.pinchStart = {
+        dist: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+        angle: Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX),
+        zoom: this.zoom,
+        bearing: this.bearing,
+        anchorLL: this.screenToLatLon(cx, cy)
+      };
+    }
+  }
+
+  onTouchMove(e) {
+      e.preventDefault();
+      if (this.isPinching && e.touches.length >= 2) {
+        const t1 = e.touches[0], t2 = e.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const angle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
+        const cx = (t1.clientX + t2.clientX) / 2;
+        const cy = (t1.clientY + t2.clientY) / 2;
+
+        const targetZoom = this.pinchStart.zoom + Math.log2(dist / this.pinchStart.dist);
+        const targetBearing = this.pinchStart.bearing + (angle - this.pinchStart.angle);
+        
+        this.applyZoomRotateAbout(cx, cy, targetZoom, targetBearing, this.pinchStart.anchorLL);
+        this.render();
+
+      } else if (this.isDragging && e.touches.length === 1) {
+        const t = e.touches[0];
+        const dx = t.clientX - this.dragStart.x;
+        const dy = t.clientY - this.dragStart.y;
+        const { lon: dLon, lat: dLat } = this.pixelsToLonLatDelta(dx, dy);
+        this.center = { lon: this.dragStart.center.lon - dLon, lat: this.dragStart.center.lat - dLat };
+        this.pushVelocitySample(t.clientX, t.clientY);
+        this.render();
+      }
+  }
+  
+  onTouchEnd(e) {
+      if (this.isDragging && e.touches.length === 0) {
+          this.isDragging = false;
+          this.startInertia();
+      }
+      if (this.isPinching && e.touches.length < 2) {
+          this.isPinching = false;
+      }
+  }
+
+  onWheel(e) {
+    e.preventDefault();
+    this.stopAllMovement();
+    const delta = e.deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP;
+    this.smoothZoom(e.clientX, e.clientY, this.zoom + delta);
+  }
+
+  // --- PHYSICS & INERTIA ---
+
+  pushVelocitySample(x, y) {
+    const t = performance.now();
+    this._moveSamples.push({ t, x, y });
+    while (this._moveSamples.length > 2 && t - this._moveSamples[0].t > VELOCITY_WINDOW_MS) {
+      this._moveSamples.shift();
+    }
+  }
+
+  getVelocity() {
+    if (this._moveSamples.length < 2) return { vx: 0, vy: 0 };
+    const first = this._moveSamples[0];
+    const last = this._moveSamples[this._moveSamples.length - 1];
+    const dt = last.t - first.t;
+    if (dt < 1) return { vx: 0, vy: 0 };
+    return { vx: (last.x - first.x) / dt, vy: (last.y - first.y) / dt };
+  }
+
+  startInertia() {
+    let { vx, vy } = this.getVelocity(); // px/ms
+    if (Math.hypot(vx, vy) < INERTIA_MIN_SPEED) return;
+
+    this.animate(2000, t => t, (p) => { // Using a long duration and breaking internally
+      const decay = Math.pow(INERTIA_DECEL, p * 100); // Exponential decay
+      vx *= decay;
+      vy *= decay;
+      
+      const {lon: dLon, lat: dLat} = this.pixelsToLonLatDelta(vx * 16.67, vy * 16.67);
+      this.center.lon += dLon;
+      this.center.lat += dLat;
+
+      if (Math.hypot(vx, vy) < INERTIA_MIN_SPEED) {
+        this._animation.raf = null; // Stop animation
+      }
+    });
+  }
+
+  // --- UI BINDING & UPDATES ---
+
+  initUI() {
+    this.ui = {
+      zoomIn: document.getElementById("zoom-in"),
+      zoomOut: document.getElementById("zoom-out"),
+      coords: document.getElementById("coords"),
+      scaleText: document.getElementById("scale-text"),
+      scaleBar: document.querySelector(".scale-bar"),
+      attribution: document.getElementById("attribution"),
+      compass: document.getElementById("compass"),
+    };
+    this.ui.zoomIn.onclick = () => this.smoothZoom(this.width / 2, this.height / 2, Math.floor(this.zoom + 1));
+    this.ui.zoomOut.onclick = () => this.smoothZoom(this.width / 2, this.height / 2, Math.floor(this.zoom - 1));
+    this.ui.compass.onclick = () => this.snapToNorth();
+  }
+
+  updateUI() {
+    // Coords
+    this.ui.coords.textContent =
+      `${this.center.lat.toFixed(5)}°, ${this.center.lon.toFixed(5)} | Z: ${this.zoom.toFixed(2)}`;
+
+    // Scale Bar
+    const res = this.getResolution(this.center.lat, this.zoom);
+    const targetWidth = 100; // pixels
+    const targetMeters = res * targetWidth;
+    const pow10 = Math.pow(10, Math.floor(Math.log10(targetMeters)));
+    const mult = [1, 2, 5].find(m => m * pow10 > targetMeters / 2) || 5;
+    const niceMeters = mult * pow10;
+    const barWidth = niceMeters / res;
+    this.ui.scaleBar.style.width = `${barWidth}px`;
+    this.ui.scaleText.textContent = niceMeters < 1000 ? `${niceMeters} m` : `${niceMeters / 1000} km`;
+    
+    // Compass
+    const isNorth = Math.abs(this.bearing) < 0.01;
+    this.ui.compass.classList.toggle('visible', !isNorth);
+    this.ui.compass.style.transform = `rotateZ(${this.bearing * RAD2DEG}deg)`;
+  }
+
+  // --- GEOMETRY & PROJECTIONS ---
+
+  getResolution(lat, z) {
+    return (EARTH_CIRCUMFERENCE * Math.cos(lat * Math.PI / 180)) / (Math.pow(2, z) * TILE_SIZE);
+  }
+
+  lonLatToTile(lon, lat, z) {
+    lat = Math.max(-MAX_LATITUDE, Math.min(MAX_LATITUDE, lat));
+    const scale = 1 << z;
+    const x = (lon + 180) / 360 * scale;
+    const y = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * scale;
+    return { x, y };
+  }
+  
+  tileToLonLat(x, y, z) {
+      const scale = 1 << z;
+      const lon = x / scale * 360 - 180;
+      const n = Math.PI - 2 * Math.PI * y / scale;
+      const lat = RAD2DEG * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+      return { lon, lat };
+  }
+
+  pixelsToLonLatDelta(dx, dy) {
+      const {x: rotatedX, y: rotatedY} = rot(dx, dy, -this.bearing);
+      const res = this.getResolution(this.center.lat, this.zoom);
+      const metersPerLon = (EARTH_CIRCUMFERENCE * Math.cos(this.center.lat * Math.PI / 180)) / 360;
+      const metersPerLat = EARTH_CIRCUMFERENCE / 360;
+      return {
+          lon: (rotatedX * res) / metersPerLon,
+          lat: -(rotatedY * res) / metersPerLat
+      };
+  }
+
+  screenToLatLon(ax, ay) {
+    const dx = ax - this.width / 2;
+    const dy = ay - this.height / 2;
+    const { lon: dLon, lat: dLat } = this.pixelsToLonLatDelta(dx, dy);
+    return { lon: this.center.lon + dLon, lat: this.center.lat + dLat };
+  }
+
+  applyZoomRotateAbout(ax, ay, newZoom, newBearing, anchorLL) {
+    newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
+    const zInt = Math.floor(newZoom);
+    const scale = Math.pow(2, newZoom - zInt);
+    
+    const tileAnchor = this.lonLatToTile(anchorLL.lon, anchorLL.lat, zInt);
+    const anchorVec = { x: ax - this.width / 2, y: ay - this.height / 2 };
+    const {x: rotatedX, y: rotatedY} = rot(anchorVec.x / (scale * TILE_SIZE), anchorVec.y / (scale * TILE_SIZE), -newBearing);
+    
+    const centerTile = { x: tileAnchor.x - rotatedX, y: tileAnchor.y - rotatedY };
+    const newCenter = this.tileToLonLat(centerTile.x, centerTile.y, zInt);
+    
+    this.center = newCenter;
+    this.zoom = newZoom;
+    this.bearing = normalizeAngle(newBearing);
+  }
+}
+
+// --- INITIALIZATION ---
+window.atlas = new Atlas("map");
+
+</script>
+</body>
+</html>
