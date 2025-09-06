@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Atlas.js — Fullscreen Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    }
+    #map-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: #e6e6e6;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Layer Switcher */
+    .layer-switcher {
+      position: absolute;top:10px;left:10px;
+      display:flex;gap:2px;z-index:15;
+      box-shadow:0 1px 3px rgba(0,0,0,0.2);
+      border-radius:4px;overflow:hidden;
+    }
+    .layer-btn {
+      background:white;border:none;font-size:12px;
+      padding:6px 8px;cursor:pointer;user-select:none;
+    }
+    .layer-btn.active {background:#0078A8;color:white;font-weight:500;}
+
+    /* Zoom Controls */
+    .zoom-controls {
+      position:absolute;top:50px;left:10px;
+      display:flex;flex-direction:column;gap:5px;z-index:15;
+    }
+    .zoom-btn {
+      background:white;
+      border:1px solid #ccc;font-size:16px;padding:5px 8px;
+      cursor:pointer;border-radius:3px;
+    }
+
+    /* Loading Indicator */
+    #loading {
+      position:absolute;top:10px;right:10px;
+      background:rgba(255,255,255,0.9);
+      padding:4px 8px;border-radius:12px;font-size:12px;
+      display:none;
+    }
+
+    /* Coords Overlay */
+    #coords {
+      position:absolute;bottom:25px;left:5px;
+      background:rgba(255,255,255,0.85);
+      font-size:11px;padding:3px 6px;border-radius:3px;
+      font-family:monospace;
+    }
+    #zoom-overlay {
+      position:absolute;top:50%;left:50%;
+      transform:translate(-50%,-50%);
+      background:rgba(255,255,255,0.9);
+      padding:6px 12px;border-radius:6px;
+      opacity:0;pointer-events:none;
+      font-weight:600;font-size:18px;
+    }
+    /* Scale Bar */
+    .scale-bar-container {
+      position:absolute;bottom:5px;right:10px;
+      background:rgba(255,255,255,0.85);
+      font-size:11px;padding:2px 4px;border-radius:3px;
+      text-align:center;
+    }
+    .scale-bar {height:4px;background:#333;margin-bottom:2px;border-radius:2px;}
+
+    /* Attribution */
+    #attribution {
+      position:absolute;bottom:5px;left:10px;
+      background:rgba(255,255,255,0.85);
+      font-size:11px;padding:2px 4px;border-radius:3px;
+    }
+    #attribution a {text-decoration:none;color:#0078A8;}
+  </style>
+</head>
+<body>
+  <div id="map-container">
+    <canvas id="map"></canvas>
+
+    <!-- Layer Switcher -->
+    <div class="layer-switcher">
+      <button class="layer-btn active" data-layer="osm">OSM</button>
+      <button class="layer-btn" data-layer="esriSat">Satellite</button>
+    </div>
+
+    <!-- Zoom Controls -->
+    <div class="zoom-controls">
+      <button id="zoom-in" class="zoom-btn">+</button>
+      <button id="zoom-out" class="zoom-btn">−</button>
+    </div>
+
+    <!-- UI Overlays -->
+    <div id="loading">Loading: <span id="loading-count">0</span></div>
+    <div id="zoom-overlay"></div>
+    <div id="coords"></div>
+    <div class="scale-bar-container">
+      <div class="scale-bar"></div>
+      <div id="scale-text"></div>
+    </div>
+    <div id="attribution"></div>
+  </div>
+
+  <!-- Include Atlas.js -->
+  <script src="atlas.js"></script>
+  <script>
+    // Initialize full-page map
+    const atlas = new Atlas("map", "map-container");
+
+    // Hook up manual zoom buttons
+    document.getElementById("zoom-in").onclick = ()=>atlas.zoom = Math.min(atlas.zoom+1, 19);
+    document.getElementById("zoom-out").onclick = ()=>atlas.zoom = Math.max(atlas.zoom-1, 0);
+  </script>
+</body>
+</html>
