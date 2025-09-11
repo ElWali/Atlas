@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="referrer" content="origin">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas.js - Professional JavaScript Mapping Library</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    #map-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      touch-action: none;
+      cursor: grab;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #map-container.dragging,
+    #map-container .atlas-marker.dragging {
+      cursor: grabbing;
+      cursor: -webkit-grabbing;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .atlas-control-container {
+      position: absolute;
+      z-index: 1000;
+      pointer-events: none;
+    }
+    .atlas-control-container > * {
+      pointer-events: auto;
+    }
+    .atlas-control-top-left { top: 10px; left: 10px; }
+    .atlas-control-top-right { top: 10px; right: 10px; }
+    .atlas-control-bottom-left { bottom: 10px; left: 10px; }
+    .atlas-control-bottom-right { bottom: 10px; right: 10px; }
+    .atlas-control-vertical {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .atlas-control-horizontal {
+      display: flex;
+      flex-direction: row;
+      gap: 5px;
+    }
+    .control-btn {
+      background: rgba(255, 255, 255, 0.9);
+      border: 1px solid #ccc;
+      font-size: 16px;
+      padding: 4px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      user-select: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      transition: all 0.15s ease;
+      min-width: 30px;
+      text-align: center;
+    }
+    .control-btn:hover {
+      background: rgba(240, 240, 240, 0.95);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+    }
+    .control-btn:active {
+      background: rgba(224, 224, 224, 0.95);
+      transform: scale(0.98);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .control-btn:focus {
+      outline: 2px solid #0078A8;
+      outline-offset: 2px;
+    }
+    .control-btn:disabled {
+      background: rgba(245, 245, 245, 0.9);
+      color: #aaa;
+      cursor: not-allowed;
+      transform: none;
+      border-color: #ddd;
+      box-shadow: none;
+    }
+    #loading {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    #loading.visible {
+      display: block;
+    }
+    #coords {
+      position: absolute;
+      bottom: 25px;
+      left: 5px;
+      background: rgba(255, 255, 255, 0.7);
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    #zoom-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 20px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      opacity: 0;
+      transition: opacity 0.25s ease-in-out;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      font-weight: bold;
+      z-index: 1000;
+    }
+    .scale-bar-container {
+      text-align: center;
+      font-size: 11px;
+      color: #fff;
+      cursor: pointer;
+      background: rgba(0,0,0,0.5);
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    .scale-bar {
+      height: 4px;
+      background: #fff;
+      margin-bottom: 2px;
+      border-radius: 2px;
+    }
+    #attribution {
+      position: absolute;
+      bottom: 5px;
+      left: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      font-size: 11px;
+      padding: 3px 6px;
+      border-radius: 3px;
+      font-family: sans-serif;
+      max-width: 50%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #attribution a {
+      text-decoration: none;
+      color: #4d90fe;
+      font-weight: bold;
+    }
+    #attribution a:hover {
+      text-decoration: underline;
+    }
+    @keyframes zoom-indicator {
+      0% {
+        transform: scale(0.2);
+        opacity: 0.8;
+      }
+      100% {
+        transform: scale(1.2);
+        opacity: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map-container">
+    <canvas id="map"></canvas>
+    <div id="loading">Loading: <span id="loading-count">0</span></div>
+    <div id="zoom-overlay" aria-live="polite"></div>
+    <div id="coords" aria-live="polite"></div>
+    <div id="attribution"></div>
+  </div>
+  <script>
+    "use strict";
+
+    /**
+     * Professional Atlas.js - Enhanced Mapping Library
+     */
+
+    // --- CONSTANTS ---
+    const EARTH_RADIUS = 6378137;
+    const EARTH_CIRCUMFERENCE = 2 * Math.PI * EARTH_RADIUS;
+    const MAX_LATITUDE = 85.05112878;
+    const MIN_LATITUDE = -85.05112878;
+    const TILE_SIZE = 256;
+    const TILE_BUFFER = 3;
+    const TILE_TTL = 1000 * 60 * 60 * 24;
+    const TILE_LOAD_TIMEOUT_MS = 10000;
+    const RAD2DEG = 180 / Math.PI;
+    const DEG2RAD = Math.PI / 180;
+
+    // --- CONFIGURATION ---
+    const CONFIG = {
+      defaultLayer: "OSM",
+      defaultCenter: { lon: 0, lat: 0 },
+      defaultZoom: 3,
+      retina: "auto",
+      retinaSuffix: "@2x"
+    };
+
+    // --- EASING FUNCTIONS ---
+    const EASING = {
+      easeInOutCubic: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+      easeOutCubic: t => 1 - Math.pow(1 - t, 3),
+      linear: t => t
+    };
+
+    // --- PROFESSIONAL LOGGING ---
+    /**
+     * Enhanced logging system with proper error handling
+     */
+    class Logger {
+      constructor() {
+        this.levels = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+        this.currentLevel = this.levels.INFO;
+        this.history = [];
+        this.maxHistorySize = 1000;
+      }
+
+      setLevel(level) {
+        if (this.levels.hasOwnProperty(level)) {
+          this.currentLevel = this.levels[level];
+        }
+      }
+
+      _log(level, message, data = null, error = null) {
+        if (this.levels[level] < this.currentLevel) return;
+
+        const timestamp = new Date().toISOString();
+        const logEntry = { timestamp, level, message, data };
+
+        // Capture actual error stacks when available
+        if (error && error.stack) {
+          logEntry.stack = error.stack;
+        }
+
+        // Safe serialization
+        if (data) {
+          try {
+            if (typeof data === 'string') {
+              logEntry.serializedData = data;
+            } else if (data && typeof data === 'object' && data.constructor === Object) {
+              logEntry.serializedData = JSON.stringify(data, null, 2);
+            } else {
+              logEntry.serializedData = String(data);
+            }
+          } catch (err) {
+            logEntry.serializedData = '[Non-Serializable Data]';
+          }
+        }
+
+        this.history.push(logEntry);
+        if (this.history.length > this.maxHistorySize) {
+          this.history.shift();
+        }
+
+        // Environment-based logging
+        if (typeof window !== 'undefined' && !window.location.hostname.includes('localhost')) {
+          // Production - only log errors
+          if (level === 'ERROR') {
+            console.error(`[Atlas ${level}] ${message}`, data || '');
+          }
+        } else {
+          // Development - log all
+          const styles = {
+            DEBUG: 'color: #888',
+            INFO: 'color: #2196F3', 
+            WARN: 'color: #FF9800',
+            ERROR: 'color: #F44336; font-weight: bold'
+          };
+          console.log(`%c[Atlas ${level}] ${message}`, styles[level], data || '');
+        }
+      }
+
+      debug(message, data) { this._log('DEBUG', message, data); }
+      info(message, data) { this._log('INFO', message, data); }
+      warn(message, data) { this._log('WARN', message, data); }
+      error(message, data, error) { this._log('ERROR', message, data, error); }
+
+      getHistory(count = 100) {
+        return this.history.slice(-count);
+      }
+    }
+
+    const logger = new Logger();
+
+    // --- UTILITY FUNCTIONS ---
+    function normalizeAngle(rad) {
+      return Math.atan2(Math.sin(rad), Math.cos(rad));
+    }
+
+    function shortestAngleDiff(from, to) {
+      return normalizeAngle(to - from);
+    }
+
+    function wrapDeltaLon(delta) {
+      delta = ((delta + 180) % 360 + 360) % 360 - 180;
+      return delta;
+    }
+
+    function rot(x, y, ang) {
+      const c = Math.cos(ang), s = Math.sin(ang);
+      return { x: x * c - y * s, y: x * s + y * c };
+    }
+
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    // --- PROJECTION SYSTEM ---
+    class Projection {
+      project(latlng) {
+        throw new Error('project() must be implemented by subclass');
+      }
+
+      unproject(point) {
+        throw new Error('unproject() must be implemented by subclass');
+      }
+    }
+
+    class WebMercatorProjection extends Projection {
+      constructor() {
+        super();
+        logger.debug('WebMercatorProjection initialized');
+      }
+
+      project(latlng) {
+        try {
+          const d = EARTH_RADIUS;
+          const maxLat = MAX_LATITUDE;
+          const lat = Math.max(Math.min(maxLat, latlng.lat), -maxLat);
+          const sin = Math.sin(lat * DEG2RAD);
+          return {
+            x: d * latlng.lon * DEG2RAD,
+            y: d * Math.log((1 + sin) / (1 - sin)) / 2
+          };
+        } catch (error) {
+          logger.error('Projection failed', { latlng }, error);
+          throw error;
+        }
+      }
+
+      unproject(point) {
+        try {
+          const d = EARTH_RADIUS;
+          return {
+            lon: (point.x / d) * RAD2DEG,
+            lat: (2 * Math.atan(Math.exp(point.y / d)) - (Math.PI / 2)) * RAD2DEG
+          };
+        } catch (error) {
+          logger.error('Unprojection failed', { point }, error);
+          throw error;
+        }
+      }
+
+      latLngToTile(latlng, zoom) {
+        const scale = Math.pow(2, zoom);
+        const projected = this.project(latlng);
+        return {
+          x: (projected.x + Math.PI * EARTH_RADIUS) / (2 * Math.PI * EARTH_RADIUS) * scale,
+          y: (Math.PI * EARTH_RADIUS - projected.y) / (2 * Math.PI * EARTH_RADIUS) * scale
+        };
+      }
+
+      tileToLatLng(x, y, zoom) {
+        const scale = Math.pow(2, zoom);
+        const projected = {
+          x: x / scale * 2 * Math.PI * EARTH_RADIUS - Math.PI * EARTH_RADIUS,
+          y: Math.PI * EARTH_RADIUS - y / scale * 2 * Math.PI * EARTH_RADIUS
+        };
+        return this.unproject(projected);
+      }
+    }
+
+    const DEFAULT_PROJECTION = new WebMercatorProjection();
+
+    // --- GIS UTILITIES ---
+    class GISUtils {
+      static toRadians(d) { return d * Math.PI / 180; }
+      static toDegrees(r) { return r * 180 / Math.PI; }
+      
+      static wrapLongitude(l) {
+        while (l > 180) l -= 360;
+        while (l < -180) l += 360;
+        return l;
+      }
+
+      static clampLatitude(lat) {
+        return Math.max(MIN_LATITUDE, Math.min(MAX_LATITUDE, lat));
+      }
+
+      static getResolution(lat, z) {
+        return (EARTH_CIRCUMFERENCE * Math.cos(this.toRadians(lat))) / (Math.pow(2, z) * TILE_SIZE);
+      }
+
+      static formatDistance(m) {
+        return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km";
+      }
+
+      static tileToLonLat(x, y, z) {
+        return DEFAULT_PROJECTION.tileToLatLng(x, y, z);
+      }
+    }
+
+    // --- BASE LAYER CLASS ---
+    /**
+     * @typedef {Object} LatLng
+     * @property {number} lat - Latitude
+     * @property {number} lon - Longitude
+     */
+
+    /**
+     * @typedef {Object} Point
+     * @property {number} x - X coordinate
+     * @property {number} y - Y coordinate
+     */
+
+    class Layer {
+      constructor(options = {}) {
+        this.options = options;
+        this._map = null;
+        this._events = {};
+      }
+
+      addTo(map) {
+        try {
+          if (this._map) {
+            this._map.removeLayer(this);
+          }
+          this._map = map;
+          map.addLayer(this);
+          return this;
+        } catch (error) {
+          logger.error('Failed to add layer', null, error);
+          throw error;
+        }
+      }
+
+      remove() {
+        try {
+          if (this._map) {
+            this._map.removeLayer(this);
+            this._map = null;
+          }
+          return this;
+        } catch (error) {
+          logger.error('Failed to remove layer', null, error);
+          throw error;
+        }
+      }
+
+      on(type, fn) {
+        if (!this._events[type]) {
+          this._events[type] = [];
+        }
+        this._events[type].push(fn);
+        return this;
+      }
+
+      off(type, fn) {
+        if (!this._events[type]) return this;
+        if (!fn) {
+          this._events[type] = [];
+        } else {
+          this._events[type] = this._events[type].filter(cb => cb !== fn);
+        }
+        return this;
+      }
+
+      fire(type, data = {}) {
+        if (!this._events[type]) return;
+        data.type = type;
+        data.target = this;
+        this._events[type].forEach(fn => {
+          try {
+            fn(data);
+          } catch (error) {
+            logger.error('Event handler error', { type }, error);
+          }
+        });
+      }
+
+      onAdd() { }
+      onRemove() { }
+      render() { }
+    }
+
+    // --- ENHANCED TILE LAYER ---
+    class TileLayer extends Layer {
+      constructor(urlTemplate, options = {}) {
+        super(options);
+        this.urlTemplate = urlTemplate;
+        this.options = {
+          minZoom: 0,
+          maxZoom: 18,
+          attribution: '',
+          background: '#ffffff',
+          supportsRetina: false,
+          maxCacheSize: 500,
+          maxConcurrency: 6,
+          ...options
+        };
+        
+        this.tileCache = new Map();
+        this.loadingTiles = new Set();
+        this.loadingControllers = new Map();
+        this._retinaAvailable = true;
+        this._loadStats = { requests: 0, successes: 0, errors: 0 };
+        this._concurrencyQueue = [];
+        this._activeRequests = 0;
+        
+        logger.debug('TileLayer created', { urlTemplate: this.urlTemplate });
+      }
+
+      _getTileUrl(x, y, z) {
+        try {
+          const scale = Math.pow(2, z);
+          let wrappedX = ((x % scale) + scale) % scale;
+          const intX = Math.floor(wrappedX);
+          const intY = Math.max(0, Math.min(scale - 1, Math.floor(y)));
+          
+          let url = this.urlTemplate
+            .replace('{z}', z)
+            .replace('{x}', intX)
+            .replace('{y}', intY);
+            
+          if (this.options.supportsRetina && this._shouldRequestRetina()) {
+            url += CONFIG.retinaSuffix;
+          }
+          
+          return url;
+        } catch (error) {
+          logger.error('Failed to generate tile URL', { x, y, z }, error);
+          throw error;
+        }
+      }
+
+      _shouldRequestRetina() {
+        const mode = CONFIG.retina;
+        const want = (mode === true) || (mode === "auto" && (window.devicePixelRatio || 1) > 1.5);
+        return want && this._retinaAvailable;
+      }
+
+      async _loadTile(key, url) {
+        if (this.tileCache.has(key)) {
+          const tile = this.tileCache.get(key);
+          tile.lastUsed = Date.now();
+          return tile;
+        }
+
+        if (this.loadingTiles.has(key)) {
+          return new Promise((resolve) => {
+            const checkLoaded = () => {
+              if (this.tileCache.has(key)) {
+                resolve(this.tileCache.get(key));
+              } else if (!this.loadingTiles.has(key)) {
+                resolve(null);
+              } else {
+                setTimeout(checkLoaded, 50);
+              }
+            };
+            checkLoaded();
+          });
+        }
+
+        // Concurrency limiting
+        if (this._activeRequests >= this.options.maxConcurrency) {
+          return new Promise((resolve) => {
+            this._concurrencyQueue.push(() => {
+              this._loadTile(key, url).then(resolve);
+            });
+          });
+        }
+
+        this._activeRequests++;
+        const controller = new AbortController();
+        const signal = controller.signal;
+        this.loadingControllers.set(key, controller);
+        
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        
+        const tile = { 
+          img, 
+          loaded: false, 
+          loadedAt: Date.now(), 
+          lastUsed: Date.now(), 
+          controller,
+          url,
+          key
+        };
+
+        this.tileCache.set(key, tile);
+        this.loadingTiles.add(key);
+        this._loadStats.requests++;
+
+        const startTime = performance.now();
+
+        try {
+          await new Promise((resolve, reject) => {
+            const cleanup = () => {
+              this.loadingTiles.delete(key);
+              this.loadingControllers.delete(key);
+              this._activeRequests--;
+              
+              // Process queue
+              if (this._concurrencyQueue.length > 0) {
+                const next = this._concurrencyQueue.shift();
+                next();
+              }
+            };
+
+            img.onload = async () => {
+              const loadTime = performance.now() - startTime;
+              logger.debug(`Tile loaded: ${key} (${loadTime.toFixed(2)}ms)`);
+              
+              // Use image.decode() for better performance
+              try {
+                if (img.decode) {
+                  await img.decode();
+                }
+              } catch (decodeError) {
+                logger.warn('Image decode failed', { key }, decodeError);
+              }
+              
+              tile.loaded = true;
+              tile.loadedAt = Date.now();
+              tile.loadTime = loadTime;
+              
+              this._loadStats.successes++;
+              cleanup();
+              
+              if (this._map) {
+                this._map.scheduleRender();
+              }
+              
+              this.fire('tileload', { tile: key, url, loadTime });
+              resolve(tile);
+            };
+
+            img.onerror = (error) => {
+              if (signal.aborted) return;
+              
+              logger.warn('Tile load failed', { key, url });
+              this._loadStats.errors++;
+              
+              // Fallback to non-retina
+              if (this.options.supportsRetina && url.includes(CONFIG.retinaSuffix)) {
+                this._retinaAvailable = false;
+                const fallbackUrl = url.replace(CONFIG.retinaSuffix, "");
+                logger.debug('Retrying non-retina', { fallbackUrl });
+                img.src = fallbackUrl;
+                return;
+              }
+              
+              cleanup();
+              this.fire('tileerror', { tile: key, url, error });
+              reject(error);
+            };
+
+            const timeoutId = setTimeout(() => {
+              if (this.loadingTiles.has(key)) {
+                controller.abort();
+                logger.warn('Tile timeout', { key, url });
+                cleanup();
+                this.fire('tileerror', { tile: key, url, error: new Error('Timeout') });
+                reject(new Error(`Timeout: ${url}`));
+              }
+            }, TILE_LOAD_TIMEOUT_MS);
+
+            img.src = url;
+            
+            signal.addEventListener('abort', () => {
+              clearTimeout(timeoutId);
+              cleanup();
+              reject(new Error('Aborted'));
+            });
+          });
+
+          this._maybeEvictCache();
+          return tile;
+          
+        } catch (error) {
+          if (!signal.aborted) {
+            logger.error('Tile loading failed', { key, url }, error);
+          }
+          return null;
+        }
+      }
+
+      _maybeEvictCache() {
+        if (this.tileCache.size <= this.options.maxCacheSize) return;
+
+        const tiles = Array.from(this.tileCache.entries());
+        const now = Date.now();
+        
+        // Enhanced LRU + TTL eviction
+        tiles.sort((a, b) => {
+          const ageA = now - a[1].lastUsed;
+          const ageB = now - b[1].lastUsed;
+          const ttlA = now - a[1].loadedAt > TILE_TTL ? 1000 : 0;
+          const ttlB = now - b[1].loadedAt > TILE_TTL ? 1000 : 0;
+          return (ageA + ttlA) - (ageB + ttlB);
+        });
+
+        // Remove oldest 25%
+        const toRemove = Math.floor(tiles.length * 0.25);
+        let removedSize = 0;
+        
+        for (let i = 0; i < toRemove; i++) {
+          const [key, tile] = tiles[i];
+          // Don't evict very recently used tiles
+          if (now - tile.lastUsed < 5000) continue;
+          
+          this.tileCache.delete(key);
+          removedSize++;
+        }
+
+        logger.debug(`Cache evicted ${removedSize} tiles, ${this.tileCache.size} remaining`);
+      }
+
+      render() {
+        if (!this._map || !this._map.canvas) return;
+
+        try {
+          const ctx = this._map.ctx;
+          const zoom = this._map.getZoom();
+          const center = this._map.getCenter();
+          const bearing = this._map.getBearing();
+          const canvas = this._map.canvas;
+          const dpr = this._map.dpr || 1;
+
+          const w = canvas.width / dpr;
+          const h = canvas.height / dpr;
+          const zInt = Math.floor(zoom);
+          const scale = Math.pow(2, zInt);
+          
+          // Calculate visible tile bounds accounting for rotation
+          const corners = [
+            { x: 0, y: 0 },
+            { x: w, y: 0 },
+            { x: w, y: h },
+            { x: 0, y: h }
+          ];
+          
+          const cornerTiles = corners.map(corner => {
+            const worldPos = this._map.screenToLatLon(corner.x, corner.y);
+            return DEFAULT_PROJECTION.latLngToTile(worldPos, zInt);
+          });
+          
+          const minTileX = Math.floor(Math.min(...cornerTiles.map(t => t.x)) - TILE_BUFFER);
+          const maxTileX = Math.ceil(Math.max(...cornerTiles.map(t => t.x)) + TILE_BUFFER);
+          const minTileY = Math.floor(Math.min(...cornerTiles.map(t => t.y)) - TILE_BUFFER);
+          const maxTileY = Math.ceil(Math.max(...cornerTiles.map(t => t.y)) + TILE_BUFFER);
+
+          // Render tiles center-out for better visual experience
+          const centerTileX = Math.floor((minTileX + maxTileX) / 2);
+          const centerTileY = Math.floor((minTileY + maxTileY) / 2);
+          
+          const tilesToRender = [];
+          for (let x = minTileX; x <= maxTileX; x++) {
+            for (let y = minTileY; y <= maxTileY; y++) {
+              if (y < 0 || y >= scale) continue;
+              const distance = Math.sqrt((x - centerTileX) ** 2 + (y - centerTileY) ** 2);
+              tilesToRender.push({ x, y, distance });
+            }
+          }
+          
+          tilesToRender.sort((a, b) => a.distance - b.distance);
+          
+          for (const { x, y } of tilesToRender) {
+            this._renderTile(ctx, x, y, zInt, zoom, bearing, dpr);
+          }
+          
+        } catch (error) {
+          logger.error('Tile render failed', null, error);
+        }
+      }
+
+      _renderTile(ctx, x, y, zInt, zoom, bearing, dpr) {
+        const key = `${zInt}_${x}_${y}`;
+        let tile = this.tileCache.get(key);
+        
+        if (!tile) {
+          const url = this._getTileUrl(x, y, zInt);
+          this._loadTile(key, url).catch(() => {
+            // Silent fail for background loads
+          });
+          return;
+        }
+        
+        if (!tile.loaded || !tile.img) return;
+        
+        tile.lastUsed = Date.now();
+        
+        try {
+          const tileLatLng = DEFAULT_PROJECTION.tileToLatLng(x, y, zInt);
+          const tileScreenPos = this._map.latLngToContainerPoint(tileLatLng);
+          
+          const tileScale = Math.pow(2, zoom - zInt);
+          const tileSize = TILE_SIZE * tileScale;
+          
+          ctx.save();
+          
+          // Apply rotation transform if bearing is set
+          if (Math.abs(bearing) > 0.001) {
+            const w = this._map.canvas.width / dpr;
+            const h = this._map.canvas.height / dpr;
+            ctx.translate(w / 2, h / 2);
+            ctx.rotate(bearing);
+            ctx.translate(-w / 2, -h / 2);
+          }
+          
+          ctx.drawImage(
+            tile.img,
+            Math.floor(tileScreenPos.x),
+            Math.floor(tileScreenPos.y),
+            Math.ceil(tileSize),
+            Math.ceil(tileSize)
+          );
+          ctx.restore();
+          
+        } catch (error) {
+          logger.error('Failed to render tile', { key }, error);
+        }
+      }
+
+      getBackground() { return this.options.background; }
+      getAttribution() { return this.options.attribution; }
+      getMinZoom() { return this.options.minZoom; }
+      getMaxZoom() { return this.options.maxZoom; }
+
+      onRemove() {
+        // Cancel all loading tiles
+        for (const controller of this.loadingControllers.values()) {
+          controller.abort();
+        }
+        this.loadingControllers.clear();
+        this.loadingTiles.clear();
+        this._concurrencyQueue.length = 0;
+        this._activeRequests = 0;
+      }
+    }
+
+    // --- PROFESSIONAL ATLAS CLASS ---
+    /**
+     * @typedef {Object} AtlasOptions
+     * @property {LatLng} [defaultCenter] - Default map center
+     * @property {number} [defaultZoom] - Default zoom level
+     * @property {string} [retina] - Retina mode: "auto", true, false
+     */
+
+    class Atlas {
+      /**
+       * Create a new Atlas map instance
+       * @param {string} id - Canvas element ID
+       * @param {AtlasOptions} [options={}] - Configuration options
+       */
+      constructor(id, options = {}) {
+        try {
+          Object.assign(CONFIG, options);
+          
+          this.canvas = document.getElementById(id);
+          if (!this.canvas) {
+            throw new Error(`Canvas element with id "${id}" not found`);
+          }
+          
+          this.ctx = this.canvas.getContext("2d");
+          if (!this.ctx) {
+            throw new Error('Failed to get 2D canvas context');
+          }
+          
+          this.container = document.getElementById("map-container");
+          if (!this.container) {
+            throw new Error('Map container not found');
+          }
+          
+          // Core state
+          this.center = {
+            lon: GISUtils.wrapLongitude(CONFIG.defaultCenter.lon),
+            lat: GISUtils.clampLatitude(CONFIG.defaultCenter.lat)
+          };
+          this.zoom = CONFIG.defaultZoom;
+          this.bearing = 0;
+          
+          // Rendering system
+          this.renderScheduled = false;
+          this.dpr = window.devicePixelRatio || 1;
+          this._renderFrame = null;
+          this._lastRender = 0;
+          this._renderThrottle = 16; // ~60fps
+          
+          // UI elements
+          this.zoomOverlay = document.getElementById("zoom-overlay");
+          this.loadingEl = document.getElementById("loading");
+          this.loadingCountEl = document.getElementById("loading-count");
+          this.coordsEl = document.getElementById("coords");
+          
+          // State management
+          this._layers = [];
+          this._baseLayer = null;
+          this._events = {};
+          this._controls = [];
+          this._controlCorners = {};
+          this._overlays = [];
+          this._handlers = {};
+          
+          // Projection system
+          this.projection = DEFAULT_PROJECTION;
+          
+          // Initialize
+          this._setupCanvas();
+          this._setupEventListeners();
+          
+          logger.info('Atlas initialized successfully', { 
+            center: this.center, 
+            zoom: this.zoom,
+            dpr: this.dpr,
+            canvasSize: `${this.canvas.width}x${this.canvas.height}`
+          });
+          
+        } catch (error) {
+          logger.error('Atlas initialization failed', null, error);
+          throw error;
+        }
+      }
+
+      _setupCanvas() {
+        try {
+          const rect = this.container.getBoundingClientRect();
+          this.canvas.width = rect.width * this.dpr;
+          this.canvas.height = rect.height * this.dpr;
+          this.canvas.style.width = rect.width + 'px';
+          this.canvas.style.height = rect.height + 'px';
+          
+          this.ctx.scale(this.dpr, this.dpr);
+          this.scheduleRender();
+        } catch (error) {
+          logger.error('Canvas setup failed', null, error);
+        }
+      }
+
+      _setupEventListeners() {
+        window.addEventListener('resize', debounce(() => {
+          this._setupCanvas();
+        }, 250));
+      }
+
+      /**
+       * Schedule a render with requestAnimationFrame throttling
+       */
+      scheduleRender() {
+        if (this.renderScheduled) return;
+        
+        this.renderScheduled = true;
+        
+        if (this._renderFrame) {
+          cancelAnimationFrame(this._renderFrame);
+        }
+        
+        this._renderFrame = requestAnimationFrame(() => {
+          const now = performance.now();
+          if (now - this._lastRender >= this._renderThrottle) {
+            this._draw();
+            this._lastRender = now;
+          }
+          this.renderScheduled = false;
+          this._renderFrame = null;
+        });
+      }
+
+      render() {
+        this.scheduleRender();
+      }
+
+      _draw() {
+        try {
+          const backgroundColor = this._baseLayer ? this._baseLayer.getBackground() : '#000';
+          const w = this.canvas.width / this.dpr;
+          const h = this.canvas.height / this.dpr;
+          
+          // Clear and fill background
+          this.ctx.fillStyle = backgroundColor;
+          this.ctx.fillRect(0, 0, w, h);
+
+          // Render layers in order
+          for (const layer of this._layers) {
+            if (layer && typeof layer.render === 'function') {
+              layer.render();
+            }
+          }
+
+          // Render overlays
+          for (const overlay of this._overlays) {
+            if (overlay && typeof overlay.render === 'function') {
+              overlay.render();
+            }
+          }
+
+          // Update UI
+          this._updateUI();
+          
+          this.fire('render');
+          
+        } catch (error) {
+          logger.error('Draw failed', null, error);
+        }
+      }
+
+      _updateUI() {
+        try {
+          // Loading indicator
+          let loadingCount = 0;
+          if (this._baseLayer && this._baseLayer instanceof TileLayer) {
+            loadingCount = this._baseLayer.loadingTiles.size;
+          }
+          
+          if (this.loadingEl && this.loadingCountEl) {
+            this.loadingEl.classList.toggle("visible", loadingCount > 0);
+            this.loadingCountEl.textContent = loadingCount;
+          }
+          
+          // Coordinates display
+          if (this.coordsEl) {
+            this.coordsEl.textContent =
+              `${this.center.lat.toFixed(6)}°, ${this.center.lon.toFixed(6)}° | ` +
+              `Z: ${this.zoom.toFixed(2)} | Bearing: ${(this.bearing * RAD2DEG).toFixed(1)}°`;
+          }
+        } catch (error) {
+          logger.error('UI update failed', null, error);
+        }
+      }
+
+      // --- CORE MAP API ---
+      
+      /**
+       * Get current map center
+       * @returns {LatLng} Current center coordinates
+       */
+      getCenter() { 
+        return { ...this.center }; 
+      }
+      
+      /**
+       * Get current zoom level
+       * @returns {number} Current zoom level
+       */
+      getZoom() { 
+        return this.zoom; 
+      }
+      
+      /**
+       * Get current bearing (rotation) in radians
+       * @returns {number} Current bearing in radians
+       */
+      getBearing() { 
+        return this.bearing; 
+      }
+
+      /**
+       * Set map center
+       * @param {LatLng} center - New center coordinates
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      setCenter(center) {
+        this.center = {
+          lon: GISUtils.wrapLongitude(center.lon),
+          lat: GISUtils.clampLatitude(center.lat)
+        };
+        this.render();
+        this.fire('moveend');
+        return this;
+      }
+
+      /**
+       * Set zoom level
+       * @param {number} zoom - New zoom level
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      setZoom(zoom) {
+        const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
+        const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
+        this.zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+        this.render();
+        this.fire('zoomend');
+        return this;
+      }
+
+      /**
+       * Set bearing (rotation)
+       * @param {number} bearing - New bearing in radians
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      setBearing(bearing) {
+        this.bearing = normalizeAngle(bearing);
+        this.render();
+        this.fire('rotateend');
+        return this;
+      }
+
+      // --- COORDINATE CONVERSION ---
+      
+      /**
+       * Convert screen coordinates to geographic coordinates
+       * @param {number} ax - Screen X coordinate
+       * @param {number} ay - Screen Y coordinate
+       * @param {number} [zoom] - Zoom level to use (defaults to current)
+       * @param {number} [bearing] - Bearing to use (defaults to current)
+       * @param {LatLng} [center] - Center to use (defaults to current)
+       * @returns {LatLng} Geographic coordinates
+       */
+      screenToLatLon(ax, ay, zoom = this.zoom, bearing = this.bearing, center = this.center) {
+        try {
+          const w = this.canvas.width / this.dpr;
+          const h = this.canvas.height / this.dpr;
+          const zInt = Math.floor(zoom);
+          const ts = TILE_SIZE * Math.pow(2, zoom - zInt);
+          const ct = this.projection.latLngToTile(center, zInt);
+          const anchorVec = { x: ax - w / 2, y: ay - h / 2 };
+          const v = rot(anchorVec.x / ts, anchorVec.y / ts, -bearing);
+          const tpt = { x: ct.x + v.x, y: ct.y + v.y };
+          const ll = this.projection.tileToLatLng(tpt.x, tpt.y, zInt);
+          return {
+            lon: GISUtils.wrapLongitude(ll.lon),
+            lat: GISUtils.clampLatitude(ll.lat)
+          };
+        } catch (error) {
+          logger.error('screenToLatLon conversion failed', { ax, ay, zoom }, error);
+          return { ...center };
+        }
+      }
+
+      /**
+       * Convert geographic coordinates to screen coordinates
+       * @param {LatLng} latlng - Geographic coordinates
+       * @returns {Point} Screen coordinates
+       */
+      latLngToContainerPoint(latlng) {
+        try {
+          const w = this.canvas.width / this.dpr;
+          const h = this.canvas.height / this.dpr;
+          const zInt = Math.floor(this.zoom);
+          const ts = TILE_SIZE * Math.pow(2, this.zoom - zInt);
+          const ct = this.projection.latLngToTile(this.center, zInt);
+          const pt = this.projection.latLngToTile(latlng, zInt);
+          const trX = (pt.x - ct.x) * ts;
+          const trY = (pt.y - ct.y) * ts;
+          const anchorVec = rot(trX, trY, this.bearing);
+          const screenX = w / 2 + anchorVec.x;
+          const screenY = h / 2 + anchorVec.y;
+          return { x: screenX, y: screenY };
+        } catch (error) {
+          logger.error('latLngToContainerPoint conversion failed', { latlng }, error);
+          return { x: 0, y: 0 };
+        }
+      }
+
+      // --- LAYER MANAGEMENT ---
+      
+      /**
+       * Add a layer to the map
+       * @param {Layer} layer - Layer to add
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      addLayer(layer) {
+        try {
+          if (!this._layers.includes(layer)) {
+            this._layers.push(layer);
+            if (typeof layer.onAdd === 'function') {
+              layer.onAdd();
+            }
+            this.render();
+            this.fire('layeradd', { layer });
+          }
+          return this;
+        } catch (error) {
+          logger.error('addLayer failed', null, error);
+          return this;
+        }
+      }
+
+      /**
+       * Remove a layer from the map
+       * @param {Layer} layer - Layer to remove
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      removeLayer(layer) {
+        try {
+          const index = this._layers.indexOf(layer);
+          if (index > -1) {
+            this._layers.splice(index, 1);
+            if (typeof layer.onRemove === 'function') {
+              layer.onRemove();
+            }
+            this.render();
+            this.fire('layerremove', { layer });
+          }
+          return this;
+        } catch (error) {
+          logger.error('removeLayer failed', null, error);
+          return this;
+        }
+      }
+
+      /**
+       * Set the base layer
+       * @param {TileLayer} layer - Base layer to set
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      setBaseLayer(layer) {
+        try {
+          if (this._baseLayer) {
+            this.removeLayer(this._baseLayer);
+          }
+          this._baseLayer = layer;
+          this.addLayer(layer);
+          this.fire('baselayerchange', { layer });
+          return this;
+        } catch (error) {
+          logger.error('setBaseLayer failed', null, error);
+          return this;
+        }
+      }
+
+      /**
+       * Get the current base layer
+       * @returns {TileLayer|null} Current base layer
+       */
+      getBaseLayer() {
+        return this._baseLayer;
+      }
+
+      // --- EVENT SYSTEM ---
+      
+      /**
+       * Add event listener
+       * @param {string} type - Event type
+       * @param {Function} fn - Event handler function
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      on(type, fn) {
+        if (!this._events[type]) {
+          this._events[type] = [];
+        }
+        this._events[type].push(fn);
+        return this;
+      }
+
+      /**
+       * Remove event listener
+       * @param {string} type - Event type
+       * @param {Function} [fn] - Event handler function to remove
+       * @returns {Atlas} This atlas instance for chaining
+       */
+      off(type, fn) {
+        if (!this._events[type]) return this;
+        if (!fn) {
+          this._events[type] = [];
+        } else {
+          this._events[type] = this._events[type].filter(cb => cb !== fn);
+        }
+        return this;
+      }
+
+      /**
+       * Fire an event
+       * @param {string} type - Event type
+       * @param {Object} [data={}] - Event data
+       */
+      fire(type, data = {}) {
+        if (!this._events[type]) return;
+        data.type = type;
+        data.target = this;
+        this._events[type].forEach(fn => {
+          try {
+            fn(data);
+          } catch (error) {
+            logger.error('Event handler error', { type }, error);
+          }
+        });
+      }
+
+      // --- LIFECYCLE ---
+      
+      /**
+       * Destroy the map instance and clean up resources
+       */
+      destroy() {
+        try {
+          // Cancel any pending renders
+          if (this._renderFrame) {
+            cancelAnimationFrame(this._renderFrame);
+            this._renderFrame = null;
+          }
+
+          // Remove all layers
+          for (const layer of [...this._layers]) {
+            this.removeLayer(layer);
+          }
+
+          // Clear state
+          this._layers = [];
+          this._baseLayer = null;
+          this._events = {};
+          
+          // Remove event listeners
+          window.removeEventListener('resize', this._setupCanvas);
+          
+          this.fire('destroy');
+          logger.info('Atlas destroyed');
+          
+        } catch (error) {
+          logger.error('Atlas destroy failed', null, error);
+        }
+      }
+    }
+
+    // --- INITIALIZATION ---
+    let atlasInstance = null;
+
+    function initializeAtlas() {
+      try {
+        logger.info('Initializing Atlas.js Professional Edition');
+        
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              try {
+                atlasInstance = new Atlas("map");
+                const lat = pos.coords.latitude;
+                const lon = pos.coords.longitude;
+
+                atlasInstance.setCenter({ lat, lon });
+                atlasInstance.setZoom(10);
+
+                const osmLayer = new TileLayer(
+                  'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  {
+                    minZoom: 0,
+                    maxZoom: 19,
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+                    background: "#e6e6e6",
+                    supportsRetina: true,
+                    maxCacheSize: 500
+                  }
+                );
+                
+                atlasInstance.setBaseLayer(osmLayer);
+                
+                logger.info('Atlas initialized with user location', { lat, lon });
+                
+              } catch (error) {
+                logger.error('Failed to initialize Atlas with geolocation', null, error);
+                fallbackInitialization();
+              }
+            },
+            (error) => {
+              logger.warn('Geolocation failed, using default location', { error: error.message });
+              fallbackInitialization();
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          );
+        } else {
+          logger.warn('Geolocation not supported');
+          fallbackInitialization();
+        }
+        
+      } catch (error) {
+        logger.error('Atlas initialization completely failed', null, error);
+        showInitializationError(error.message);
+      }
+    }
+
+    function fallbackInitialization() {
+      try {
+        atlasInstance = new Atlas("map");
+        const osmLayer = new TileLayer(
+          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+          {
+            minZoom: 0,
+            maxZoom: 19,
+            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+            background: "#e6e6e6",
+            supportsRetina: true,
+            maxCacheSize: 500
+          }
+        );
+        atlasInstance.setBaseLayer(osmLayer);
+        logger.info('Atlas initialized with default settings');
+      } catch (error) {
+        logger.error('Fallback initialization failed', null, error);
+        showInitializationError(error.message);
+      }
+    }
+
+    function showInitializationError(message) {
+      const canvas = document.getElementById('map');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Atlas.js Initialization Failed', canvas.width / 2, canvas.height / 2 - 20);
+        ctx.font = '14px Arial';
+        ctx.fillText(message, canvas.width / 2, canvas.height / 2 + 20);
+      }
+    }
+
+    // Start initialization
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initializeAtlas);
+    } else {
+      initializeAtlas();
+    }
+
+    // Expose Atlas globally for testing
+    window.Atlas = Atlas;
+    window.TileLayer = TileLayer;
+    window.logger = logger;
+
+    logger.info('Atlas.js Professional Edition loaded successfully');
+
+  </script>
+</body>
+</html>
