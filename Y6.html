@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarfaya Interactive Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+          crossorigin=""/>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f5f5f5;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            background: white;
+            border: 2px solid #3498db;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            color: #3498db;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .control-btn:hover {
+            background: #3498db;
+            color: white;
+            transform: scale(1.1);
+        }
+        
+        .search-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            width: 300px;
+        }
+        
+        .search-box {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #3498db;
+            border-radius: 30px;
+            font-size: 16px;
+            outline: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .search-box:focus {
+            border-color: #2980b9;
+            box-shadow: 0 2px 15px rgba(52, 152, 219, 0.3);
+        }
+        
+        .location-info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            max-width: 350px;
+            backdrop-filter: blur(10px);
+            border-left: 4px solid #3498db;
+        }
+        
+        .location-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+        
+        .location-desc {
+            font-size: 14px;
+            color: #7f8c8d;
+            line-height: 1.5;
+        }
+        
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .zoom-btn {
+            background: white;
+            width: 40px;
+            height: 40px;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-weight: bold;
+            font-size: 20px;
+            color: #3498db;
+            transition: all 0.3s ease;
+        }
+        
+        .zoom-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+        
+        .scale-indicator {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.5s ease;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .toast {
+            position: fixed;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2ecc71;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 9999;
+            transition: top 0.3s ease;
+        }
+        
+        .toast.error {
+            background: #e74c3c;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .search-container {
+                width: calc(100% - 40px);
+            }
+            
+            .controls {
+                top: 80px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <div>Loading Tarfaya Map...</div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="search-container">
+        <input type="text" class="search-box" id="searchBox" placeholder="Search location...">
+    </div>
+    
+    <div class="controls">
+        <div class="control-btn" id="locateBtn">📍</div>
+        <div class="control-btn" id="layersBtn">🗺️</div>
+        <div class="control-btn" id="infoBtn">ℹ️</div>
+    </div>
+    
+    <div class="zoom-controls">
+        <div class="zoom-btn" id="zoomIn">+</div>
+        <div class="zoom-btn" id="zoomOut">-</div>
+    </div>
+    
+    <div class="location-info">
+        <div class="location-title">Tarfaya, Morocco</div>
+        <div class="location-desc">
+            Tarfaya is a coastal city in the western Sahara desert region of Morocco. 
+            Known for its beautiful beaches, historic significance, and as the hometown of aviation pioneer Antoine de Saint-Exupéry.
+            The city offers stunning views of the Atlantic Ocean and is gateway to the Moroccan Sahara.
+        </div>
+    </div>
+    
+    <div class="scale-indicator" id="scaleIndicator">Scale: 1:50,000</div>
+    
+    <div class="toast" id="toast">Action completed successfully!</div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+            crossorigin=""></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize map centered on Tarfaya, Morocco
+            const tarfayaCoords = [27.9289, -12.9068]; // Latitude, Longitude for Tarfaya
+            
+            const map = L.map('map', {
+                zoomControl: false, // We'll create our own
+                attributionControl: true
+            }).setView(tarfayaCoords, 13);
+            
+            // Add OpenStreetMap tiles
+            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 19,
+                minZoom: 3
+            }).addTo(map);
+            
+            // Add alternative layers
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+                maxZoom: 19,
+                minZoom: 3
+            });
+            
+            const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
+                maxZoom: 17,
+                minZoom: 3
+            });
+            
+            // Layer control
+            const baseLayers = {
+                "OpenStreetMap": osmLayer,
+                "Satellite": satelliteLayer,
+                "Topographic": topoLayer
+            };
+            
+            // Create layer control but keep it hidden initially
+            const layerControl = L.control.layers(baseLayers).addTo(map);
+            layerControl.getContainer().style.display = 'none';
+            
+            // Add marker for Tarfaya
+            const tarfayaMarker = L.marker(tarfayaCoords, {
+                title: "Tarfaya",
+                alt: "City of Tarfaya"
+            }).addTo(map);
+            
+            tarfayaMarker.bindPopup(`
+                <h3>Tarfaya</h3>
+                <p>Coastal city in Western Sahara, Morocco</p>
+                <p><strong>Coordinates:</strong> 27.9289° N, 12.9068° W</p>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Tarfaya.jpg/320px-Tarfaya.jpg" 
+                     alt="Tarfaya landscape" style="width: 100%; border-radius: 5px; margin-top: 10px;">
+            `);
+            
+            // Custom controls functionality
+            document.getElementById('locateBtn').addEventListener('click', function() {
+                map.setView(tarfayaCoords, 13);
+                showToast("Centered on Tarfaya");
+                
+                // Flash the marker
+                tarfayaMarker.openPopup();
+                setTimeout(() => tarfayaMarker.closePopup(), 3000);
+            });
+            
+            document.getElementById('layersBtn').addEventListener('click', function() {
+                const container = layerControl.getContainer();
+                if (container.style.display === 'none') {
+                    container.style.display = 'block';
+                    container.style.right = '70px';
+                    container.style.top = '80px';
+                    container.style.maxHeight = '200px';
+                    container.style.overflowY = 'auto';
+                    container.style.zIndex = '1001';
+                    container.style.backgroundColor = 'white';
+                    container.style.padding = '10px';
+                    container.style.borderRadius = '8px';
+                    container.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+                } else {
+                    container.style.display = 'none';
+                }
+            });
+            
+            document.getElementById('infoBtn').addEventListener('click', function() {
+                alert(`
+                    Tarfaya Interactive Map
+                    
+                    Features:
+                    - Custom zoom controls
+                    - Multiple map layers
+                    - Location search
+                    - Responsive design
+                    - Rich UI/UX elements
+                    
+                    Tarfaya is located on the Atlantic coast of Morocco and was an important waypoint for Aéropostale, 
+                    the pioneering aviation company where Antoine de Saint-Exupéry once served as station manager.
+                `);
+            });
+            
+            document.getElementById('zoomIn').addEventListener('click', function() {
+                map.zoomIn();
+            });
+            
+            document.getElementById('zoomOut').addEventListener('click', function() {
+                map.zoomOut();
+            });
+            
+            // Search functionality (basic implementation)
+            document.getElementById('searchBox').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const query = this.value.trim();
+                    if (query) {
+                        // In a real app, you would use a geocoding service
+                        // For demo purposes, we'll just handle some basic cases
+                        if (query.toLowerCase().includes('tarfaya')) {
+                            map.setView(tarfayaCoords, 13);
+                            tarfayaMarker.openPopup();
+                            showToast("Found: " + query);
+                        } else if (query.toLowerCase().includes('morocco') || query.toLowerCase().includes('maroc')) {
+                            map.setView([31.7917, -7.0926], 6);
+                            showToast("Showing Morocco");
+                        } else {
+                            showToast("Search limited in demo. Try 'Tarfaya'", true);
+                        }
+                    }
+                }
+            });
+            
+            // Update scale indicator on zoom
+            map.on('zoomend', updateScaleIndicator);
+            
+            function updateScaleIndicator() {
+                const zoom = map.getZoom();
+                let scaleText = "";
+                
+                switch(true) {
+                    case (zoom <= 5):
+                        scaleText = "1:10,000,000 (Continent)";
+                        break;
+                    case (zoom <= 8):
+                        scaleText = "1:1,000,000 (Country)";
+                        break;
+                    case (zoom <= 11):
+                        scaleText = "1:250,000 (Region)";
+                        break;
+                    case (zoom <= 14):
+                        scaleText = "1:50,000 (City)";
+                        break;
+                    case (zoom <= 17):
+                        scaleText = "1:10,000 (Neighborhood)";
+                        break;
+                    default:
+                        scaleText = "1:1,000 (Street)";
+                }
+                
+                document.getElementById('scaleIndicator').textContent = "Scale: " + scaleText;
+            }
+            
+            // Handle map events for better UX
+            map.on('movestart', function() {
+                document.body.style.cursor = 'grabbing';
+            });
+            
+            map.on('moveend', function() {
+                document.body.style.cursor = 'default';
+            });
+            
+            // Simulate loading completion
+            setTimeout(function() {
+                document.getElementById('loading').style.opacity = '0';
+                setTimeout(function() {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+                
+                // Show welcome toast
+                setTimeout(function() {
+                    showToast("Welcome to Tarfaya Interactive Map!");
+                }, 1000);
+            }, 1500);
+            
+            // Toast notification system
+            function showToast(message, isError = false) {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = 'toast';
+                if (isError) {
+                    toast.classList.add('error');
+                }
+                
+                toast.style.top = '20px';
+                
+                setTimeout(function() {
+                    toast.style.top = '-100px';
+                }, 3000);
+            }
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                map.invalidateSize();
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.key === '+' || e.key === '=') {
+                    map.zoomIn();
+                } else if (e.key === '-') {
+                    map.zoomOut();
+                } else if (e.key === '0') {
+                    map.setView(tarfayaCoords, 13);
+                }
+            });
+            
+            // Update scale indicator initially
+            updateScaleIndicator();
+        });
+    </script>
+</body>
+</html>
