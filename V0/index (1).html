@@ -1,0 +1,185 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas.js Demo - Lightweight Mapping Library</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        #map {
+            height: 500px;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            max-width: 800px;
+            margin: 20px auto;
+            text-align: center;
+        }
+        
+        .controls button {
+            margin: 0 5px;
+            padding: 10px 20px;
+            background: #3388ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .controls button:hover {
+            background: #2266dd;
+        }
+        
+        .info {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .info h3 {
+            color: #333;
+            margin-top: 0;
+        }
+        
+        .info ul {
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Atlas.js Demo</h1>
+        <p>A lightweight, single-file JavaScript mapping library inspired by Leaflet v0.1</p>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="controls">
+        <button onclick="addMarker()">Add Marker</button>
+        <button onclick="changeLocation()">Go to Paris</button>
+        <button onclick="addRandomMarkers()">Add Random Markers</button>
+        <button onclick="clearMarkers()">Clear Markers</button>
+    </div>
+
+    <div class="info">
+        <h3>Atlas.js Features</h3>
+        <ul>
+            <li>✅ Lightweight single-file library (~15KB unminified)</li>
+            <li>✅ Tile layer support with OpenStreetMap</li>
+            <li>✅ Custom markers with built-in styling</li>
+            <li>✅ Mouse pan and zoom interactions</li>
+            <li>✅ Zoom controls</li>
+            <li>✅ Spherical Mercator projection (EPSG:3857)</li>
+            <li>✅ Modern ES6+ JavaScript</li>
+            <li>✅ No dependencies</li>
+        </ul>
+        
+        <h3>Usage Example</h3>
+        <pre><code>// Create a map
+const map = Atlas.map('map').setView([51.505, -0.09], 13);
+
+// Add a tile layer
+Atlas.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+// Add a marker
+Atlas.marker([51.5, -0.09]).addTo(map);</code></pre>
+    </div>
+
+    <script src="Atlas.js"></script>
+    <script>
+        // Initialize the map
+        const map = Atlas.map('map').setView([51.505, -0.09], 13);
+
+        // Add OpenStreetMap tiles
+        const osmLayer = Atlas.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        // Add a default marker
+        const defaultMarker = Atlas.marker([51.505, -0.09], {
+            title: 'Hello London!'
+        }).addTo(map);
+
+        // Store markers for management
+        let markers = [defaultMarker];
+
+        // Demo functions
+        function addMarker() {
+            const lat = 51.5 + (Math.random() - 0.5) * 0.1;
+            const lng = -0.09 + (Math.random() - 0.5) * 0.1;
+            
+            const marker = Atlas.marker([lat, lng], {
+                title: `Marker at ${lat.toFixed(4)}, ${lng.toFixed(4)}`
+            }).addTo(map);
+            
+            markers.push(marker);
+        }
+
+        function changeLocation() {
+            // Paris coordinates
+            map.setView([48.8566, 2.3522], 13);
+        }
+
+        function addRandomMarkers() {
+            const center = map.getCenter();
+            
+            for (let i = 0; i < 5; i++) {
+                const lat = center.lat + (Math.random() - 0.5) * 0.02;
+                const lng = center.lng + (Math.random() - 0.5) * 0.02;
+                
+                const marker = Atlas.marker([lat, lng], {
+                    title: `Random marker ${i + 1}`
+                }).addTo(map);
+                
+                markers.push(marker);
+            }
+        }
+
+        function clearMarkers() {
+            markers.forEach(marker => {
+                if (marker !== defaultMarker) {
+                    map.removeLayer(marker);
+                }
+            });
+            markers = [defaultMarker];
+        }
+
+        // Log the map instance for debugging
+        console.log('Atlas map initialized:', map);
+        console.log('Current center:', map.getCenter());
+        console.log('Current zoom:', map.getZoom());
+    </script>
+</body>
+</html>
