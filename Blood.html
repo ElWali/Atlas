@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Morocco Blood Donors Directory</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <style>
+    :root{
+      --primary:#d90429;
+      --bg:#f8f9fa;
+      --card:#ffffff;
+      --success:#2e7d32;
+      --error:#c62828;
+      --info:#f9a825;
+      --toast-bg:#323232;
+      --shadow: 0 6px 18px rgba(0,0,0,0.12);
+    }
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+    body{background:var(--bg);overflow:hidden}
+    #map{height:100vh;width:100%;}
+
+    /* Drawer */
+    #drawer {
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:-480px;           /* hidden by default */
+      height:480px;
+      background:var(--card);
+      border-top-left-radius:12px;
+      border-top-right-radius:12px;
+      box-shadow:var(--shadow);
+      transition:bottom 300ms cubic-bezier(.2,.9,.3,1);
+      z-index:1200;
+      display:flex;
+      flex-direction:column;
+      touch-action:none;       /* for smooth gesture */
+    }
+    #drawer.open { bottom:0; }
+
+    /* Drag handle */
+    .drag-handle {
+      width:40px;height:6px;border-radius:6px;background:#ddd;margin:10px auto 6px;
+      cursor:grab;
+    }
+
+    /* Content */
+    .drawer-body{padding:12px 14px; overflow:auto; flex:1;}
+    h2{margin:0 0 8px 0;color:var(--primary);font-size:1.1rem;text-align:center;}
+    .row{display:flex;gap:8px;align-items:center;}
+    label{display:block;font-size:0.9rem;margin:8px 0 4px;color:#333}
+    input,select,button,textarea{width:100%;padding:8px;border:1px solid #e6e6e6;border-radius:8px;background:#fff}
+    button.action{background:var(--primary);color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:600}
+    button.ghost{background:transparent;border:1px solid #ddd}
+    .section{margin-bottom:12px;padding-bottom:8px;border-bottom:1px dashed #eee}
+
+    /* Donor card */
+    .donor-card{background:#fff;border-radius:8px;padding:10px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,0.03);border-left:4px solid var(--primary)}
+    .donor-name{font-weight:700;color:#222}
+    .donor-meta{font-size:0.9rem;color:#555;margin-top:6px}
+    .masked-phone{color:#0b66ff;text-decoration:underline;cursor:pointer}
+
+    /* Toggle button & badge */
+    #toggleDrawer{
+      position:fixed;left:50%;transform:translateX(-50%);
+      bottom:16px;z-index:1210;
+      background:var(--primary);color:#fff;border:none;padding:12px 18px;border-radius:28px;box-shadow:var(--shadow);cursor:pointer;font-weight:700;
+      display:flex;align-items:center;gap:10px;
+    }
+    #donorCount{
+      display:inline-block;background:rgba(255,255,255,0.15);padding:4px 8px;border-radius:999px;font-weight:700;font-size:0.9rem;
+    }
+
+    /* Toast (Material-style bottom pill) */
+    #toast {
+      position:fixed;left:50%;transform:translateX(-50%) translateY(40px);bottom:22px;
+      min-width:160px;max-width:92%;padding:12px 16px;border-radius:28px;color:white;background:var(--toast-bg);
+      box-shadow:0 8px 24px rgba(0,0,0,0.18);opacity:0;visibility:hidden;transition:opacity .25s,transform .25s,visibility .25s;
+      z-index:1300;display:flex;align-items:center;gap:8px;
+    }
+    #toast.show{opacity:1;visibility:visible;transform:translateX(-50%) translateY(0);}
+    #toast.success{background:var(--success)}
+    #toast.error{background:var(--error)}
+    #toast.info{background:var(--info);color:#111}
+
+    /* small responsive tweaks */
+    @media (max-width:600px){
+      #drawer{height:56vh}
+      #drawer.open{bottom:0}
+      #toggleDrawer{bottom:12px;padding:10px 14px}
+    }
+  </style>
+</head>
+<body>
+  <div id="map" role="application" aria-label="Interactive map showing blood donor locations"></div>
+
+  <!-- Toggle button with donor count badge -->
+  <button id="toggleDrawer" aria-label="Toggle donor panel">
+    🩸 <span id="donorCount" aria-live="polite">Donors (0)</span>
+  </button>
+
+  <!-- Bottom drawer + drag handle -->
+  <aside id="drawer" role="complementary" aria-label="Blood Donor Registration and Search Panel">
+    <div class="drag-handle" id="dragHandle" aria-hidden="true"></div>
+    <div class="drawer-body" id="drawerBody">
+      <h2>🩸 Blood Donors Morocco</h2>
+
+      <div class="section" aria-labelledby="add-heading">
+        <h3 id="add-heading" style="margin:6px 0 8px 0">Add Yourself</h3>
+        <label for="name">Full Name</label>
+        <input id="name" type="text" placeholder="Your full name" aria-required="true">
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <div style="flex:1">
+            <label for="bloodType">Blood Type</label>
+            <select id="bloodType" aria-label="blood type">
+              <option value="">Choose</option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label for="city">City</label>
+            <select id="city" aria-label="city">
+              <option value="">Choose</option>
+              <option>Casablanca</option><option>Rabat</option><option>Marrakech</option>
+              <option>Fes</option><option>Tangier</option><option>Agadir</option>
+              <option>Meknes</option><option>Oujda</option><option>Kenitra</option>
+              <option>Tetouan</option><option>Safi</option><option>El Jadida</option>
+              <option>Nador</option><option>Khouribga</option><option>Beni Mellal</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="phone" style="margin-top:10px">Phone Number</label>
+        <input id="phone" type="tel" inputmode="tel" placeholder="e.g., 0612345678 or +212612345678" aria-required="true">
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <input id="consent" type="checkbox" aria-label="consent checkbox">
+          <label for="consent" style="margin:0;font-size:0.95rem">I consent to store my contact details for blood donation purposes.</label>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="action" id="addDonorBtn">Add Me as Donor</button>
+          <button class="ghost" id="clearInputsBtn" type="button">Clear</button>
+        </div>
+      </div>
+
+      <div class="section" aria-labelledby="search-heading">
+        <h3 id="search-heading" style="margin:6px 0 8px 0">Search Donors</h3>
+        <div class="row">
+          <div style="flex:1">
+            <label for="searchBloodType">Blood Type</label>
+            <select id="searchBloodType">
+              <option value="">All Types</option>
+              <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+              <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+            </select>
+          </div>
+          <div style="width:120px">
+            <label for="searchCity">City</label>
+            <select id="searchCity">
+              <option value="">All</option>
+              <option>Casablanca</option><option>Rabat</option><option>Marrakech</option>
+              <option>Fes</option><option>Tangier</option><option>Agadir</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="action" id="searchDonorsBtn">Search Donors</button>
+          <button class="ghost" id="resetSearchBtn">Reset</button>
+        </div>
+      </div>
+
+      <div style="flex:1;overflow:auto">
+        <h3 style="margin:8px 0 6px 0">Results</h3>
+        <div id="results" aria-live="polite" style="padding-bottom:28px"></div>
+      </div>
+
+      <div style="padding:12px 0 22px 0;text-align:center;border-top:1px dashed #eee">
+        <button id="clearAllBtn" class="ghost" style="color:#b30000">⚠️ Clear All Donors (testing)</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Toast -->
+  <div id="toast" role="status" aria-atomic="true" aria-live="polite"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // -------------------------
+    // Map setup
+    // -------------------------
+    const map = L.map('map', { zoomControl: true }).setView([31.7917, -7.0926], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // City coordinates (Morocco)
+    const cityCoordinates = {
+      'Casablanca': [33.5731, -7.5898],
+      'Rabat': [34.0209, -6.8416],
+      'Marrakech': [31.6295, -7.9811],
+      'Fes': [34.0334, -4.9993],
+      'Tangier': [35.7595, -5.8340],
+      'Agadir': [30.4202, -9.5982],
+      'Meknes': [33.8932, -5.5473],
+      'Oujda': [34.6828, -1.9116],
+      'Kenitra': [34.2564, -6.5803],
+      'Tetouan': [35.5781, -5.3618],
+      'Safi': [32.3051, -9.2372],
+      'El Jadida': [33.2384, -8.5037],
+      'Nador': [35.1732, -2.9276],
+      'Khouribga': [32.8822, -6.9101],
+      'Beni Mellal': [32.3448, -6.3541]
+    };
+
+    // -------------------------
+    // Storage & state
+    // -------------------------
+    let donors = [];
+    const STORAGE_KEY = 'bloodDonors_v1';
+
+    try {
+      const s = localStorage.getItem(STORAGE_KEY);
+      donors = s ? JSON.parse(s) : [];
+    } catch (e) {
+      donors = [];
+      console.warn('localStorage unavailable', e);
+      showToast('⚠️ Storage unavailable. Data will not persist.', 'error');
+    }
+
+    let markers = []; // L.marker instances
+
+    // -------------------------
+    // Toast utility (material style)
+    // -------------------------
+    const toastEl = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(message, type = 'success', duration = 3000) {
+      // type: 'success' | 'error' | 'info'
+      toastEl.className = '';
+      toastEl.textContent = '';
+      const iconSpan = document.createElement('span');
+      if (type === 'success') iconSpan.textContent = '✅';
+      else if (type === 'error') iconSpan.textContent = '❌';
+      else iconSpan.textContent = '⚠️';
+      const textSpan = document.createElement('span');
+      textSpan.textContent = ' ' + message;
+      toastEl.appendChild(iconSpan);
+      toastEl.appendChild(textSpan);
+      toastEl.classList.add('show', type);
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastEl.classList.remove('show', 'success', 'error', 'info');
+        toastEl.textContent = '';
+      }, duration);
+    }
+
+    // -------------------------
+    // Helpers: phone normalization & validation
+    // -------------------------
+    function normalizePhone(raw) {
+      if (!raw) return '';
+      let s = raw.trim().replace(/\s+/g, '');
+      // If starts with 0 -> replace with +212
+      if (/^0\d+/.test(s)) s = '+212' + s.slice(1);
+      // If starts with 212 without plus -> add plus
+      if (/^212\d+/.test(s)) s = '+' + s;
+      return s;
+    }
+    function isValidMoroccanPhone(raw) {
+      if (!raw) return false;
+      const s = normalizePhone(raw);
+      // Moroccan mobile numbers: +2126xxxxxxxx or +2127xxxxxxxx (9 digits after 212)
+      return /^(?:\+212)(?:6|7)\d{8}$/.test(s);
+    }
+
+    // -------------------------
+    // Icons per blood type (simple)
+    // -------------------------
+    const bloodIcon = type => L.divIcon({
+      html: `<div style="background:var(--primary);color:white;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">${type}</div>`,
+      className: ''
+    });
+
+    // -------------------------
+    // Render donors on map + results list
+    // -------------------------
+    const resultsEl = document.getElementById('results');
+    function clearMarkers() {
+      markers.forEach(m => map.removeLayer(m));
+      markers = [];
+    }
+    function fitMapToDonors(list) {
+      const group = new L.featureGroup(list
+        .map(d => (cityCoordinates[d.city] ? L.marker(cityCoordinates[d.city]) : null))
+        .filter(Boolean)
+      );
+      if (group.getLayers().length > 0) {
+        map.fitBounds(group.getBounds().pad(0.18));
+      } else {
+        map.setView([31.7917, -7.0926], 6);
+      }
+    }
+
+    function renderDonors(list = donors) {
+      // update donor count badge
+      updateDonorCount();
+
+      clearMarkers();
+      resultsEl.innerHTML = '';
+      if (!list.length) {
+        resultsEl.innerHTML = '<p style="color:#666">No donors to display.</p>';
+        fitMapToDonors(list);
+        return;
+      }
+
+      list.forEach(d => {
+        // card
+        const card = document.createElement('div');
+        card.className = 'donor-card';
+        card.innerHTML = `
+          <div class="donor-name">${escapeHtml(d.name)}</div>
+          <div class="donor-meta">Blood: ${escapeHtml(d.bloodType)} · City: ${escapeHtml(d.city)}</div>
+          <div class="donor-meta" style="margin-top:8px">
+            Phone: <span class="masked-phone" data-phone="${escapeHtml(d.phone)}">${maskPhone(d.phone)}</span>
+          </div>
+        `;
+        resultsEl.appendChild(card);
+
+        // marker
+        if (cityCoordinates[d.city]) {
+          const m = L.marker(cityCoordinates[d.city], { icon: bloodIcon(d.bloodType || 'O') })
+            .addTo(map)
+            .bindPopup(`<strong>${escapeHtml(d.name)}</strong><br>Blood: ${escapeHtml(d.bloodType)}<br>City: ${escapeHtml(d.city)}<br>Phone: <span class="masked-phone-popup" data-phone="${escapeHtml(d.phone)}">${maskPhone(d.phone)}</span>`);
+          markers.push(m);
+        }
+      });
+
+      fitMapToDonors(list);
+
+      // attach click handlers for masked phone (in list)
+      document.querySelectorAll('.masked-phone').forEach(el => {
+        el.addEventListener('click', function () {
+          // reveal immediately, show toast
+          const phone = this.dataset.phone;
+          this.textContent = phone;
+          this.style.textDecoration = 'none';
+          this.style.cursor = 'default';
+          showToast('📞 Phone number revealed', 'info', 2400);
+        });
+      });
+    }
+
+    // popup phone reveal handling (leaflet popups are separate DOM nodes)
+    map.on('popupopen', function (e) {
+      const popupNode = e.popup.getElement();
+      if (!popupNode) return;
+      const el = popupNode.querySelector('.masked-phone-popup');
+      if (el) {
+        el.addEventListener('click', function () {
+          const phone = this.dataset.phone;
+          this.textContent = phone;
+          this.style.textDecoration = 'none';
+          this.style.cursor = 'default';
+          showToast('📞 Phone number revealed', 'info', 2400);
+        });
+      }
+    });
+
+    // escapeHtml to prevent injection in dynamic innerHTML
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (m) {
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]);
+      });
+    }
+    function maskPhone(p) {
+      if (!p) return '';
+      const cleaned = p.replace(/\D/g, '');
+      if (cleaned.length <= 3) return '***';
+      return '*** *** ' + cleaned.slice(-3);
+    }
+
+    // -------------------------
+    // Persistence
+    // -------------------------
+    function saveDonors() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(donors));
+      } catch (e) {
+        console.warn('Failed to save donors', e);
+      }
+    }
+
+    // -------------------------
+    // UI wiring: buttons, search, add, clear
+    // -------------------------
+    const addBtn = document.getElementById('addDonorBtn');
+    const clearInputsBtn = document.getElementById('clearInputsBtn');
+    const searchBtn = document.getElementById('searchDonorsBtn');
+    const resetSearchBtn = document.getElementById('resetSearchBtn');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    addBtn.addEventListener('click', () => {
+      const name = document.getElementById('name').value.trim();
+      const rawPhone = document.getElementById('phone').value.trim();
+      const bloodType = document.getElementById('bloodType').value;
+      const city = document.getElementById('city').value;
+      const consent = document.getElementById('consent').checked;
+
+      if (!name || !rawPhone || !bloodType || !city) {
+        showToast('Please fill in all required fields', 'error');
+        return;
+      }
+      if (!consent) {
+        showToast('Please consent to store your data', 'error');
+        return;
+      }
+      const normalized = normalizePhone(rawPhone);
+      if (!isValidMoroccanPhone(rawPhone)) {
+        showToast('Please enter a valid Moroccan phone (06XXXXXXXX or +2126XXXXXXXX)', 'error');
+        return;
+      }
+      // prevent duplicates (same normalized phone)
+      if (donors.some(d => d.phone === normalized)) {
+        showToast('This phone number is already registered', 'error');
+        return;
+      }
+
+      const newDonor = { id: Date.now().toString(), name, bloodType, city, phone: normalized };
+      donors.push(newDonor);
+      saveDonors();
+
+      renderDonors(donors);
+      // clear inputs
+      document.getElementById('name').value = '';
+      document.getElementById('phone').value = '';
+      document.getElementById('bloodType').value = '';
+      document.getElementById('city').value = '';
+      document.getElementById('consent').checked = false;
+
+      showToast('✅ Donor registered successfully', 'success');
+    });
+
+    clearInputsBtn.addEventListener('click', () => {
+      document.getElementById('name').value = '';
+      document.getElementById('phone').value = '';
+      document.getElementById('bloodType').value = '';
+      document.getElementById('city').value = '';
+      document.getElementById('consent').checked = false;
+      showToast('Inputs cleared', 'info');
+    });
+
+    searchBtn.addEventListener('click', () => {
+      const type = document.getElementById('searchBloodType').value;
+      const city = document.getElementById('searchCity').value;
+      let filtered = donors.slice();
+      if (type) filtered = filtered.filter(d => d.bloodType === type);
+      if (city) filtered = filtered.filter(d => d.city === city);
+      renderDonors(filtered);
+      showToast(`${filtered.length} result(s)`, 'info');
+    });
+
+    resetSearchBtn.addEventListener('click', () => {
+      document.getElementById('searchBloodType').value = '';
+      document.getElementById('searchCity').value = '';
+      renderDonors(donors);
+      showToast('Search reset', 'info');
+    });
+
+    clearAllBtn.addEventListener('click', () => {
+      // safer: require a quick two-step press within 3s to prevent accidental clearing
+      clearAllBtn.textContent = 'Click again to confirm';
+      clearAllBtn.style.color = '#fff';
+      clearAllBtn.style.background = '#b71c1c';
+      const timeout = setTimeout(() => {
+        clearAllBtn.textContent = '⚠️ Clear All Donors (testing)';
+        clearAllBtn.style.color = '';
+        clearAllBtn.style.background = '';
+      }, 3000);
+
+      clearAllBtn.onclick = () => {
+        clearTimeout(timeout);
+        donors = [];
+        saveDonors();
+        renderDonors(donors);
+        showToast('All donors cleared', 'success');
+        // restore handler
+        clearAllBtn.textContent = '⚠️ Clear All Donors (testing)';
+        clearAllBtn.style.color = '';
+        clearAllBtn.style.background = '';
+        clearAllBtn.onclick = () => { /* replaced above; restore after */ };
+      };
+    });
+
+    // -------------------------
+    // Donor count badge update
+    // -------------------------
+    function updateDonorCount() {
+      const badge = document.getElementById('donorCount');
+      badge.textContent = `Donors (${donors.length})`;
+    }
+
+    // -------------------------
+    // Drawer toggle & donor count badge
+    // -------------------------
+    const toggleBtn = document.getElementById('toggleDrawer');
+    const drawer = document.getElementById('drawer');
+    const dragHandle = document.getElementById('dragHandle');
+
+    function openDrawer() {
+      drawer.classList.add('open');
+      toggleBtn.setAttribute('aria-pressed', 'true');
+      toggleBtn.innerHTML = '⬇ <span id="donorCountInline">' + `Donors (${donors.length})` + '</span>';
+    }
+    function closeDrawer() {
+      drawer.classList.remove('open');
+      toggleBtn.setAttribute('aria-pressed', 'false');
+      // restore original content (emoji + badge)
+      document.getElementById('donorCount').textContent = `Donors (${donors.length})`;
+      toggleBtn.innerHTML = '🩸 <span id="donorCount">Donors (' + donors.length + ')</span>';
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      if (drawer.classList.contains('open')) closeDrawer();
+      else openDrawer();
+    });
+
+    // Update badge periodically (in case of changes)
+    function refreshBadge() {
+      const b = document.getElementById('donorCount');
+      if (b) b.textContent = `Donors (${donors.length})`;
+    }
+
+    // -------------------------
+    // Drag / swipe gestures for drawer (mobile friendly)
+    // -------------------------
+    let startY = 0, currentY = 0, isDragging = false;
+    const drawerHeight = () => drawer.getBoundingClientRect().height || 480;
+
+    function touchStart(e) {
+      const t = (e.touches && e.touches[0]) || e;
+      startY = t.clientY;
+      isDragging = true;
+      drawer.style.transition = 'none';
+    }
+    function touchMove(e) {
+      if (!isDragging) return;
+      const t = (e.touches && e.touches[0]) || e;
+      currentY = t.clientY;
+      const delta = startY - currentY; // positive when dragging up
+      // compute new bottom
+      const h = drawerHeight();
+      if (drawer.classList.contains('open')) {
+        // open -> allow dragging down to hide
+        const pct = Math.min(Math.max(-delta / h, -1), 1); // clamp
+        drawer.style.bottom = Math.min(0, -delta) + 'px';
+      } else {
+        // closed -> dragging up to open
+        drawer.style.bottom = Math.max(-h, -h - delta) + 'px';
+      }
+    }
+    function touchEnd(e) {
+      if (!isDragging) return;
+      drawer.style.transition = '';
+      isDragging = false;
+      const delta = startY - currentY;
+      const threshold = 60;
+      if (delta > threshold) {
+        // dragged up -> open
+        openDrawer();
+      } else if (delta < -threshold) {
+        // dragged down -> close
+        closeDrawer();
+      } else {
+        // small drag -> restore previous
+        if (drawer.classList.contains('open')) openDrawer(); else closeDrawer();
+      }
+      startY = currentY = 0;
+    }
+
+    // Attach both touch and mouse for desktop testing
+    dragHandle.addEventListener('touchstart', touchStart, {passive:true});
+    dragHandle.addEventListener('touchmove', touchMove, {passive:true});
+    dragHandle.addEventListener('touchend', touchEnd);
+    dragHandle.addEventListener('mousedown', e => { e.preventDefault(); touchStart(e); document.addEventListener('mousemove', touchMove); document.addEventListener('mouseup', () => { touchEnd(); document.removeEventListener('mousemove', touchMove); }, { once:true }); });
+
+    // Also allow dragging anywhere on drawer header area
+    drawer.addEventListener('touchstart', function(e){
+      // only start if touch near top area (so form input touches don't activate)
+      if (e.touches[0].clientY - drawer.getBoundingClientRect().top < 60) touchStart(e);
+    }, {passive:true});
+    drawer.addEventListener('touchmove', touchMove, {passive:true});
+    drawer.addEventListener('touchend', touchEnd);
+
+    // -------------------------
+    // Utility: escape dataset for safety (already used)
+    // -------------------------
+    // (already done in renderDonors)
+
+    // -------------------------
+    // When popup opens, we added click handlers above
+    // -------------------------
+
+    // -------------------------
+    // Initial render & binding marker popup phone reveal handlers
+    // -------------------------
+    renderDonors(donors);
+    refreshBadge();
+
+    // Periodically refresh badge (if inner DOM badges changed)
+    setInterval(refreshBadge, 1200);
+
+    // -------------------------
+    // Helper: prevent form submit on Enter inside inputs
+    // -------------------------
+    ['name','phone'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+    });
+
+    // -------------------------
+    // Safety: Expose a small API on window for debugging if required
+    // -------------------------
+    window._donorApp = {
+      getDonors: () => donors.slice(),
+      addDonor: d => { donors.push(d); saveDonors(); renderDonors(donors); },
+      clearAll: () => { donors = []; saveDonors(); renderDonors(donors); }
+    };
+  </script>
+</body>
+</html>
