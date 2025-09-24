@@ -1308,7 +1308,23 @@
         this._cache.set(query, data);
         return data;
       }
-      formatResult(result) { return { lat: parseFloat(result.lat), lng: parseFloat(result.lon), displayName: result.display_name || `${result.lat}, ${result.lon}` }; }
+      formatResult(result) {
+        return {
+            lat: parseFloat(result.lat),
+            lng: parseFloat(result.lon),
+            displayName: result.display_name || `${result.lat}, ${result.lon}`,
+            type: result.type,
+            osm_id: result.osm_id,
+            osm_type: result.osm_type
+        };
+      }
+      getBoundingBox(result) {
+        if (!result.boundingbox || result.boundingbox.length !== 4) return null;
+        return {
+            sw: { lat: parseFloat(result.boundingbox[0]), lon: parseFloat(result.boundingbox[2]) },
+            ne: { lat: parseFloat(result.boundingbox[1]), lon: parseFloat(result.boundingbox[3]) }
+        };
+      }
     }
     // Search control - Enhanced with marker icons and fly-to with popup
     class SearchControl extends Control {
@@ -1575,27 +1591,39 @@
         // Bind and open a popup with the location name
         newMarker.bindPopup(`
             <h4>${formatted.displayName}</h4>
+            <p>Type: ${formatted.type}</p>
+            <a href="https://www.openstreetmap.org/${formatted.osm_type}/${formatted.osm_id}" target="_blank">View on OSM</a>
         `).openPopup();
         
         // Store reference to active marker for cleanup
         this._activeMarker = newMarker;
         
-        // Fly to the location
-        this._liveRegion.textContent = `Navigating to ${formatted.displayName}.`;
-        if (typeof this._map.flyToQuick === 'function') {
-            this._map.flyToQuick({
-                center: { lat: lat, lon: lon },
-                zoom: 14,
-                duration: 420,
+        const boundingBox = this.options.provider.getBoundingBox(result);
+
+        if (boundingBox) {
+            this._map.fitBounds(boundingBox, {
+                padding: 0.1,
+                duration: 800,
                 easing: EASING.easeInOutQuint
             });
         } else {
-            this._map.flyTo({
-                center: { lat: lat, lon: lon },
-                zoom: 14,
-                duration: 420,
-                easing: EASING.easeInOutQuint
-            });
+            // Fly to the location
+            this._liveRegion.textContent = `Navigating to ${formatted.displayName}.`;
+            if (typeof this._map.flyToQuick === 'function') {
+                this._map.flyToQuick({
+                    center: { lat: lat, lon: lon },
+                    zoom: 14,
+                    duration: 420,
+                    easing: EASING.easeInOutQuint
+                });
+            } else {
+                this._map.flyTo({
+                    center: { lat: lat, lon: lon },
+                    zoom: 14,
+                    duration: 420,
+                    easing: EASING.easeInOutQuint
+                });
+            }
         }
 
         // Clear the search input and hide results
@@ -2668,6 +2696,25 @@
         };
         this._flyAnim = { raf: requestAnimationFrame(step) };
         this.fire('movestart');
+      }
+      fitBounds(bounds, options = {}) {
+        const { padding = 0.1, maxZoom = 18 } = options;
+        const w = this.canvas.width / this.dpr;
+        const h = this.canvas.height / this.dpr;
+
+        const { sw, ne } = bounds;
+
+        const zoomX = Math.log2(w / (ne.lon - sw.lon)) - Math.log2(360 / (2 * Math.PI));
+        const zoomY = Math.log2(h / (ne.lat - sw.lat)) - Math.log2(180 / (2 * Math.PI));
+
+        const zoom = Math.min(zoomX, zoomY, maxZoom);
+
+        const center = {
+            lon: (sw.lon + ne.lon) / 2,
+            lat: (sw.lat + ne.lat) / 2
+        };
+
+        this.flyTo({ center, zoom: zoom - padding, ...options });
       }
       flyToQuick({ center = this.center, zoom = this.zoom, bearing = this.bearing, duration = 450, easing = EASING.easeInOutCubic } = {}) {
         const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
