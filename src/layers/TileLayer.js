@@ -61,6 +61,11 @@ export class TileLayer extends Layer {
     if (retinaScale > 1 && this.options.supportsRetina && url.includes('openstreetmap') && !url.includes('@2x')) {
       url = url.replace('.png', '@2x.png');
     }
+
+    if (this.options.supportsWebP && this._map.supportsWebP) {
+      url = url.replace('.png', '.webp');
+    }
+
     return url;
   }
   // Default image-based loader (keeps crossOrigin and supports AbortController)
@@ -167,7 +172,15 @@ export class TileLayer extends Layer {
     if (this.loadingTiles.has(key)) return;
     // don't queue if already in queue
     if (this._loadingQueue.some(item => item.key === key)) return;
-    this._loadingQueue.push({ key, url, priority, retinaScale });
+
+    const [z, x, y] = key.split('/').map(Number);
+    const center = this._map.getCenter();
+    const centerTile = this._map.lonLatToTile(center.lon, center.lat, z);
+    const dx = x - centerTile.x;
+    const dy = y - centerTile.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    this._loadingQueue.push({ key, url, priority: priority - distance, retinaScale });
     // sort by priority (higher first)
     this._loadingQueue.sort((a, b) => b.priority - a.priority);
     this._processQueue();
@@ -210,18 +223,36 @@ export class TileLayer extends Layer {
     const startY = Math.floor(ct.y - rows / 2);
     const protectedKeys = new Set();
     for (let dx = 0; dx < cols; dx++) for (let dy = 0; dy < rows; dy++) protectedKeys.add(`${zInt}/${startX + dx}/${startY + dy}`);
-    // prune oldest entries that are not in protectedKeys
-    const removedKeys = this.tileCache.prune(toRemove, protectedKeys);
-    for (const key of removedKeys) {
-      // abort any ongoing load
+    const zoom = this._map.zoom;
+    const center = this._map.getCenter();
+    const centerTile = this._map.lonLatToTile(center.lon, center.lat, zInt);
+
+    const toEvict = [];
+    for (const [key, tile] of this.tileCache.entries()) {
+      if (protectedKeys.has(key)) continue;
+
+      const [z, x, y] = key.split('/').map(Number);
+      const dz = Math.abs(z - zoom);
+      const dx = x - centerTile.x;
+      const dy = y - centerTile.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      toEvict.push({ key, tile, score: tile.lastUsed - dz * 1000 - distance * 100 });
+    }
+
+    toEvict.sort((a, b) => a.score - b.score);
+
+    for (let i = 0; i < toRemove && i < toEvict.length; i++) {
+      const { key, tile } = toEvict[i];
+      this.tileCache.delete(key);
+
       const controller = this.loadingControllers.get(key);
       if (controller) {
         try { controller.abort(); } catch (e) {}
         this.loadingControllers.delete(key);
         this.loadingTiles.delete(key);
       }
-      // revoke object URL if any
-      const tile = this.tileCache.peek(key);
+
       if (tile && tile.blobUrl) {
         try { URL.revokeObjectURL(tile.blobUrl); } catch (e) {}
       }
@@ -322,6 +353,16 @@ export class TileLayer extends Layer {
           tile.lastUsed = Date.now();
           // TTL reload check
           if (tile.loadedAt && (Date.now() - tile.loadedAt > TILE_TTL)) this._reloadTile(key, url, retinaScale);
+
+          if (!tile.animated) {
+            ctx.globalAlpha = 0;
+            ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
+            ctx.globalAlpha = 1;
+            tile.animated = true;
+            this._fadeInTile(tile, (X - ct.x) * ts, (Y - ct.y) * ts, ts);
+          } else {
+            ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
+          }
         } catch (err) {
           // drawing errors should not crash the render
         }
@@ -430,5 +471,23 @@ export class TileLayer extends Layer {
     else if (deviceMemory >= 8) buffer = Math.min(5, buffer + 1);
     if (this._isPanningFast) buffer = Math.min(5, buffer + 1);
     return Math.max(1, Math.min(5, buffer));
+  }
+
+  _fadeInTile(tile, x, y, size) {
+    const duration = 300;
+    const startTime = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const elapsed = now - startTime;
+      const alpha = Math.min(elapsed / duration, 1);
+      const ctx = this._map.ctx;
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(tile.img, x, y, size, size);
+      ctx.globalAlpha = 1;
+      if (alpha < 1) {
+        requestAnimationFrame(step);
+      }
+    };
+    requestAnimationFrame(step);
   }
 }

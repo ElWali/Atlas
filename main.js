@@ -24,27 +24,4 @@ if (document.getElementById('map')) {
     <p>The City That Never Sleeps</p>
     <p>Population: 8.4 million</p>
   `).openPopup();
-
-  const marker2 = new AtlasMarker({ lat: 34.0522, lon: -118.2437 }, {
-    title: 'Los Angeles',
-    draggable: true,
-    color: '#00a86b'
-  }).addTo(atlas);
-  marker2.bindPopup(`
-    <h3>Los Angeles</h3>
-    <p>The City of Angels</p>
-    <p>Population: 3.9 million</p>
-  `);
-
-  const marker3 = new AtlasMarker({ lat: 41.8781, lon: -87.6298 }, {
-    title: 'Chicago',
-    draggable: true,
-    icon: 'https://cdn-icons-png.flaticon.com/512/25/25231.png',
-    iconSize: [32, 32]
-  }).addTo(atlas);
-  marker3.bindPopup(`
-    <h3>Chicago</h3>
-    <p>The Windy City</p>
-    <p>Population: 2.7 million</p>
-  `);
 }
