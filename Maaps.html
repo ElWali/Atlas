@@ -202,6 +202,54 @@
         white-space: nowrap;
         backdrop-filter: blur(2px);
     }
+
+    .atlas-location-marker {
+        pointer-events: none;
+    }
+
+    .atlas-location-marker .dot {
+        background: #2A93EE;
+        width: 16px;
+        height: 16px;
+        border: 2px solid #FFFFFF;
+        border-radius: 50%;
+        box-shadow: 0 0 5px rgba(0,0,0,0.5);
+    }
+
+    .atlas-location-marker .accuracy-circle {
+        width: 32px; /* Initial size, will be updated by JS */
+        height: 32px;
+        background: rgba(42, 147, 238, 0.2);
+        border: 1px solid rgba(42, 147, 238, 0.5);
+        border-radius: 50%;
+        animation: atlas-pulse 2s infinite;
+    }
+
+    @keyframes atlas-pulse {
+      0% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.2); opacity: 0.2; }
+      100% { transform: scale(1); opacity: 0.5; }
+    }
+
+    .atlas-search-popup-content .title {
+        font-weight: bold;
+        font-size: 14px;
+        margin-bottom: 4px;
+    }
+    .atlas-search-popup-content .details {
+        font-size: 12px;
+        color: #555;
+        margin-bottom: 6px;
+    }
+    .atlas-search-popup-content hr {
+        border: 0;
+        border-top: 1px solid #eee;
+        margin: 6px 0;
+    }
+    .atlas-search-popup-content .coords {
+        font-size: 11px;
+        color: #888;
+    }
   </style>
 </head>
 <body>
@@ -518,7 +566,8 @@
         }
       }
       render() {
-        if (!this._map) return;
+        if (!this._map) return false;
+        let needsReRender = false;
         const w = this._map.canvas.width / this._map.dpr;
         const h = this._map.canvas.height / this._map.dpr;
         const zInt = Math.floor(this._map.zoom);
@@ -573,7 +622,25 @@
             continue;
           }
           if (tile.loaded) {
+            const FADE_DURATION = 250;
+            const timeSinceLoad = Date.now() - tile.loadedAt;
+            let opacity = 1;
+
+            if (timeSinceLoad < FADE_DURATION) {
+                opacity = timeSinceLoad / FADE_DURATION;
+                needsReRender = true;
+            }
+
+            if (opacity < 1) {
+                ctx.globalAlpha = opacity;
+            }
+
             ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
+
+            if (opacity < 1) {
+                ctx.globalAlpha = 1; // Reset for next tile
+            }
+
             tile.lastUsed = Date.now();
             if (tile.loadedAt && (Date.now() - tile.loadedAt > TILE_TTL)) {
               this._reloadTile(key, url);
@@ -586,6 +653,7 @@
         this._lastRenderedCenter = { ...this._map.center };
         this._lastRenderedZoom = this._map.zoom;
         this._lastRenderedBearing = this._map.bearing;
+        return needsReRender;
       }
       onAdd() { this.fire('add'); }
       onRemove() {
@@ -924,6 +992,66 @@
         _setIconStyles(el, size) {
             el.style.width = `${size[0]}px`;
             el.style.height = `${size[1]}px`;
+        }
+    }
+
+    class LocationMarker extends Layer {
+        constructor(latlng, accuracy, options = {}) {
+            super(options);
+            this._latlng = latlng;
+            this._accuracy = accuracy;
+        }
+
+        onAdd() {
+            this._container = document.createElement('div');
+            this._container.className = 'atlas-location-marker';
+
+            this._dot = document.createElement('div');
+            this._dot.className = 'dot';
+
+            this._accuracyCircle = document.createElement('div');
+            this._accuracyCircle.className = 'accuracy-circle';
+
+            this._container.appendChild(this._accuracyCircle);
+            this._container.appendChild(this._dot);
+
+            this._map.getPane('markerPane').appendChild(this._container);
+            this._updatePosition();
+            this._map.on('move', this._updatePosition, this);
+        }
+
+        onRemove() {
+            if (this._container && this._container.parentNode) {
+                this._container.parentNode.removeChild(this._container);
+            }
+            this._map.off('move', this._updatePosition, this);
+        }
+
+        _updatePosition() {
+            if (!this._map) return;
+            const pos = this._map.latLngToContainerPoint(this._latlng);
+            this._container.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+
+            const radius = this._accuracy / GISUtils.getResolution(this._latlng.lat, this._map.getZoom());
+            this._accuracyCircle.style.width = `${radius * 2}px`;
+            this._accuracyCircle.style.height = `${radius * 2}px`;
+            this._accuracyCircle.style.marginLeft = `${-radius}px`;
+            this._accuracyCircle.style.marginTop = `${-radius}px`;
+
+            this._dot.style.marginLeft = '-8px';
+            this._dot.style.marginTop = '-8px';
+        }
+
+        setLatLng(latlng) {
+            this._latlng = latlng;
+            this._updatePosition();
+            return this;
+        }
+
+        setAccuracy(accuracy) {
+            this._accuracy = accuracy;
+            this._updatePosition();
+            return this;
         }
     }
 
@@ -1455,6 +1583,7 @@
         constructor(options = {}) {
             super({ position: 'top-right', ...options });
             this.options.title = options.title || 'Show my location';
+            this._locationMarker = null;
         }
 
         onAdd() {
@@ -1473,7 +1602,7 @@
 
         _locate() {
             if (!navigator.geolocation) {
-                alert('Geolocation is not supported by your browser');
+                this._handleError({ code: -1, message: 'Geolocation is not supported by your browser.' });
                 return;
             }
 
@@ -1481,25 +1610,54 @@
             this._button.innerHTML = '...';
 
             navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    this._map.flyTo({
-                        center: { lat, lon },
-                        zoom: 16
-                    });
-                    this._resetButton();
-                },
-                (error) => {
-                    alert(`Error getting location: ${error.message}`);
-                    this._resetButton();
-                },
+                (position) => this._onLocationFound(position),
+                (error) => this._onLocationError(error),
                 {
                     enableHighAccuracy: true,
-                    timeout: 5000,
+                    timeout: 8000,
                     maximumAge: 0
                 }
             );
+        }
+
+        _onLocationFound(position) {
+            const latlng = { lat: position.coords.latitude, lon: position.coords.longitude };
+            const accuracy = position.coords.accuracy;
+
+            if (this._locationMarker) {
+                this._locationMarker.setLatLng(latlng).setAccuracy(accuracy);
+            } else {
+                this._locationMarker = new LocationMarker(latlng, accuracy).addTo(this._map);
+            }
+
+            this._map.flyTo({
+                center: latlng,
+                zoom: 17
+            });
+            this._resetButton();
+        }
+
+        _onLocationError(error) {
+            let message = '';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = 'Geolocation request denied. Please enable location services for this site.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = 'Location information is unavailable.';
+                    break;
+                case error.TIMEOUT:
+                    message = 'The request to get user location timed out.';
+                    break;
+                default:
+                    message = 'An unknown error occurred.';
+                    break;
+            }
+            if (window.location.protocol === 'http:') {
+                message += '\n\nNote: Geolocation may require a secure (HTTPS) connection.';
+            }
+            alert(message);
+            this._resetButton();
         }
 
         _resetButton() {
@@ -1865,9 +2023,21 @@
         }
 
         // Add a new marker with a popup
-        const displayName = result.display_name || 'Selected Location';
+        const displayNameParts = (result.display_name || 'Selected Location').split(',');
+        const title = displayNameParts[0];
+        const details = displayNameParts.slice(1).join(',').trim();
+
+        const popupContent = `
+            <div class="atlas-search-popup-content">
+                <div class="title">${title}</div>
+                ${details ? `<div class="details">${details}</div>` : ''}
+                <hr>
+                <div class="coords">Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}</div>
+            </div>
+        `;
+
         this._resultMarker = new Marker(latlng)
-            .bindPopup(`<b>${displayName}</b>`)
+            .bindPopup(popupContent)
             .addTo(this._map)
             .openPopup();
 
@@ -2629,14 +2799,24 @@
         const w = this.canvas.width / this.dpr, h = this.canvas.height / this.dpr;
         this.ctx.fillStyle = backgroundColor;
         this.ctx.fillRect(0, 0, w, h);
-        for (const layer of this._layers) layer.render();
+
+        let needsReRender = false;
+        for (const layer of this._layers) {
+            if (layer.render()) {
+                needsReRender = true;
+            }
+        }
+
         this._snapCanvasToPixelGrid();
         let loadingCount = 0;
         if (this._baseLayer && this._baseLayer instanceof TileLayer) loadingCount = this._baseLayer.loadingTiles.size;
         this.loadingEl.classList.toggle("visible", loadingCount > 0);
         this.loadingCountEl.textContent = loadingCount;
         this.updateControlsUI();
-        this.fire('moveend');
+
+        if (needsReRender) {
+            this.render();
+        }
       }
       updateAttribution() {
         for (const control of this._controls) {
@@ -2720,6 +2900,8 @@
       animateZoomRotateAbout(ax, ay, toZoom, toBearing = this.bearing, duration = WHEEL_ZOOM_DURATION, easing = EASING.easeInOutCubic) {
         this.showZoomIndicator(ax, ay);
         this.stopAnimations();
+        this.fire('movestart');
+        this.fire('zoomstart');
         const startT = performance.now();
         const sZoom = this.zoom;
         const sBear = this.bearing;
@@ -2738,10 +2920,10 @@
             this._zoomAnim = null;
             this.updateControlsUI();
             this.fire('zoomend');
+            this.fire('moveend');
           }
         };
         this._zoomAnim = { raf: requestAnimationFrame(step) };
-        this.fire('zoomstart');
       }
       smoothZoomAt(ax, ay, deltaZ) {
         const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
