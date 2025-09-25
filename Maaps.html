@@ -506,14 +506,8 @@
         const absCos = Math.abs(Math.cos(this._map.bearing)), absSin = Math.abs(Math.sin(this._map.bearing));
         const needW = w * absCos + h * absSin;
         const needH = w * absSin + h * absCos;
-        // --- FIXED: Calculate cols and rows correctly to prevent vertical tiling ---
         const cols = Math.ceil(needW / (ts * scaleFactor)) + TILE_BUFFER;
-        // Adjust rows based on the actual visible latitudes to prevent vertical tiling
-        const visibleLatSpan = MAX_LATITUDE - MIN_LATITUDE;
-        const visibleLatPixels = h * absCos; // Height in pixels
-        const visibleLatDegrees = visibleLatSpan * (visibleLatPixels / h);
-        const rows = Math.ceil(visibleLatDegrees / (TILE_SIZE * scaleFactor)) + TILE_BUFFER;
-        // --- END FIX ---
+        const rows = Math.ceil(needH / (ts * scaleFactor)) + TILE_BUFFER;
         const startX = Math.floor(ct.x - cols / 2);
         const startY = Math.floor(ct.y - rows / 2);
         if (!this._renderTilesArray) this._renderTilesArray = [];
@@ -1419,6 +1413,89 @@
         }
     }
 
+    class GeolocationControl extends Control {
+        constructor(options = {}) {
+            super({ position: 'top-right', ...options });
+            this.options.title = options.title || 'Show my location';
+        }
+
+        onAdd() {
+            const container = document.createElement('div');
+            container.className = 'atlas-geolocation-control';
+            const button = document.createElement('button');
+            button.className = 'control-btn';
+            button.title = this.options.title;
+            button.setAttribute('aria-label', this.options.title);
+            button.innerHTML = '⌖'; // Target symbol
+            button.onclick = () => this._locate();
+            container.appendChild(button);
+            this._button = button;
+            return container;
+        }
+
+        _locate() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+
+            this._button.disabled = true;
+            this._button.innerHTML = '...';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    this._map.flyTo({
+                        center: { lat, lon },
+                        zoom: 16
+                    });
+                    this._resetButton();
+                },
+                (error) => {
+                    alert(`Error getting location: ${error.message}`);
+                    this._resetButton();
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        _resetButton() {
+            this._button.disabled = false;
+            this._button.innerHTML = '⌖';
+        }
+    }
+
+    class HomeControl extends Control {
+        constructor(options = {}) {
+            super({ position: 'top-right', ...options });
+            this.options.title = options.title || 'Reset view';
+        }
+
+        onAdd() {
+            const container = document.createElement('div');
+            container.className = 'atlas-home-control';
+            const button = document.createElement('button');
+            button.className = 'control-btn';
+            button.title = this.options.title;
+            button.setAttribute('aria-label', this.options.title);
+            button.innerHTML = '&#8962;'; // Home icon
+            button.onclick = () => {
+                this._map.flyTo({
+                    center: CONFIG.defaultCenter,
+                    zoom: CONFIG.defaultZoom,
+                    bearing: 0
+                });
+            };
+            container.appendChild(button);
+            return container;
+        }
+    }
+
 
     /* >>>> ADDED: SearchControl Class <<<< */
     class SearchControl extends Control {
@@ -1443,6 +1520,7 @@
         this._activeResultIndex = -1; // For keyboard navigation
         this._currentResults = [];
         this._debounceTimer = null;
+        this._resultMarker = null;
         this._onInputChangeBound = this._onInputChange.bind(this);
         this._onInputKeyDownBound = this._onInputKeyDown.bind(this);
         this._onDocumentClickBound = this._onDocumentClick.bind(this);
@@ -1741,10 +1819,23 @@
           return;
         }
 
+        const latlng = { lat, lon };
+
+        // Remove previous search marker
+        if (this._resultMarker) {
+            this._map.removeLayer(this._resultMarker);
+        }
+
+        // Add a new marker with a popup
+        const displayName = result.display_name || 'Selected Location';
+        this._resultMarker = new Marker(latlng)
+            .bindPopup(`<b>${displayName}</b>`)
+            .addTo(this._map)
+            .openPopup();
+
         // Animate the map to the selected location
-        // We'll fly to a zoom level of 14 for a good detail view
         this._map.flyTo({
-          center: { lat: lat, lon: lon },
+          center: latlng,
           zoom: 14,
           duration: 800,
           easing: EASING.easeInOutCubic
@@ -1758,7 +1849,7 @@
         // Fire a custom event so users can hook into the selection
         this.fire('search:select', {
           result: result,
-          latlng: { lat: lat, lon: lon }
+          latlng: latlng
         });
       }
 
@@ -1783,7 +1874,6 @@
       }
     }
     /* >>>> END OF ADDED CLASS <<<< */
-
     class Handler {
       constructor(map) { this._map = map; this._enabled = false; this._eventListeners = {}; }
       enable() { if (this._enabled) return this; this._enabled = true; this._addEvents(); return this; }
@@ -2295,6 +2385,8 @@
         this.addControl(new CompassControl({ position: 'top-right' }));
         // >>>> MOVED: Search control to the left side <<<<
         this.addControl(new SearchControl({ position: 'top-left' }));
+        this.addControl(new GeolocationControl({ position: 'top-right' }));
+        this.addControl(new HomeControl({ position: 'top-right' }));
         this.addControl(new ScaleControl());
         this.updateAttribution();
         this.on('click', this._closeCurrentPopup, this);
