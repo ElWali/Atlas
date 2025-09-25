@@ -250,6 +250,64 @@
         font-size: 11px;
         color: #888;
     }
+    .atlas-layers-control {
+        background: rgba(255,255,255,0.9);
+        border-radius: 5px;
+        box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+        transition: all 0.2s;
+    }
+    .atlas-layers-control-toggle {
+        width: 36px;
+        height: 36px;
+        background-image: url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/%3E%3C/svg%3E');
+        background-size: 24px 24px;
+        background-position: center;
+        background-repeat: no-repeat;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    .atlas-layers-list {
+        padding: 6px 10px;
+        line-height: 1.5;
+    }
+    .atlas-layers-list label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .atlas-layers-separator {
+        height: 1px;
+        background-color: #ddd;
+        margin: 6px 0;
+    }
+    .atlas-edit-handle {
+        background: #fff;
+        border: 2px solid #3388ff;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        position: absolute;
+        cursor: move;
+        pointer-events: auto;
+        z-index: 800;
+    }
+    .atlas-tooltip-pane {
+        pointer-events: none;
+        z-index: 850;
+    }
+    .atlas-tooltip {
+        position: absolute;
+        padding: 6px 8px;
+        background-color: rgba(255, 255, 255, 0.9);
+        border: 1px solid #ccc;
+        border-radius: 3px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        white-space: nowrap;
+        font-size: 12px;
+        color: #333;
+    }
   </style>
 </head>
 <body>
@@ -692,6 +750,8 @@
         this._onMouseDown = this._onMouseDown.bind(this);
         this._onMouseMoveDrag = this._onMouseMoveDrag.bind(this);
         this._onMouseUp = this._onMouseUp.bind(this);
+        this._editing = false;
+        this._editHandles = [];
       }
       _normalizeGeoJSON(input) {
         if (Array.isArray(input)) return { type: 'FeatureCollection', features: input.map(f => f.type === 'Feature' ? f : { type: 'Feature', geometry: f, properties: {} }) };
@@ -741,9 +801,25 @@
       _renderLineString(ctx, feature, style) {
         const coords = feature.coordinates;
         if (coords.length < 2) return;
-        ctx.beginPath(); ctx.moveTo(coords[0].x, coords[0].y);
-        for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i].x, coords[i].y);
-        ctx.strokeStyle = style.color || '#3388ff'; ctx.lineWidth = style.weight || 3; ctx.globalAlpha = style.opacity || 1; ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(coords[0].x, coords[0].y);
+        for (let i = 1; i < coords.length; i++) {
+            ctx.lineTo(coords[i].x, coords[i].y);
+        }
+
+        if (style.dashArray) {
+            ctx.setLineDash(style.dashArray);
+        }
+
+        ctx.strokeStyle = style.color || '#3388ff';
+        ctx.lineWidth = style.weight || 3;
+        ctx.globalAlpha = style.opacity || 1;
+        ctx.stroke();
+
+        // Reset dash style for other layers
+        if (style.dashArray) {
+            ctx.setLineDash([]);
+        }
         ctx.globalAlpha = 1;
       }
       _renderPolygon(ctx, feature, style) {
@@ -793,17 +869,28 @@
         return this._hitCache.get(viewKey).get(`${x}_${y}`) || null;
       }
       _onMouseMove(e) {
-        if (this._draggingFeature) return; // Skip if dragging
+        if (this._draggingFeature) return;
         const rect = this._map.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
         const feature = this._hitDetect(x, y);
+
+        if (feature !== this._hoveredFeature) {
+            if (this._hoveredFeature) {
+                this.fire('mouseout', { originalEvent: e, feature: this._hoveredFeature });
+            }
+            if (feature) {
+                this.fire('mouseover', { originalEvent: e, feature: feature });
+            }
+        }
+
+        this._hoveredFeature = feature;
+
         if (feature) {
-          this._map.canvas.style.cursor = 'pointer';
-          this.fire('mousemove', { originalEvent: e, feature });
+            this._map.canvas.style.cursor = 'pointer';
+            this.fire('mousemove', { originalEvent: e, feature });
         } else {
-          this._map.canvas.style.cursor = 'grab';
-          this.fire('mouseout', { originalEvent: e });
+            this._map.canvas.style.cursor = 'grab';
         }
       }
       _onMouseOut(e) {
@@ -892,30 +979,149 @@
         // Re-render
         if (this._map) this._map.render();
       }
+
+      enableEdit() {
+        if (this._editing || !this._map) { return this; }
+        this._editing = true;
+        this._createEditHandles();
+        this._map.on('move', this._updateEditHandles, this);
+        this.fire('edit:enabled');
+        return this;
+      }
+
+      disableEdit() {
+        if (!this._editing) { return this; }
+        this._editing = false;
+        this._removeEditHandles();
+        this._map.off('move', this._updateEditHandles, this);
+        this.fire('edit:disabled');
+        return this;
+      }
+
+      isEditing() {
+        return this._editing;
+      }
+
+      _createEditHandles() {
+        this._removeEditHandles();
+        const pane = this._map.getPane('markerPane');
+        this._features.forEach(feature => {
+            if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'LineString') return;
+
+            const processRing = (ring, ringIndex) => {
+                ring.forEach((coord, coordIndex) => {
+                    const handle = this._createHandle(feature, ringIndex, coordIndex);
+                    pane.appendChild(handle);
+                    this._editHandles.push(handle);
+                });
+            };
+
+            if (feature.geometry.type === 'Polygon') {
+                feature.geometry.coordinates.forEach(processRing);
+            } else { // LineString
+                processRing(feature.geometry.coordinates, null);
+            }
+        });
+        this._updateEditHandles();
+      }
+
+      _removeEditHandles() {
+        this._editHandles.forEach(handle => handle.parentNode.removeChild(handle));
+        this._editHandles = [];
+      }
+
+      _updateEditHandles() {
+        if (!this._editing) return;
+        let handleIndex = 0;
+        this._features.forEach(feature => {
+            if (feature.geometry.type !== 'Polygon' && feature.geometry.type !== 'LineString') return;
+
+            const processRing = (ring) => {
+                ring.forEach(coord => {
+                    if (this._editHandles[handleIndex]) {
+                        const pos = this._map.latLngToContainerPoint({ lat: coord[1], lon: coord[0] });
+                        this._editHandles[handleIndex].style.transform = `translate(${pos.x - 6}px, ${pos.y - 6}px)`;
+                    }
+                    handleIndex++;
+                });
+            };
+
+            if (feature.geometry.type === 'Polygon') {
+                feature.geometry.coordinates.forEach(processRing);
+            } else {
+                processRing(feature.geometry.coordinates);
+            }
+        });
+      }
+
+      _createHandle(feature, ringIndex, coordIndex) {
+        const handle = document.createElement('div');
+        handle.className = 'atlas-edit-handle';
+
+        handle.onmousedown = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            this._map.getHandler('dragPan').disable();
+
+            const onMouseMove = (moveEvent) => {
+                const newLatLng = this._map.screenToLatLon(moveEvent.clientX, moveEvent.clientY);
+                const newCoord = [newLatLng.lon, newLatLng.lat];
+
+                if (feature.geometry.type === 'Polygon') {
+                    feature.geometry.coordinates[ringIndex][coordIndex] = newCoord;
+                } else { // LineString
+                    feature.geometry.coordinates[coordIndex] = newCoord;
+                }
+
+                this._featureCache.clear();
+                this._map.render();
+                this._updateEditHandles();
+                this.fire('edit', { feature });
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                this._map.getHandler('dragPan').enable();
+                this.fire('edit:vertex:dragend', { feature });
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            this.fire('edit:vertex:dragstart', { feature });
+        };
+        return handle;
+      }
+
       onAdd() {
         this._features = this._geojson.features || [];
         if (this.options.interactive) {
           this._map.canvas.addEventListener('mousemove', this._onMouseMove);
           this._map.canvas.addEventListener('mouseout', this._onMouseOut);
           this._map.canvas.addEventListener('click', this._onClick);
-          // Add drag listeners if draggable
           if (this.options.draggable) {
             this._map.canvas.addEventListener('mousedown', this._onMouseDown);
           }
         }
+        if (this._editing) {
+            this.enableEdit();
+        }
         this.fire('add');
       }
+
       onRemove() {
         if (this.options.interactive) {
           this._map.canvas.removeEventListener('mousemove', this._onMouseMove);
           this._map.canvas.removeEventListener('mouseout', this._onMouseOut);
           this._map.canvas.removeEventListener('click', this._onClick);
-          // Remove drag listeners
           if (this.options.draggable) {
             this._map.canvas.removeEventListener('mousedown', this._onMouseDown);
             document.removeEventListener('mousemove', this._onMouseMoveDrag);
             document.removeEventListener('mouseup', this._onMouseUp);
           }
+        }
+        if (this._editing) {
+            this.disableEdit();
         }
         this._featureCache.clear();
         this._hitCache.clear();
@@ -1304,6 +1510,75 @@
         }
     });
 
+    class Tooltip extends Layer {
+        constructor(options = {}, source) {
+            super(options);
+            this._source = source;
+            this._content = options.content || '';
+        }
+
+        onAdd() {
+            this._initLayout();
+            this._updatePosition();
+            this._map.getPane('tooltipPane').appendChild(this._container);
+            this._map.on('move', this._updatePosition, this);
+        }
+
+        onRemove() {
+            if (this._container && this._container.parentNode) {
+                this._container.parentNode.removeChild(this._container);
+            }
+            this._map.off('move', this._updatePosition, this);
+        }
+
+        setContent(content) {
+            this._content = content;
+            if (this._container) {
+                if (typeof content === 'string') {
+                    this._container.innerHTML = content;
+                } else {
+                    this._container.innerHTML = '';
+                    this._container.appendChild(content);
+                }
+            }
+            return this;
+        }
+
+        _initLayout() {
+            this._container = document.createElement('div');
+            this._container.className = 'atlas-tooltip';
+            this.setContent(this._content);
+        }
+
+        _updatePosition() {
+            if (!this._map) return;
+            const pos = this._map.latLngToContainerPoint(this._latlng || this._source.getLatLng());
+            const offset = { x: 10, y: -10 }; // Default offset
+            this._container.style.transform = `translate(${pos.x + offset.x}px, ${pos.y + offset.y}px)`;
+        }
+    }
+
+    Object.assign(Layer.prototype, {
+        bindTooltip: function(content, options) {
+            this._tooltip = new Tooltip({ content, ...options }, this);
+            this.on('mouseover', () => this.openTooltip());
+            this.on('mouseout', () => this.closeTooltip());
+            return this;
+        },
+        openTooltip: function() {
+            if (this._tooltip && !this._map.hasLayer(this._tooltip)) {
+                this._map.openTooltip(this._tooltip);
+            }
+            return this;
+        },
+        closeTooltip: function() {
+            if (this._tooltip) {
+                this._map.closeTooltip(this._tooltip);
+            }
+            return this;
+        }
+    });
+
 
     class Control {
       constructor(options = {}) {
@@ -1386,59 +1661,139 @@
       }
     }
     class LayerControl extends Control {
-      constructor(options = {}) {
-        super(options);
-        this.options = { ...this.options, title: options.title || 'Toggle layer' };
-      }
-      onAdd() {
-        const container = document.createElement('div');
-        container.className = 'atlas-layer-control';
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className = 'control-btn';
-        toggleBtn.title = this.options.title;
-        toggleBtn.setAttribute('aria-label', this.options.title);
-        toggleBtn.textContent = '🌐';
-        toggleBtn.onclick = () => {
-          if (this._map) {
-            const current = this._map.getBaseLayer();
-            let newLayerKey;
-            // Determine the next layer in the cycle: OSM -> ESRI -> ESRI_TOPO -> OSM
-            if (!current || (current.urlTemplate && current.urlTemplate.includes('openstreetmap'))) {
-              newLayerKey = 'ESRI'; // Switch to Satellite
-            } else if (current.urlTemplate && current.urlTemplate.includes('World_Imagery')) {
-              newLayerKey = 'ESRI_TOPO'; // Switch to Topo
+        constructor(baseLayers, overlays, options = {}) {
+            super({ position: 'top-right', ...options });
+            this._baseLayers = baseLayers || {};
+            this._overlays = overlays || {};
+            this._collapsed = true;
+        }
+
+        onAdd(map) {
+            this._initLayout();
+            this._update();
+            this._map.on('layeradd layerremove', this._onLayersChange, this);
+            return this._container;
+        }
+
+        onRemove(map) {
+            this._map.off('layeradd layerremove', this._onLayersChange, this);
+        }
+
+        _initLayout() {
+            const className = 'atlas-layers-control';
+            this._container = document.createElement('div');
+            this._container.className = className;
+
+            this._container.addEventListener('mousedown', e => e.stopPropagation());
+            this._container.addEventListener('dblclick', e => e.stopPropagation());
+            this._container.addEventListener('click', e => e.stopPropagation());
+
+            this._layersLink = document.createElement('a');
+            this._layersLink.className = 'atlas-layers-control-toggle control-btn';
+            this._layersLink.href = '#';
+            this._layersLink.title = 'Layers';
+            this._layersLink.setAttribute('role', 'button');
+            this._layersLink.setAttribute('aria-label', 'Toggle layers');
+
+            this._form = document.createElement('form');
+            this._form.className = 'atlas-layers-list';
+            this._form.style.display = 'none';
+
+            this._layersLink.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this._toggle();
+            };
+
+            this._map.on('click', ()=>this._collapse(), this);
+
+            this._container.appendChild(this._layersLink);
+            this._container.appendChild(this._form);
+        }
+
+        _toggle() {
+            this._collapsed = !this._collapsed;
+            this._update();
+        }
+
+        _collapse() {
+            this._collapsed = true;
+            this._update();
+        }
+
+        _update() {
+            if (!this._container) return;
+
+            this._form.innerHTML = '';
+            this._baseLayersList = document.createElement('div');
+            this._overlaysList = document.createElement('div');
+            this._baseLayersList.className = 'atlas-layers-base';
+            this._overlaysList.className = 'atlas-layers-overlays';
+
+            let hasOverlays = Object.keys(this._overlays).length > 0;
+            let hasBaseLayers = Object.keys(this._baseLayers).length > 0;
+
+            for (const name in this._baseLayers) {
+                this._addLayerInput(this._baseLayers[name], name, this._baseLayersList, false);
+            }
+
+            for (const name in this._overlays) {
+                this._addLayerInput(this._overlays[name], name, this._overlaysList, true);
+            }
+
+            if (hasBaseLayers) {
+                this._form.appendChild(this._baseLayersList);
+            }
+            if (hasOverlays && hasBaseLayers) {
+                const separator = document.createElement('div');
+                separator.className = 'atlas-layers-separator';
+                this._form.appendChild(separator);
+            }
+            if (hasOverlays) {
+                this._form.appendChild(this._overlaysList);
+            }
+
+            if (this._collapsed) {
+                this._form.style.display = 'none';
+                this._container.classList.remove('atlas-layers-control-expanded');
             } else {
-              newLayerKey = 'OSM'; // Switch back to OSM
+                this._form.style.display = 'block';
+                this._container.classList.add('atlas-layers-control-expanded');
             }
-            const layerConfig = LAYERS[newLayerKey];
-            if (layerConfig) {
-              let urlTemplate;
-              if (newLayerKey === "ESRI") {
-                urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-              } else if (newLayerKey === "ESRI_TOPO") {
-                urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
-              } else { // OSM
-                const subdomains = ['a', 'b', 'c'];
-                const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-                urlTemplate = `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`;
-              }
-              const newLayer = new TileLayer(urlTemplate, {
-                minZoom: layerConfig.minZoom,
-                maxZoom: layerConfig.maxZoom,
-                attribution: layerConfig.attribution,
-                background: layerConfig.background,
-                supportsRetina: layerConfig.supportsRetina,
-                maxCacheSize: layerConfig.maxCacheSize
-              });
-              this._map.setBaseLayer(newLayer);
-            }
-          }
-        };
-        container.appendChild(toggleBtn);
-        this._toggleBtn = toggleBtn;
-        return container;
-      }
-      onRemove() {}
+        }
+
+        _addLayerInput(layer, name, container, isOverlay) {
+            const label = document.createElement('label');
+            const input = document.createElement('input');
+            input.type = isOverlay ? 'checkbox' : 'radio';
+            input.name = isOverlay ? 'atlas-overlay-layer' : 'atlas-base-layer';
+            input.checked = this._map.hasLayer(layer);
+
+            input.addEventListener('change', () => {
+                if (isOverlay) {
+                    if (input.checked) {
+                        this._map.addLayer(layer);
+                    } else {
+                        this._map.removeLayer(layer);
+                    }
+                } else {
+                    if (input.checked) {
+                        this._map.setBaseLayer(layer);
+                    }
+                }
+            });
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = ` ${name}`;
+
+            label.appendChild(input);
+            label.appendChild(nameSpan);
+            container.appendChild(label);
+        }
+
+        _onLayersChange() {
+            this._update();
+        }
     }
     class FullscreenControl extends Control {
       constructor(options = {}) {
@@ -2580,6 +2935,7 @@
         this._handlers = {};
         this._panes = {};
         this._popup = null;
+        this._tooltip = null;
         this.projection = DEFAULT_PROJECTION;
         this.addHandler('dragPan', DragPanHandler);
         this.addHandler('scrollZoom', ScrollZoomHandler);
@@ -2601,7 +2957,6 @@
         this.resize();
         // >>>> MOVED: All UI controls to the right side <<<<
         this.addControl(new ZoomControl({ position: 'top-right' }));
-        this.addControl(new LayerControl({ position: 'top-right' }));
         this.addControl(new FullscreenControl({ position: 'top-right' }));
         this.addControl(new AttributionControl({ position: 'bottom-left' }));
         this.addControl(new CompassControl({ position: 'top-right' }));
@@ -2723,6 +3078,22 @@
               this.removeLayer(this._popup);
               this._popup = null;
           }
+      }
+
+      openTooltip(tooltip) {
+          this.closeTooltip();
+          this._tooltip = tooltip;
+          return this.addLayer(tooltip);
+      }
+
+      closeTooltip(tooltip) {
+          if (!tooltip || this._tooltip === tooltip) {
+              if (this._tooltip) {
+                this.removeLayer(this._tooltip);
+                this._tooltip = null;
+              }
+          }
+          return this;
       }
 
       getPane(name) {
@@ -2995,32 +3366,50 @@
     }
     let atlasInstance = null;
     function initializeAtlas() {
-      atlasInstance = new Atlas("map");
-      const subdomains = ['a', 'b', 'c'];
-      const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-      const osmLayer = new TileLayer(
-        `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-        {
-          minZoom: 0,
-          maxZoom: 19,
-          attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-          background: "#e6e6e6",
-          supportsRetina: true,
-          maxCacheSize: 800
-        }
-      );
-      atlasInstance.setBaseLayer(osmLayer);
+        atlasInstance = new Atlas("map");
 
-      // --- Example Usage of New Features ---
-      const marker = new Marker({ lat: 51.5, lon: -0.09 }, { draggable: true })
-          .bindPopup("<b>Hello world!</b><br>I am a draggable marker.")
-          .addTo(atlasInstance);
+        // --- Base Layers ---
+        const osmLayer = new TileLayer(`https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`.replace('{s}', 'a'), LAYERS.OSM);
+        const esriSatLayer = new TileLayer(LAYERS.ESRI.tileServers[0] + '/{z}/{y}/{x}', LAYERS.ESRI);
 
-      marker.on('dragend', () => {
-          console.log('Marker dragged to:', marker.getLatLng());
-      });
+        const baseLayers = {
+            "OpenStreetMap": osmLayer,
+            "Esri Satellite": esriSatLayer
+        };
 
-      atlasInstance.flyTo({ center: { lat: 51.505, lon: -0.09 }, zoom: 13 });
+        // --- Overlay Layers ---
+        const cityMarker = new Marker({ lat: 51.5074, lon: -0.1278 }, { draggable: true })
+            .bindPopup("A draggable marker in London.");
+
+        const parkPolygon = new GeoJSONLayer({
+            type: 'Polygon',
+            coordinates: [[
+                [-0.17, 51.50], [-0.15, 51.51], [-0.13, 51.50], [-0.17, 51.50]
+            ]]
+        }, { style: { color: 'green', fillColor: 'rgba(0, 255, 0, 0.5)' } })
+            .bindPopup("Click me to toggle editing!");
+
+        parkPolygon.on('click', () => {
+            if (parkPolygon.isEditing()) {
+                parkPolygon.disableEdit();
+            } else {
+                parkPolygon.enableEdit();
+            }
+        });
+
+        const overlays = {
+            "City Marker": cityMarker,
+            "Park Area": parkPolygon
+        };
+
+        // --- Initialize Map ---
+        atlasInstance.setBaseLayer(osmLayer); // Set initial base layer
+        atlasInstance.addLayer(cityMarker);   // Set initial overlay
+
+        const layerControl = new LayerControl(baseLayers, overlays, { position: 'top-right' });
+        atlasInstance.addControl(layerControl);
+
+        atlasInstance.flyTo({ center: { lat: 51.505, lon: -0.09 }, zoom: 13 });
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initializeAtlas);
