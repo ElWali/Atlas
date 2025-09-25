@@ -43,10 +43,7 @@ export class Circle extends Path {
 
 	onAdd(map) {
 		this._map = map;
-		if (!this._map._renderer) {
-			this._map._renderer = new Canvas();
-			this._map.addLayer(this._map._renderer);
-		}
+		this.options.renderer = this._map._renderer;
 		this._project();
 		this._update();
 	}

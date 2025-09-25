@@ -1,6 +1,8 @@
 import { DEFAULT_CONFIG, TILE_SIZE, WHEEL_ZOOM_DURATION, FLYTO_DURATION, EASING, normalizeAngle, shortestAngleDiff, wrapDeltaLon, rot } from '../utils/constants.js';
 import { GISUtils } from '../utils/gis.js';
 import { DEFAULT_PROJECTION } from '../utils/projection.js';
+import { toPoint } from './Point.js';
+import { toLatLng } from './LatLng.js';
 import { Layer } from '../layers/Layer.js';
 import { TileLayer } from '../layers/TileLayer.js';
 import { Control } from '../controls/Control.js';
@@ -16,6 +18,7 @@ import { ScrollZoomHandler } from '../handlers/ScrollZoomHandler.js';
 import { DoubleClickZoomHandler } from '../handlers/DoubleClickZoomHandler.js';
 import { KeyboardPanHandler } from '../handlers/KeyboardPanHandler.js';
 import { AreaZoomHandler } from '../handlers/AreaZoomHandler.js';
+import { Canvas } from '../renderers/Canvas.js';
 
 // Atlas core
 export class Atlas {
@@ -56,7 +59,10 @@ export class Atlas {
       }
     )();
     this.isDragging = false;
+    this._pixelOrigin = this.getPixelOrigin();
     this._createPane('tooltipPane');
+    this._renderer = new Canvas();
+    this.addLayer(this._renderer);
     // add handlers (use pointer handler instead of separate drag/touch)
     this.addHandler('pointer', PointerHandler);
     this.addHandler('scrollZoom', ScrollZoomHandler);
@@ -435,6 +441,21 @@ export class Atlas {
     for (const name in this._handlers) this.removeHandler(name);
     if (this._resizeObserver) { this._resizeObserver.disconnect(); this._resizeObserver = null; }
     this.fire('unload');
+  }
+  getPixelOrigin() {
+    return this._pixelOrigin;
+  }
+  unproject(point, zoom) {
+    zoom = zoom === undefined ? this.getZoom() : zoom;
+    return this.projection.unproject(this.project(point, zoom));
+  }
+  project(latlng, zoom) {
+    zoom = zoom === undefined ? this.getZoom() : zoom;
+    return this.projection.project(toLatLng(latlng), zoom);
+  }
+  panBy(offset) {
+    offset = toPoint(offset).round();
+    this.panTo(this.project(this.unproject(this.getPixelOrigin()).add(offset)));
   }
   _createPane(name) {
     const pane = document.createElement('div');

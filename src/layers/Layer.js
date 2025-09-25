@@ -1,8 +1,14 @@
 import { Tooltip } from '../core/Tooltip.js';
+import { Evented } from '../core/Evented.js';
 
 // Base Layer class
-export class Layer {
-  constructor(options = {}) { this.options = options; this._map = null; this._events = {}; this._domListeners = []; }
+export class Layer extends Evented {
+  constructor(options = {}) {
+		super();
+		this.options = options;
+		this._map = null;
+		this._domListeners = [];
+	}
   addTo(map) { if (this._map) this._map.removeLayer(this); this._map = map; map.addLayer(this); return this; }
   remove() { if (this._map) { this._map.removeLayer(this); this._map = null; } return this; }
   on(type, fn) { if (!this._events[type]) this._events[type] = []; this._events[type].push(fn); return this; }
