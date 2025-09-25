@@ -6,8 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Atlas.js - Lightweight JavaScript Mapping Library</title>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hidden; font-family: sans-serif; }
-    #map-container { position: relative; width: 100%; height: 100%; overflow: hidden; background: #000; cursor: grab; }
+    html, body { margin: 0; padding: 0; height: 100%; width: 100%; overflow: hid
+den; font-family: sans-serif; }
+    #map-container { position: relative; width: 100%; height: 100%; overflow: hi
+dden; background: #000; cursor: grab; }
     #map-container.dragging { cursor: grabbing; }
     #map-container.selecting { cursor: crosshair; }
     #map { width: 100%; height: 100%; display: block; }
@@ -36,10 +38,13 @@
       min-width: 30px;
       text-align: center;
     }
-    .control-btn:hover { background: rgba(240,240,240,0.95); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
-    .control-btn:active { background: rgba(224,224,224,0.95); transform: scale(0.98); }
+    .control-btn:hover { background: rgba(240,240,240,0.95); box-shadow: 0 2px 5
+px rgba(0,0,0,0.15); }
+    .control-btn:active { background: rgba(224,224,224,0.95); transform: scale(0
+.98); }
     .control-btn:focus { outline: 2px solid #0078A8; outline-offset: 2px; }
-    .control-btn:disabled { background: rgba(245,245,245,0.9); color: #aaa; cursor: not-allowed; }
+    .control-btn:disabled { background: rgba(245,245,245,0.9); color: #aaa; curs
+or: not-allowed; }
     #loading {
       position: absolute; top: 10px; right: 10px;
       background: rgba(255,255,255,0.9); padding: 4px 8px; border-radius: 4px;
@@ -104,11 +109,111 @@
       0% { transform: scale(0.2); opacity: 0.8; }
       100% { transform: scale(1.2); opacity: 0; }
     }
+
+    /* >>>> ADDED: Marker and Popup Styles <<<< */
+    .atlas-marker-pane, .atlas-popup-pane {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 600;
+    }
+
+    .atlas-marker-icon {
+      position: absolute;
+      pointer-events: auto;
+      transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+    }
+
+    .atlas-marker-icon:hover {
+      transform: scale(1.1);
+    }
+
+    .atlas-marker-shadow {
+      position: absolute;
+      pointer-events: none;
+      filter: blur(1.5px);
+      opacity: 0.4;
+    }
+
+    .atlas-popup {
+        position: absolute;
+        text-align: center;
+        pointer-events: auto;
+        z-index: 700; /* Above markers */
+    }
+
+    .atlas-popup-content-wrapper {
+        padding: 1px;
+        text-align: left;
+        border-radius: 12px;
+        background-color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+        backdrop-filter: blur(5px);
+    }
+
+    .atlas-popup-content {
+        padding: 10px 20px;
+        margin: 0;
+        line-height: 1.4;
+    }
+
+    .atlas-popup-tip-container {
+        width: 40px;
+        height: 20px;
+        position: absolute;
+        left: 50%;
+        margin-left: -20px;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .atlas-popup-tip {
+        width: 17px;
+        height: 17px;
+        padding: 1px;
+        margin: -10px auto 0;
+        transform: rotate(45deg);
+        background-color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+    }
+
+    .atlas-popup-close-button {
+        position: absolute;
+        top: 0;
+        right: 0;
+        padding: 4px 4px 0 0;
+        border: none;
+        text-align: center;
+        width: 18px;
+        height: 14px;
+        font: 16px/14px Tahoma, Verdana, sans-serif;
+        color: #757575;
+        text-decoration: none;
+        font-weight: bold;
+        background: transparent;
+        cursor: pointer;
+    }
+
+    .atlas-scale-control {
+        background: rgba(255, 255, 255, 0.7);
+        border: 2px solid #777;
+        border-top: none;
+        padding: 2px 5px;
+        font-size: 11px;
+        color: #333;
+        white-space: nowrap;
+        backdrop-filter: blur(2px);
+    }
   </style>
 </head>
 <body>
   <div id="map-container">
     <canvas id="map"></canvas>
+    <div class="atlas-marker-pane"></div>
+    <div class="atlas-popup-pane"></div>
     <div id="loading">Loading: <span id="loading-count">0</span></div>
     <div id="attribution"></div>
   </div>
@@ -139,8 +244,10 @@
         name: "OpenStreetMap",
         minZoom: 0,
         maxZoom: 19,
-        tileServers: ["https://a.tile.openstreetmap.org", "https://b.tile.openstreetmap.org", "https://c.tile.openstreetmap.org"],
-        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+        tileServers: ["https://a.tile.openstreetmap.org", "https://b.tile.openst
+reetmap.org", "https://c.tile.openstreetmap.org"],
+        attribution: '© <a href="https://www.openstreetmap.org/copyright" target
+="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
         background: "#e6e6e6",
         supportsRetina: true,
         maxCacheSize: 800
@@ -149,8 +256,11 @@
         name: "Esri Satellite",
         minZoom: 0,
         maxZoom: 19,
-        tileServers: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile"],
-        attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener noreferrer">Esri World Imagery</a>',
+        tileServers: ["https://server.arcgisonline.com/ArcGIS/rest/services/Worl
+d_Imagery/MapServer/tile"],
+        attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/
+rest/services/World_Imagery/MapServer" target="_blank" rel="noopener noreferrer"
+>Esri World Imagery</a>',
         background: "#000000",
         supportsRetina: false,
         maxCacheSize: 600
@@ -159,8 +269,11 @@
         name: "Esri Topographic",
         minZoom: 0,
         maxZoom: 19,
-        tileServers: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile"],
-        attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer" target="_blank" rel="noopener noreferrer">Esri World Topographic Map</a>',
+        tileServers: ["https://server.arcgisonline.com/ArcGIS/rest/services/Worl
+d_Topo_Map/MapServer/tile"],
+        attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/
+rest/services/World_Topo_Map/MapServer" target="_blank" rel="noopener noreferrer
+">Esri World Topographic Map</a>',
         background: "#f5f5f0",
         supportsRetina: false,
         maxCacheSize: 600
@@ -174,16 +287,20 @@
       retinaSuffix: "@2x"
     };
     const EASING = {
-      easeInOutCubic: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+      easeInOutCubic: t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3)
+ / 2,
       easeOutCubic: t => 1 - Math.pow(1 - t, 3),
       linear: t => t
     };
     const RAD2DEG = 180 / Math.PI;
     const DEG2RAD = Math.PI / 180;
-    function normalizeAngle(rad) { return Math.atan2(Math.sin(rad), Math.cos(rad)); }
+    function normalizeAngle(rad) { return Math.atan2(Math.sin(rad), Math.cos(rad
+)); }
     function shortestAngleDiff(from, to) { return normalizeAngle(to - from); }
-    function wrapDeltaLon(delta) { delta = ((delta + 180) % 360 + 360) % 360 - 180; return delta; }
-    function rot(x, y, ang) { const c = Math.cos(ang), s = Math.sin(ang); return { x: x * c - y * s, y: x * s + y * c }; }
+    function wrapDeltaLon(delta) { delta = ((delta + 180) % 360 + 360) % 360 - 1
+80; return delta; }
+    function rot(x, y, ang) { const c = Math.cos(ang), s = Math.sin(ang); return
+ { x: x * c - y * s, y: x * s + y * c }; }
     class Projection {
       project(latlng) { throw new Error('project() must be implemented'); }
       unproject(point) { throw new Error('unproject() must be implemented'); }
@@ -209,8 +326,10 @@
         const scale = Math.pow(2, zoom);
         const p = this.project(latlng);
         return {
-          x: (p.x + Math.PI * EARTH_RADIUS) / (2 * Math.PI * EARTH_RADIUS) * scale,
-          y: (Math.PI * EARTH_RADIUS - p.y) / (2 * Math.PI * EARTH_RADIUS) * scale
+          x: (p.x + Math.PI * EARTH_RADIUS) / (2 * Math.PI * EARTH_RADIUS) * sca
+le,
+          y: (Math.PI * EARTH_RADIUS - p.y) / (2 * Math.PI * EARTH_RADIUS) * sca
+le
         };
       }
       tileToLatLng(x, y, zoom) {
@@ -224,19 +343,36 @@
     }
     const DEFAULT_PROJECTION = new WebMercatorProjection();
     class GISUtils {
-      static wrapLongitude(l) { while (l > 180) l -= 360; while (l < -180) l += 360; return l; }
-      static clampLatitude(lat) { return Math.max(MIN_LATITUDE, Math.min(MAX_LATITUDE, lat)); }
-      static getResolution(lat, z) { return (EARTH_CIRCUMFERENCE * Math.cos(lat * DEG2RAD)) / (Math.pow(2, z) * TILE_SIZE); }
-      static formatDistance(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km"; }
-      static tileToLonLat(x, y, z) { return DEFAULT_PROJECTION.tileToLatLng(x, y, z); }
+      static wrapLongitude(l) { while (l > 180) l -= 360; while (l < -180) l +=
+360; return l; }
+      static clampLatitude(lat) { return Math.max(MIN_LATITUDE, Math.min(MAX_LAT
+ITUDE, lat)); }
+      static getResolution(lat, z) { return (EARTH_CIRCUMFERENCE * Math.cos(lat
+* DEG2RAD)) / (Math.pow(2, z) * TILE_SIZE); }
+      static formatDistance(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1
+000).toFixed(1) + " km"; }
+      static tileToLonLat(x, y, z) { return DEFAULT_PROJECTION.tileToLatLng(x, y
+, z); }
     }
     class Layer {
-      constructor(options = {}) { this.options = options; this._map = null; this._events = {}; }
-      addTo(map) { if (this._map) this._map.removeLayer(this); this._map = map; map.addLayer(this); return this; }
-      remove() { if (this._map) { this._map.removeLayer(this); this._map = null; } return this; }
-      on(type, fn) { if (!this._events[type]) this._events[type] = []; this._events[type].push(fn); return this; }
-      off(type, fn) { if (!this._events[type]) return this; this._events[type] = this._events[type].filter(cb => cb !== fn); return this; }
-      fire(type, data = {}) { if (!this._events[type]) return; data.type = type; data.target = this; this._events[type].forEach(fn => fn(data)); }
+      constructor(options = {}) { this.options = options; this._map = null; this
+._events = {}; }
+      addTo(map) { if (this._map) this._map.removeLayer(this); this._map = map;
+map.addLayer(this); return this; }
+      remove() { if (this._map) { this._map.removeLayer(this); this._map = null;
+ } return this; }
+      on(type, fn, context = this) { if (!this._events[type]) this._events[type] = []; this._events[type].push({ fn, context }); return this; }
+      off(type, fn, context = this) {
+        if (!this._events[type]) return this;
+        this._events[type] = this._events[type].filter(listener => listener.fn !== fn || listener.context !== context);
+        return this;
+      }
+      fire(type, data = {}) {
+        if (!this._events[type]) return;
+        data.type = type;
+        data.target = this;
+        [...this._events[type]].forEach(listener => listener.fn.call(listener.context, data));
+      }
       onAdd() {}
       onRemove() {}
       render() {}
@@ -245,7 +381,10 @@
       constructor(urlTemplate, options = {}) {
         super(options);
         this.urlTemplate = urlTemplate;
-        this.options = { minZoom: options.minZoom || 0, maxZoom: options.maxZoom || 18, attribution: options.attribution || '', background: options.background || '#ffffff', supportsRetina: options.supportsRetina || false, maxCacheSize: options.maxCacheSize || 800, ...options };
+        this.options = { minZoom: options.minZoom || 0, maxZoom: options.maxZoom
+ || 18, attribution: options.attribution || '', background: options.background |
+| '#ffffff', supportsRetina: options.supportsRetina || false, maxCacheSize: opti
+ons.maxCacheSize || 800, ...options };
         this.tileCache = new Map();
         this.loadingTiles = new Set();
         this.loadingControllers = new Map();
@@ -259,13 +398,16 @@
         let wrappedX = ((x % scale) + scale) % scale;
         const intX = Math.floor(wrappedX);
         const intY = Math.max(0, Math.min(scale - 1, Math.floor(y)));
-        let url = this.urlTemplate.replace('{z}', z).replace('{x}', intX).replace('{y}', intY);
-        if (this.options.supportsRetina && this._shouldRequestRetina()) url += CONFIG.retinaSuffix;
+        let url = this.urlTemplate.replace('{z}', z).replace('{x}', intX).replac
+e('{y}', intY);
+        if (this.options.supportsRetina && this._shouldRequestRetina()) url += C
+ONFIG.retinaSuffix;
         return url;
       }
       _shouldRequestRetina() {
         const mode = CONFIG.retina;
-        return (mode === true) || (mode === "auto" && (window.devicePixelRatio || 1) > 1.5);
+        return (mode === true) || (mode === "auto" && (window.devicePixelRatio |
+| 1) > 1.5);
       }
       async _loadTile(key, url) {
         if (this.tileCache.has(key)) return this.tileCache.get(key);
@@ -274,14 +416,16 @@
         this.loadingControllers.set(key, controller);
         const img = new Image();
         img.crossOrigin = "anonymous";
-        const tile = { img, loaded: false, loadedAt: Date.now(), lastUsed: Date.now(), controller };
+        const tile = { img, loaded: false, loadedAt: Date.now(), lastUsed: Date.
+now(), controller };
         this.tileCache.set(key, tile);
         this.loadingTiles.add(key);
         const start = performance.now();
         const loadPromise = new Promise((resolve, reject) => {
           img.onload = () => {
             const loadTime = performance.now() - start;
-            console.log(`[Atlas] Tile ${key} loaded in ${loadTime.toFixed(2)}ms`);
+            console.log(`[Atlas] Tile ${key} loaded in ${loadTime.toFixed(2)}ms`
+);
             tile.loaded = true;
             tile.loadedAt = Date.now();
             this.loadingTiles.delete(key);
@@ -293,7 +437,8 @@
           img.onerror = (e) => {
             if (signal.aborted) return;
             console.warn(`[Atlas] Failed to load tile: ${url}`, e);
-            if (this.options.supportsRetina && url.includes(CONFIG.retinaSuffix)) {
+            if (this.options.supportsRetina && url.includes(CONFIG.retinaSuffix)
+) {
               this._retinaAvailable = false;
               img.src = url.replace(CONFIG.retinaSuffix, "");
               return;
@@ -313,13 +458,15 @@
               this.loadingTiles.delete(key);
               this.loadingControllers.delete(key);
               if (this.tileCache.has(key)) this.tileCache.delete(key);
-              this.fire('tileerror', { tile: key, url, error: new Error('Timeout') });
+              this.fire('tileerror', { tile: key, url, error: new Error('Timeout
+') });
               reject(new Error(`Timeout loading tile: ${url}`));
             }
           }, TILE_LOAD_TIMEOUT_MS);
         });
         try { await Promise.race([loadPromise, timeoutPromise]); }
-        catch (error) { if (!signal.aborted) console.error("[Atlas] Tile loading failed or timed out:", error.message); }
+        catch (error) { if (!signal.aborted) console.error("[Atlas] Tile loading
+ failed or timed out:", error.message); }
         return tile;
       }
       _reloadTile(key, url) {
@@ -342,19 +489,23 @@
           img.onerror = () => this.loadingTiles.delete(token);
           img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
         };
-        if ('requestIdleCallback' in window) requestIdleCallback(doReload, { timeout: 2000 });
+        if ('requestIdleCallback' in window) requestIdleCallback(doReload, { tim
+eout: 2000 });
         else setTimeout(doReload, 100);
       }
       _evict() {
         if (this.tileCache.size <= this.options.maxCacheSize) return;
-        if ('requestIdleCallback' in window) requestIdleCallback(() => this._performEviction(), { timeout: 2000 });
+        if ('requestIdleCallback' in window) requestIdleCallback(() => this._per
+formEviction(), { timeout: 2000 });
         else setTimeout(() => this._performEviction(), 100);
       }
       _performEviction() {
         if (this.tileCache.size <= this.options.maxCacheSize) return;
-        const entries = Array.from(this.tileCache.entries()).sort((a, b) => a[1].lastUsed - b[1].lastUsed);
+        const entries = Array.from(this.tileCache.entries()).sort((a, b) => a[1]
+.lastUsed - b[1].lastUsed);
         const removeCount = this.tileCache.size - this.options.maxCacheSize;
-        for (let i = 0; i < removeCount; i++) this.tileCache.delete(entries[i][0]);
+        for (let i = 0; i < removeCount; i++) this.tileCache.delete(entries[i][0
+]);
       }
       _preloadAdjacentZoomTiles() {
         if (!this._map) return;
@@ -363,7 +514,8 @@
         const prevZoom = Math.max(this.options.minZoom, zInt - 1);
         if (Math.abs(this._map.zoom - zInt) > 0.3) return;
         const wrappedCenterLon = GISUtils.wrapLongitude(this._map.center.lon);
-        const ct = this._map.projection.latLngToTile({ lat: this._map.center.lat, lon: wrappedCenterLon }, zInt);
+        const ct = this._map.projection.latLngToTile({ lat: this._map.center.lat
+, lon: wrappedCenterLon }, zInt);
         const ts = TILE_SIZE;
         const w = this._map.canvas.width / this._map.dpr;
         const h = this._map.canvas.height / this._map.dpr;
@@ -371,8 +523,10 @@
         for (let dz of [prevZoom, nextZoom]) {
           if (dz === zInt) continue;
           const scaleDiff = Math.pow(2, Math.abs(dz - zInt));
-          const startX = Math.floor(ct.x * (dz > zInt ? scaleDiff : 1 / scaleDiff) - viewportTiles / 2);
-          const startY = Math.floor(ct.y * (dz > zInt ? scaleDiff : 1 / scaleDiff) - viewportTiles / 2);
+          const startX = Math.floor(ct.x * (dz > zInt ? scaleDiff : 1 / scaleDif
+f) - viewportTiles / 2);
+          const startY = Math.floor(ct.y * (dz > zInt ? scaleDiff : 1 / scaleDif
+f) - viewportTiles / 2);
           for (let dx = 0; dx < viewportTiles; dx++) {
             for (let dy = 0; dy < viewportTiles; dy++) {
               const X = startX + dx, Y = startY + dy;
@@ -393,17 +547,22 @@
         const scaleFactor = Math.pow(2, this._map.zoom - zInt);
         const ts = TILE_SIZE;
         const wrappedCenterLon = GISUtils.wrapLongitude(this._map.center.lon);
-        const ct = this._map.projection.latLngToTile({ lat: this._map.center.lat, lon: wrappedCenterLon }, zInt);
-        const absCos = Math.abs(Math.cos(this._map.bearing)), absSin = Math.abs(Math.sin(this._map.bearing));
+        const ct = this._map.projection.latLngToTile({ lat: this._map.center.lat
+, lon: wrappedCenterLon }, zInt);
+        const absCos = Math.abs(Math.cos(this._map.bearing)), absSin = Math.abs(
+Math.sin(this._map.bearing));
         const needW = w * absCos + h * absSin;
         const needH = w * absSin + h * absCos;
-        // --- FIXED: Calculate cols and rows correctly to prevent vertical tiling ---
+        // --- FIXED: Calculate cols and rows correctly to prevent vertical tili
+ng ---
         const cols = Math.ceil(needW / (ts * scaleFactor)) + TILE_BUFFER;
-        // Adjust rows based on the actual visible latitudes to prevent vertical tiling
+        // Adjust rows based on the actual visible latitudes to prevent vertical
+ tiling
         const visibleLatSpan = MAX_LATITUDE - MIN_LATITUDE;
         const visibleLatPixels = h * absCos; // Height in pixels
         const visibleLatDegrees = visibleLatSpan * (visibleLatPixels / h);
-        const rows = Math.ceil(visibleLatDegrees / (TILE_SIZE * scaleFactor)) + TILE_BUFFER;
+        const rows = Math.ceil(visibleLatDegrees / (TILE_SIZE * scaleFactor)) +
+TILE_BUFFER;
         // --- END FIX ---
         const startX = Math.floor(ct.x - cols / 2);
         const startY = Math.floor(ct.y - rows / 2);
@@ -414,7 +573,8 @@
         for (let dx = 0; dx < cols; dx++) {
           for (let dy = 0; dy < rows; dy++) {
             const X = startX + dx, Y = startY + dy;
-            const distSq = (dx - centerX) * (dx - centerX) + (dy - centerY) * (dy - centerY);
+            const distSq = (dx - centerX) * (dx - centerX) + (dy - centerY) * (d
+y - centerY);
             this._renderTilesArray.push({ X, Y, distSq });
           }
         }
@@ -450,7 +610,8 @@
       }
       onAdd() { this.fire('add'); }
       onRemove() {
-        for (const controller of this.loadingControllers.values()) controller.abort();
+        for (const controller of this.loadingControllers.values()) controller.ab
+ort();
         this.loadingTiles.clear();
         this.loadingControllers.clear();
         this.tileCache.clear();
@@ -471,9 +632,12 @@
         this._lastRenderZoom = null;
         this._lastRenderBearing = null;
         this._lastRenderCenter = null;
-        this.options.style = options.style || { color: '#3388ff', weight: 3, opacity: 1, fillColor: '#3388ff', fillOpacity: 0.2 };
-        this.options.interactive = options.interactive !== undefined ? options.interactive : true;
-        this.options.draggable = options.draggable !== undefined ? options.draggable : false;
+        this.options.style = options.style || { color: '#3388ff', weight: 3, opa
+city: 1, fillColor: '#3388ff', fillOpacity: 0.2 };
+        this.options.interactive = options.interactive !== undefined ? options.i
+nteractive : true;
+        this.options.draggable = options.draggable !== undefined ? options.dragg
+able : false;
         this._draggingFeature = null;
         this._dragStartPoint = null;
         this._originalCoords = null;
@@ -485,10 +649,14 @@
         this._onMouseUp = this._onMouseUp.bind(this);
       }
       _normalizeGeoJSON(input) {
-        if (Array.isArray(input)) return { type: 'FeatureCollection', features: input.map(f => f.type === 'Feature' ? f : { type: 'Feature', geometry: f, properties: {} }) };
+        if (Array.isArray(input)) return { type: 'FeatureCollection', features:
+input.map(f => f.type === 'Feature' ? f : { type: 'Feature', geometry: f, proper
+ties: {} }) };
         if (input.type === 'FeatureCollection') return input;
-        if (input.type === 'Feature') return { type: 'FeatureCollection', features: [input] };
-        return { type: 'FeatureCollection', features: [{ type: 'Feature', geometry: input, properties: {} }] };
+        if (input.type === 'Feature') return { type: 'FeatureCollection', featur
+es: [input] };
+        return { type: 'FeatureCollection', features: [{ type: 'Feature', geomet
+ry: input, properties: {} }] };
       }
       _latLngToScreenPoint(coord) {
         if (!this._map) return { x: 0, y: 0 };
@@ -504,20 +672,31 @@
         const anchorVec = rot(trX, trY, this._map.bearing);
         return { x: w / 2 + anchorVec.x, y: h / 2 + anchorVec.y };
       }
-      _getFeatureStyle(feature) { return typeof this.options.style === 'function' ? this.options.style(feature) : this.options.style; }
+      _getFeatureStyle(feature) { return typeof this.options.style === 'function
+' ? this.options.style(feature) : this.options.style; }
       _processFeature(feature) {
         const cacheKey = JSON.stringify(feature);
-        if (this._featureCache.has(cacheKey)) return this._featureCache.get(cacheKey);
+        if (this._featureCache.has(cacheKey)) return this._featureCache.get(cach
+eKey);
         const geometry = feature.geometry;
-        const processed = { type: geometry.type, coordinates: null, properties: feature.properties };
+        const processed = { type: geometry.type, coordinates: null, properties:
+feature.properties };
         switch (geometry.type) {
-          case 'Point': processed.coordinates = this._latLngToScreenPoint(geometry.coordinates); break;
-          case 'MultiPoint': processed.coordinates = geometry.coordinates.map(coord => this._latLngToScreenPoint(coord)); break;
-          case 'LineString': processed.coordinates = geometry.coordinates.map(coord => this._latLngToScreenPoint(coord)); break;
-          case 'MultiLineString': processed.coordinates = geometry.coordinates.map(ring => ring.map(coord => this._latLngToScreenPoint(coord))); break;
-          case 'Polygon': processed.coordinates = geometry.coordinates.map(ring => ring.map(coord => this._latLngToScreenPoint(coord))); break;
-          case 'MultiPolygon': processed.coordinates = geometry.coordinates.map(polygon => polygon.map(ring => ring.map(coord => this._latLngToScreenPoint(coord)))); break;
-          default: console.warn('[Atlas] Unsupported geometry type:', geometry.type); return null;
+          case 'Point': processed.coordinates = this._latLngToScreenPoint(geomet
+ry.coordinates); break;
+          case 'MultiPoint': processed.coordinates = geometry.coordinates.map(co
+ord => this._latLngToScreenPoint(coord)); break;
+          case 'LineString': processed.coordinates = geometry.coordinates.map(co
+ord => this._latLngToScreenPoint(coord)); break;
+          case 'MultiLineString': processed.coordinates = geometry.coordinates.m
+ap(ring => ring.map(coord => this._latLngToScreenPoint(coord))); break;
+          case 'Polygon': processed.coordinates = geometry.coordinates.map(ring
+=> ring.map(coord => this._latLngToScreenPoint(coord))); break;
+          case 'MultiPolygon': processed.coordinates = geometry.coordinates.map(
+polygon => polygon.map(ring => ring.map(coord => this._latLngToScreenPoint(coord
+)))); break;
+          default: console.warn('[Atlas] Unsupported geometry type:', geometry.t
+ype); return null;
         }
         this._featureCache.set(cacheKey, processed);
         return processed;
@@ -526,15 +705,19 @@
         const { x, y } = feature.coordinates;
         ctx.beginPath(); ctx.arc(x, y, style.radius || 5, 0, 2 * Math.PI);
         ctx.fillStyle = style.fillColor || style.color || '#3388ff'; ctx.fill();
-        if (style.stroke !== false) { ctx.strokeStyle = style.color || '#3388ff'; ctx.lineWidth = style.weight || 2; ctx.globalAlpha = style.opacity || 1; ctx.stroke(); }
+        if (style.stroke !== false) { ctx.strokeStyle = style.color || '#3388ff'
+; ctx.lineWidth = style.weight || 2; ctx.globalAlpha = style.opacity || 1; ctx.s
+troke(); }
         ctx.globalAlpha = 1;
       }
       _renderLineString(ctx, feature, style) {
         const coords = feature.coordinates;
         if (coords.length < 2) return;
         ctx.beginPath(); ctx.moveTo(coords[0].x, coords[0].y);
-        for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i].x, coords[i].y);
-        ctx.strokeStyle = style.color || '#3388ff'; ctx.lineWidth = style.weight || 3; ctx.globalAlpha = style.opacity || 1; ctx.stroke();
+        for (let i = 1; i < coords.length; i++) ctx.lineTo(coords[i].x, coords[i
+].y);
+        ctx.strokeStyle = style.color || '#3388ff'; ctx.lineWidth = style.weight
+ || 3; ctx.globalAlpha = style.opacity || 1; ctx.stroke();
         ctx.globalAlpha = 1;
       }
       _renderPolygon(ctx, feature, style) {
@@ -544,24 +727,31 @@
         for (const ring of rings) {
           if (ring.length < 3) continue;
           ctx.moveTo(ring[0].x, ring[0].y);
-          for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i].x, ring[i].y);
+          for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i].x, ring[i].y)
+;
           ctx.closePath();
         }
-        if (style.fill !== false) { ctx.fillStyle = style.fillColor || style.color || '#3388ff'; ctx.globalAlpha = style.fillOpacity || 0.2; ctx.fill(); ctx.globalAlpha = 1; }
-        if (style.stroke !== false) { ctx.strokeStyle = style.color || '#3388ff'; ctx.lineWidth = style.weight || 3; ctx.globalAlpha = style.opacity || 1; ctx.stroke(); ctx.globalAlpha = 1; }
+        if (style.fill !== false) { ctx.fillStyle = style.fillColor || style.col
+or || '#3388ff'; ctx.globalAlpha = style.fillOpacity || 0.2; ctx.fill(); ctx.glo
+balAlpha = 1; }
+        if (style.stroke !== false) { ctx.strokeStyle = style.color || '#3388ff'
+; ctx.lineWidth = style.weight || 3; ctx.globalAlpha = style.opacity || 1; ctx.s
+troke(); ctx.globalAlpha = 1; }
       }
       _pointInPolygon(x, y, ring) {
         let inside = false;
         for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
           const xi = ring[i].x, yi = ring[i].y;
           const xj = ring[j].x, yj = ring[j].y;
-          const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+          const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi)
+ / (yj - yi) + xi);
           if (intersect) inside = !inside;
         }
         return inside;
       }
       _hitDetect(x, y) {
-        const viewKey = `${this._map.zoom.toFixed(6)}_${this._map.bearing}_${this._map.center.lon}_${this._map.center.lat}`;
+        const viewKey = `${this._map.zoom.toFixed(6)}_${this._map.bearing}_${thi
+s._map.center.lon}_${this._map.center.lat}`;
         if (!this._hitCache.has(viewKey)) {
           const hitMap = new Map();
           for (const feature of this._features) {
@@ -569,12 +759,15 @@
             if (!processed) continue;
             switch (processed.type) {
               case 'Point':
-                const dist = Math.hypot(x - processed.coordinates.x, y - processed.coordinates.y);
-                if (dist <= (this._getFeatureStyle(feature).radius || 5) + 5) hitMap.set(`${x}_${y}`, feature);
+                const dist = Math.hypot(x - processed.coordinates.x, y - process
+ed.coordinates.y);
+                if (dist <= (this._getFeatureStyle(feature).radius || 5) + 5) hi
+tMap.set(`${x}_${y}`, feature);
                 break;
               case 'Polygon':
                 for (const ring of processed.coordinates) {
-                  if (this._pointInPolygon(x, y, ring)) { hitMap.set(`${x}_${y}`, feature); break; }
+                  if (this._pointInPolygon(x, y, ring)) { hitMap.set(`${x}_${y}`
+, feature); break; }
                 }
                 break;
             }
@@ -609,7 +802,8 @@
         if (feature) this.fire('click', { originalEvent: e, feature });
       }
       _onMouseDown(e) {
-        if (!this.options.draggable || e.button !== 0) return; // Left mouse button only
+        if (!this.options.draggable || e.button !== 0) return; // Left mouse but
+ton only
         const rect = this._map.canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -640,7 +834,8 @@
         // Calculate the new LatLng for the point
         const newLatLng = this._map.screenToLatLon(x, y);
         // Update the feature's geometry
-        this._draggingFeature.geometry.coordinates = [newLatLng.lon, newLatLng.lat];
+        this._draggingFeature.geometry.coordinates = [newLatLng.lon, newLatLng.l
+at];
         // Clear caches so the point is re-rendered at the new position
         this._featureCache.clear();
         this._hitCache.clear();
@@ -661,7 +856,8 @@
         // Calculate final position
         const finalLatLng = this._map.screenToLatLon(x, y);
         // Update feature one last time
-        this._draggingFeature.geometry.coordinates = [finalLatLng.lon, finalLatLng.lat];
+        this._draggingFeature.geometry.coordinates = [finalLatLng.lon, finalLatL
+ng.lat];
         this._featureCache.clear();
         this._hitCache.clear();
         // Reset state
@@ -703,7 +899,8 @@
           this._map.canvas.removeEventListener('click', this._onClick);
           // Remove drag listeners
           if (this.options.draggable) {
-            this._map.canvas.removeEventListener('mousedown', this._onMouseDown);
+            this._map.canvas.removeEventListener('mousedown', this._onMouseDown)
+;
             document.removeEventListener('mousemove', this._onMouseMoveDrag);
             document.removeEventListener('mouseup', this._onMouseUp);
           }
@@ -734,7 +931,8 @@
           const style = this._getFeatureStyle(feature);
           switch (processed.type) {
             case 'Point': this._renderPoint(ctx, processed, style); break;
-            case 'LineString': this._renderLineString(ctx, processed, style); break;
+            case 'LineString': this._renderLineString(ctx, processed, style); br
+eak;
             case 'Polygon': this._renderPolygon(ctx, processed, style); break;
           }
         }
@@ -749,6 +947,293 @@
       }
       getData() { return this._geojson; }
     }
+
+    /* >>>> ADDED: Icon and Marker Classes <<<< */
+    class Icon {
+        constructor(options = {}) {
+            this.options = {
+                iconUrl: options.iconUrl || '',
+                shadowUrl: options.shadowUrl || '',
+                iconSize: options.iconSize || [25, 41],
+                iconAnchor: options.iconAnchor || [12, 41],
+                shadowSize: options.shadowSize || [41, 41],
+                shadowAnchor: options.shadowAnchor || [12, 41]
+            };
+        }
+
+        createIcon() {
+            const img = document.createElement('img');
+            img.src = this.options.iconUrl;
+            img.className = 'atlas-marker-icon';
+            this._setIconStyles(img, this.options.iconSize);
+            return img;
+        }
+
+        createShadow() {
+            if (!this.options.shadowUrl) return null;
+            const shadow = document.createElement('img');
+            shadow.src = this.options.shadowUrl;
+            shadow.className = 'atlas-marker-shadow';
+            this._setIconStyles(shadow, this.options.shadowSize);
+            return shadow;
+        }
+
+        _setIconStyles(el, size) {
+            el.style.width = `${size[0]}px`;
+            el.style.height = `${size[1]}px`;
+        }
+    }
+
+    class DefaultIcon extends Icon {
+        constructor(options = {}) {
+            super(options);
+            this.options.iconUrl = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 41'%3E%3Cpath fill='%233388FF' stroke='%23FFFFFF' stroke-width='1.5' d='M14,0 C6.27,0 0,6.27 0,14 C0,24.5 14,41 14,41 C14,41 28,24.5 28,14 C28,6.27 21.73,0 14,0 Z'/%3E%3Ccircle fill='%23FFFFFF' cx='14' cy='14' r='6'/%3E%3C/svg%3E";
+            this.options.shadowUrl = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 41 41'%3E%3Cellipse cx='20.5' cy='20.5' rx='15' ry='7.5' fill='%23000000'/%3E%3C/svg%3E";
+            this.options.iconSize = [28, 41];
+            this.options.iconAnchor = [14, 41];
+            this.options.shadowSize = [41, 41];
+            this.options.shadowAnchor = [14, 41];
+        }
+    }
+
+    class Marker extends Layer {
+        constructor(latlng, options = {}) {
+            super(options);
+            this._latlng = { ...latlng };
+            this.options.icon = options.icon || new DefaultIcon();
+            this.options.interactive = options.interactive !== false;
+            this.options.draggable = options.draggable || false;
+            this._element = null;
+            this._shadow = null;
+        }
+
+        onAdd() {
+            this._initIcon();
+            if (this.options.interactive) {
+                this._addEventListeners();
+            }
+            this._map.getPane('markerPane').appendChild(this._element);
+            this._updatePosition();
+            this.fire('add');
+        }
+
+        onRemove() {
+            if (this._element && this._element.parentNode) {
+                this._element.parentNode.removeChild(this._element);
+            }
+            if (this._shadow && this._shadow.parentNode) {
+                this._shadow.parentNode.removeChild(this._shadow);
+            }
+            this._removeEventListeners();
+            this.fire('remove');
+        }
+
+        _initIcon() {
+            this._element = this.options.icon.createIcon();
+            this._shadow = this.options.icon.createShadow();
+            if (this._shadow) {
+                this._map.getPane('markerPane').appendChild(this._shadow);
+            }
+        }
+
+        _addEventListeners() {
+            this._element.addEventListener('click', (e) => this.fire('click', { originalEvent: e }));
+            if (this.options.draggable) {
+                this._element.addEventListener('mousedown', this._onDragStart.bind(this));
+            } else {
+                this._element.addEventListener('mousedown', (e) => this.fire('mousedown', { originalEvent: e }));
+            }
+        }
+
+        _removeEventListeners() {
+            this._element.removeEventListener('mousedown', this._onDragStart.bind(this));
+        }
+
+        _onDragStart(e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            this._map.getHandler('dragPan').disable();
+            this._isDragging = true;
+            this._dragStartX = e.clientX;
+            this._dragStartY = e.clientY;
+            this._originalLatLng = { ...this._latlng };
+
+            document.addEventListener('mousemove', this._onDrag = this._onDrag.bind(this));
+            document.addEventListener('mouseup', this._onDragEnd = this._onDragEnd.bind(this));
+
+            this.fire('movestart');
+            this.fire('dragstart');
+        }
+
+        _onDrag(e) {
+            if (!this._isDragging) return;
+            e.preventDefault();
+
+            const currentPoint = this._map.latLngToContainerPoint(this._originalLatLng);
+            const newPoint = {
+                x: currentPoint.x + (e.clientX - this._dragStartX),
+                y: currentPoint.y + (e.clientY - this._dragStartY)
+            };
+
+            this.setLatLng(this._map.screenToLatLon(newPoint.x, newPoint.y));
+
+            this.fire('move', { latlng: this._latlng });
+            this.fire('drag', { latlng: this._latlng });
+        }
+
+        _onDragEnd(e) {
+            e.preventDefault();
+            this._isDragging = false;
+            document.removeEventListener('mousemove', this._onDrag);
+            document.removeEventListener('mouseup', this._onDragEnd);
+            this._map.getHandler('dragPan').enable();
+
+            this.fire('moveend');
+            this.fire('dragend');
+        }
+
+        render() {
+            this._updatePosition();
+        }
+
+        _updatePosition() {
+            if (!this._map || !this._element) return;
+            const pos = this._map.latLngToContainerPoint(this._latlng);
+            this._setElementPos(this._element, pos, this.options.icon.options.iconAnchor);
+            if (this._shadow) {
+                this._setElementPos(this._shadow, pos, this.options.icon.options.shadowAnchor);
+            }
+        }
+
+        _setElementPos(el, pos, anchor) {
+            el.style.left = `${pos.x - anchor[0]}px`;
+            el.style.top = `${pos.y - anchor[1]}px`;
+        }
+
+        getLatLng() {
+            return { ...this._latlng };
+        }
+
+        setLatLng(latlng) {
+            this._latlng = { ...latlng };
+            this.render();
+            return this;
+        }
+    }
+
+    class Popup extends Layer {
+        constructor(options = {}, source) {
+            super(options);
+            this._source = source;
+            this._content = options.content || '';
+        }
+
+        onAdd() {
+            this._initLayout();
+            this._updatePosition();
+            this._map.getPane('popupPane').appendChild(this._container);
+            this.fire('open');
+            this._map.on('move', this._updatePosition, this);
+        }
+
+        onRemove() {
+            if (this._container && this._container.parentNode) {
+                this._container.parentNode.removeChild(this._container);
+            }
+            this.fire('close');
+            this._map.off('move', this._updatePosition, this);
+        }
+
+        setContent(content) {
+            this._content = content;
+            if (this._contentNode) {
+                if (typeof content === 'string') {
+                    this._contentNode.innerHTML = content;
+                } else {
+                    this._contentNode.innerHTML = '';
+                    this._contentNode.appendChild(content);
+                }
+            }
+            return this;
+        }
+
+        _initLayout() {
+            this._container = document.createElement('div');
+            this._container.className = 'atlas-popup';
+
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'atlas-popup-content-wrapper';
+
+            this._contentNode = document.createElement('div');
+            this._contentNode.className = 'atlas-popup-content';
+            this.setContent(this._content);
+
+            const closeButton = document.createElement('a');
+            closeButton.className = 'atlas-popup-close-button';
+            closeButton.href = '#close';
+            closeButton.innerHTML = '&#215;';
+            closeButton.onclick = (e) => {
+                e.preventDefault();
+                this._map.closePopup(this);
+            };
+
+            const tipContainer = document.createElement('div');
+            tipContainer.className = 'atlas-popup-tip-container';
+            const tip = document.createElement('div');
+            tip.className = 'atlas-popup-tip';
+
+            contentWrapper.appendChild(this._contentNode);
+            contentWrapper.appendChild(closeButton);
+            tipContainer.appendChild(tip);
+            this._container.appendChild(contentWrapper);
+            this._container.appendChild(tipContainer);
+        }
+
+        _updatePosition() {
+            if (!this._map) return;
+            const pos = this._map.latLngToContainerPoint(this._latlng || this._source.getLatLng());
+            const icon = this._source.options.icon;
+            const yOffset = icon ? icon.options.iconAnchor[1] : 20;
+
+            this._container.style.transform = `translate3d(${pos.x}px, ${pos.y - yOffset}px, 0)`;
+        }
+    }
+
+    // Add Popup methods to Layer prototype
+    Object.assign(Layer.prototype, {
+        bindPopup: function(content, options) {
+            this._popup = new Popup({ content, ...options }, this);
+            this.on('click', () => this.togglePopup());
+            return this;
+        },
+
+        openPopup: function() {
+            if (this._popup && !this._map.hasLayer(this._popup)) {
+                this._map.openPopup(this._popup);
+            }
+            return this;
+        },
+
+        closePopup: function() {
+            if (this._popup) {
+                this._map.closePopup(this._popup);
+            }
+            return this;
+        },
+
+        togglePopup: function() {
+            if (this._popup) {
+                if (this._map.hasLayer(this._popup)) {
+                    this.closePopup();
+                } else {
+                    this.openPopup();
+                }
+            }
+            return this;
+        }
+    });
+
+
     class Control {
       constructor(options = {}) {
         this.options = { position: options.position || 'top-left' };
@@ -756,9 +1241,12 @@
         this._container = null;
         this._events = {};
       }
-      on(type, fn) { if (!this._events[type]) this._events[type] = []; this._events[type].push(fn); return this; }
-      off(type, fn) { if (!this._events[type]) return this; this._events[type] = this._events[type].filter(cb => cb !== fn); return this; }
-      fire(type, data = {}) { if (!this._events[type]) return; data.type = type; data.target = this; this._events[type].forEach(fn => fn(data)); }
+      on(type, fn) { if (!this._events[type]) this._events[type] = []; this._eve
+nts[type].push(fn); return this; }
+      off(type, fn) { if (!this._events[type]) return this; this._events[type] =
+ this._events[type].filter(cb => cb !== fn); return this; }
+      fire(type, data = {}) { if (!this._events[type]) return; data.type = type;
+ data.target = this; this._events[type].forEach(fn => fn(data)); }
       onAdd() { return document.createElement('div'); }
       onRemove() {}
       addTo(map) {
@@ -772,7 +1260,8 @@
       remove() {
         if (!this._map) return this;
         this.onRemove();
-        if (this._container && this._container.parentNode) this._container.parentNode.removeChild(this._container);
+        if (this._container && this._container.parentNode) this._container.paren
+tNode.removeChild(this._container);
         this._map = null;
         this._container = null;
         return this;
@@ -784,8 +1273,10 @@
         let container = this._map._controlCorners[position];
         if (!container) {
           container = document.createElement('div');
-          container.className = `atlas-control-container atlas-control-${position}`;
-          if (position.includes('top') || position.includes('bottom')) container.classList.add('atlas-control-vertical');
+          container.className = `atlas-control-container atlas-control-${positio
+n}`;
+          if (position.includes('top') || position.includes('bottom')) container
+.classList.add('atlas-control-vertical');
           else container.classList.add('atlas-control-horizontal');
           this._map.container.appendChild(container);
           this._map._controlCorners[position] = container;
@@ -796,7 +1287,8 @@
     class ZoomControl extends Control {
       constructor(options = {}) {
         super(options);
-        this.options = { ...this.options, zoomInTitle: options.zoomInTitle || 'Zoom in', zoomOutTitle: options.zoomOutTitle || 'Zoom out' };
+        this.options = { ...this.options, zoomInTitle: options.zoomInTitle || 'Z
+oom in', zoomOutTitle: options.zoomOutTitle || 'Zoom out' };
       }
       onAdd() {
         const container = document.createElement('div');
@@ -806,13 +1298,15 @@
         zoomInBtn.title = this.options.zoomInTitle;
         zoomInBtn.setAttribute('aria-label', this.options.zoomInTitle);
         zoomInBtn.textContent = '+';
-        zoomInBtn.onclick = () => { if (this._map) { this._map.stopAnimations(); this._map.setZoom(this._map.getZoom() + 1); } };
+        zoomInBtn.onclick = () => { if (this._map) { this._map.stopAnimations();
+ this._map.setZoom(this._map.getZoom() + 1); } };
         const zoomOutBtn = document.createElement('button');
         zoomOutBtn.className = 'control-btn';
         zoomOutBtn.title = this.options.zoomOutTitle;
         zoomOutBtn.setAttribute('aria-label', this.options.zoomOutTitle);
         zoomOutBtn.textContent = '−';
-        zoomOutBtn.onclick = () => { if (this._map) { this._map.stopAnimations(); this._map.setZoom(this._map.getZoom() - 1); } };
+        zoomOutBtn.onclick = () => { if (this._map) { this._map.stopAnimations()
+; this._map.setZoom(this._map.getZoom() - 1); } };
         container.appendChild(zoomInBtn);
         container.appendChild(zoomOutBtn);
         this._zoomInBtn = zoomInBtn;
@@ -822,8 +1316,10 @@
       onRemove() {}
       _update() {
         if (!this._map || !this._zoomInBtn || !this._zoomOutBtn) return;
-        const minZoom = this._map.getBaseLayer() ? this._map.getBaseLayer().getMinZoom() : 0;
-        const maxZoom = this._map.getBaseLayer() ? this._map.getBaseLayer().getMaxZoom() : 18;
+        const minZoom = this._map.getBaseLayer() ? this._map.getBaseLayer().getM
+inZoom() : 0;
+        const maxZoom = this._map.getBaseLayer() ? this._map.getBaseLayer().getM
+axZoom() : 18;
         const currentZoom = this._map.getZoom();
         this._zoomInBtn.disabled = currentZoom >= maxZoom;
         this._zoomOutBtn.disabled = currentZoom <= minZoom;
@@ -832,7 +1328,8 @@
     class LayerControl extends Control {
       constructor(options = {}) {
         super(options);
-        this.options = { ...this.options, title: options.title || 'Toggle layer' };
+        this.options = { ...this.options, title: options.title || 'Toggle layer'
+ };
       }
       onAdd() {
         const container = document.createElement('div');
@@ -846,10 +1343,13 @@
           if (this._map) {
             const current = this._map.getBaseLayer();
             let newLayerKey;
-            // Determine the next layer in the cycle: OSM -> ESRI -> ESRI_TOPO -> OSM
-            if (!current || (current.urlTemplate && current.urlTemplate.includes('openstreetmap'))) {
+            // Determine the next layer in the cycle: OSM -> ESRI -> ESRI_TOPO -
+> OSM
+            if (!current || (current.urlTemplate && current.urlTemplate.includes
+('openstreetmap'))) {
               newLayerKey = 'ESRI'; // Switch to Satellite
-            } else if (current.urlTemplate && current.urlTemplate.includes('World_Imagery')) {
+            } else if (current.urlTemplate && current.urlTemplate.includes('Worl
+d_Imagery')) {
               newLayerKey = 'ESRI_TOPO'; // Switch to Topo
             } else {
               newLayerKey = 'OSM'; // Switch back to OSM
@@ -858,13 +1358,17 @@
             if (layerConfig) {
               let urlTemplate;
               if (newLayerKey === "ESRI") {
-                urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+                urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/servi
+ces/World_Imagery/MapServer/tile/{z}/{y}/{x}";
               } else if (newLayerKey === "ESRI_TOPO") {
-                urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
+                urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/servi
+ces/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
               } else { // OSM
                 const subdomains = ['a', 'b', 'c'];
-                const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-                urlTemplate = `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`;
+                const randomSubdomain = subdomains[Math.floor(Math.random() * su
+bdomains.length)];
+                urlTemplate = `https://${randomSubdomain}.tile.openstreetmap.org
+/{z}/{x}/{y}.png`;
               }
               const newLayer = new TileLayer(urlTemplate, {
                 minZoom: layerConfig.minZoom,
@@ -887,7 +1391,8 @@
     class FullscreenControl extends Control {
       constructor(options = {}) {
         super(options);
-        this.options = { ...this.options, title: options.title || 'Toggle fullscreen' };
+        this.options = { ...this.options, title: options.title || 'Toggle fullsc
+reen' };
       }
       onAdd() {
         const container = document.createElement('div');
@@ -899,9 +1404,11 @@
         fullscreenBtn.textContent = '⛶';
         fullscreenBtn.onclick = () => {
           if (!document.fullscreenElement) {
-            this._map.container.requestFullscreen().catch(err => console.warn(`[Atlas] Error enabling fullscreen: ${err.message}`));
+            this._map.container.requestFullscreen().catch(err => console.warn(`[
+Atlas] Error enabling fullscreen: ${err.message}`));
           } else {
-            document.exitFullscreen().catch(err => console.warn(`[Atlas] Error exiting fullscreen: ${err.message}`));
+            document.exitFullscreen().catch(err => console.warn(`[Atlas] Error e
+xiting fullscreen: ${err.message}`));
           }
         };
         container.appendChild(fullscreenBtn);
@@ -940,14 +1447,16 @@
             }
           }
         }
-        attributions.push('<a href="https://github.com/your-org/atlasjs" target="_blank" rel="noopener noreferrer">Atlas.js</a>');
+        attributions.push('<a href="https://github.com/your-org/atlasjs" target=
+"_blank" rel="noopener noreferrer">Atlas.js</a>');
         this._container.innerHTML = attributions.join(' | ');
       }
     }
     class CompassControl extends Control {
       constructor(options = {}) {
         super(options);
-        this.options = { ...this.options, title: options.title || 'Reset North' };
+        this.options = { ...this.options, title: options.title || 'Reset North'
+};
       }
       onAdd() {
         const container = document.createElement('div');
@@ -963,13 +1472,18 @@
           if (this._map) {
             const w = this._map.canvas.width / this._map.dpr;
             const h = this._map.canvas.height / this._map.dpr;
-            this._map.animateZoomRotateAbout(w / 2, h / 2, this._map.getZoom(), 0, SNAP_DURATION);
+            this._map.animateZoomRotateAbout(w / 2, h / 2, this._map.getZoom(),
+0, SNAP_DURATION);
           }
         };
-        compassBtn.onmouseenter = () => { compassBtn.style.background = "rgba(240, 240, 240, 0.95)"; };
-        compassBtn.onmouseleave = () => { compassBtn.style.background = "rgba(255, 255, 255, 0.9)"; };
-        compassBtn.onmousedown = () => { compassBtn.style.transform = "scale(0.98) rotate(" + (-this._map.getBearing() * RAD2DEG) + "deg)"; };
-        compassBtn.onmouseup = () => { compassBtn.style.transform = "rotate(" + (-this._map.getBearing() * RAD2DEG) + "deg)"; };
+        compassBtn.onmouseenter = () => { compassBtn.style.background = "rgba(24
+0, 240, 240, 0.95)"; };
+        compassBtn.onmouseleave = () => { compassBtn.style.background = "rgba(25
+5, 255, 255, 0.9)"; };
+        compassBtn.onmousedown = () => { compassBtn.style.transform = "scale(0.9
+8) rotate(" + (-this._map.getBearing() * RAD2DEG) + "deg)"; };
+        compassBtn.onmouseup = () => { compassBtn.style.transform = "rotate(" +
+(-this._map.getBearing() * RAD2DEG) + "deg)"; };
         container.appendChild(compassBtn);
         this._compassBtn = compassBtn;
         return container;
@@ -979,9 +1493,51 @@
         if (!this._compassBtn || !this._map) return;
         const visible = Math.abs(this._map.getBearing()) > 0.001;
         this._compassBtn.style.display = visible ? "block" : "none";
-        this._compassBtn.style.transform = `rotate(${-this._map.getBearing() * RAD2DEG}deg)`;
+        this._compassBtn.style.transform = `rotate(${-this._map.getBearing() * R
+AD2DEG}deg)`;
       }
     }
+
+    class ScaleControl extends Control {
+        constructor(options = {}) {
+            super({ position: 'bottom-left', ...options });
+            this.options.maxWidth = options.maxWidth || 100; // in pixels
+        }
+
+        onAdd() {
+            const container = document.createElement('div');
+            container.className = 'atlas-scale-control';
+            this._container = container;
+            this._map.on('move', this._update, this);
+            this._update();
+            return container;
+        }
+
+        onRemove() {
+            this._map.off('move', this._update, this);
+        }
+
+        _update() {
+            const centerLat = this._map.getCenter().lat;
+            const zoom = this._map.getZoom();
+            const maxMeters = GISUtils.getResolution(centerLat, zoom) * this.options.maxWidth * this._map.dpr;
+
+            const getRoundNum = (num) => {
+                const pow10 = Math.pow(10, (Math.floor(num) + '').length - 1);
+                let d = pow10 / 10;
+                num = Math.ceil(num / d) * d;
+                return num;
+            };
+
+            const meters = getRoundNum(maxMeters);
+            const label = meters < 1000 ? `${meters} m` : `${meters / 1000} km`;
+            const scaleWidth = (meters / maxMeters) * this.options.maxWidth;
+
+            this._container.style.width = `${scaleWidth}px`;
+            this._container.innerHTML = label;
+        }
+    }
+
 
     /* >>>> ADDED: SearchControl Class <<<< */
     class SearchControl extends Control {
@@ -993,7 +1549,8 @@
           placeholder: options.placeholder || 'Search for a place...',
           noResultsMessage: options.noResultsMessage || 'No results found.',
           messageHideDelay: options.messageHideDelay || 3000, // ms
-          providerUrl: options.providerUrl || 'https://nominatim.openstreetmap.org/search',
+          providerUrl: options.providerUrl || 'https://nominatim.openstreetmap.o
+rg/search',
           providerOptions: {
             format: 'json',
             limit: 5,
@@ -1139,8 +1696,10 @@
         }
 
         // Hide containers
-        if (this._resultsContainer) this._resultsContainer.style.display = 'none';
-        if (this._messageContainer) this._messageContainer.style.display = 'none';
+        if (this._resultsContainer) this._resultsContainer.style.display = 'none
+';
+        if (this._messageContainer) this._messageContainer.style.display = 'none
+';
       }
 
       _onDocumentClick(event) {
@@ -1174,7 +1733,8 @@
 
         if (key === 'ArrowDown') {
           event.preventDefault();
-          this._activeResultIndex = Math.min(this._activeResultIndex + 1, this._currentResults.length - 1);
+          this._activeResultIndex = Math.min(this._activeResultIndex + 1, this._
+currentResults.length - 1);
           this._updateResultHighlight();
         } else if (key === 'ArrowUp') {
           event.preventDefault();
@@ -1192,11 +1752,13 @@
 
       _updateResultHighlight() {
         // Remove 'active' class from all results
-        const resultItems = this._resultsContainer.querySelectorAll('.atlas-search-result-item');
+        const resultItems = this._resultsContainer.querySelectorAll('.atlas-sear
+ch-result-item');
         resultItems.forEach(item => item.classList.remove('active'));
 
         // Add 'active' class to the currently selected result
-        if (this._activeResultIndex >= 0 && resultItems[this._activeResultIndex]) {
+        if (this._activeResultIndex >= 0 && resultItems[this._activeResultIndex]
+) {
           resultItems[this._activeResultIndex].classList.add('active');
         }
       }
@@ -1217,7 +1779,8 @@
 
         fetch(url, {
           headers: {
-            'User-Agent': 'Atlas.js Search Control / https://github.com/your-org/atlasjs'
+            'User-Agent': 'Atlas.js Search Control / https://github.com/your-org
+/atlasjs'
           }
         })
         .then(response => {
@@ -1348,9 +1911,12 @@
     /* >>>> END OF ADDED CLASS <<<< */
 
     class Handler {
-      constructor(map) { this._map = map; this._enabled = false; this._eventListeners = {}; }
-      enable() { if (this._enabled) return this; this._enabled = true; this._addEvents(); return this; }
-      disable() { if (!this._enabled) return this; this._enabled = false; this._removeEvents(); return this; }
+      constructor(map) { this._map = map; this._enabled = false; this._eventList
+eners = {}; }
+      enable() { if (this._enabled) return this; this._enabled = true; this._add
+Events(); return this; }
+      disable() { if (!this._enabled) return this; this._enabled = false; this._
+removeEvents(); return this; }
       toggle() { return this._enabled ? this.disable() : this.enable(); }
       isEnabled() { return this._enabled; }
       _addEvents() {}
@@ -1365,8 +1931,10 @@
         this._moveSamples = [];
       }
       _addEvents() {
-        this._map.canvas.addEventListener('mousedown', this._onMouseDown = this._onMouseDown.bind(this));
-        this._map.canvas.addEventListener('touchstart', this._onTouchStart = this._onTouchStart.bind(this), { passive: false });
+        this._map.canvas.addEventListener('mousedown', this._onMouseDown = this.
+_onMouseDown.bind(this));
+        this._map.canvas.addEventListener('touchstart', this._onTouchStart = thi
+s._onTouchStart.bind(this), { passive: false });
       }
       _removeEvents() {
         this._map.canvas.removeEventListener('mousedown', this._onMouseDown);
@@ -1376,15 +1944,18 @@
       _removeMoveEvents() {
         document.removeEventListener('mousemove', this._onMouseMove);
         document.removeEventListener('mouseup', this._onMouseUp);
-        document.removeEventListener('touchmove', this._onTouchMove, { passive: false });
+        document.removeEventListener('touchmove', this._onTouchMove, { passive:
+false });
         document.removeEventListener('touchend', this._onTouchEnd);
         document.removeEventListener('touchcancel', this._onTouchEnd);
       }
       _onMouseDown(e) {
         if (e.button !== 0) return;
         this._startDrag(e.clientX, e.clientY);
-        document.addEventListener('mousemove', this._onMouseMove = this._onMouseMove.bind(this));
-        document.addEventListener('mouseup', this._onMouseUp = this._onMouseUp.bind(this));
+        document.addEventListener('mousemove', this._onMouseMove = this._onMouse
+Move.bind(this));
+        document.addEventListener('mouseup', this._onMouseUp = this._onMouseUp.b
+ind(this));
       }
       _onMouseMove(e) {
         if (!this._isDragging) return;
@@ -1393,7 +1964,8 @@
         const dy = e.clientY - this._dragStart.y;
         const w = this._map.canvas.width / this._map.dpr;
         const h = this._map.canvas.height / this._map.dpr;
-        this._map.center = this._map.screenToLatLon(w / 2 - dx, h / 2 - dy, this._map.zoom, this._map.bearing, this._dragStart.center);
+        this._map.center = this._map.screenToLatLon(w / 2 - dx, h / 2 - dy, this
+._map.zoom, this._map.bearing, this._dragStart.center);
         this._pushVelocitySample(e.clientX, e.clientY);
         this._map.render();
       }
@@ -1402,8 +1974,10 @@
         if (e.touches.length !== 1) return;
         e.preventDefault();
         this._startDrag(e.touches[0].clientX, e.touches[0].clientY);
-        document.addEventListener('touchmove', this._onTouchMove = this._onTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this._onTouchEnd = this._onTouchEnd.bind(this));
+        document.addEventListener('touchmove', this._onTouchMove = this._onTouch
+Move.bind(this), { passive: false });
+        document.addEventListener('touchend', this._onTouchEnd = this._onTouchEn
+d.bind(this));
         document.addEventListener('touchcancel', this._onTouchEnd);
       }
       _onTouchMove(e) {
@@ -1413,7 +1987,8 @@
         const dy = e.touches[0].clientY - this._dragStart.y;
         const w = this._map.canvas.width / this._map.dpr;
         const h = this._map.canvas.height / this._map.dpr;
-        this._map.center = this._map.screenToLatLon(w / 2 - dx, h / 2 - dy, this._map.zoom, this._map.bearing, this._dragStart.center);
+        this._map.center = this._map.screenToLatLon(w / 2 - dx, h / 2 - dy, this
+._map.zoom, this._map.bearing, this._dragStart.center);
         this._pushVelocitySample(e.touches[0].clientX, e.touches[0].clientY);
         this._map.render();
       }
@@ -1423,7 +1998,8 @@
         this._map.stopAnimations();
         this._map.isDragging = true;
         this._map.container.classList.add('dragging');
-        this._dragStart = { x: clientX, y: clientY, center: { ...this._map.center } };
+        this._dragStart = { x: clientX, y: clientY, center: { ...this._map.cente
+r } };
         this._moveSamples = [];
         this._pushVelocitySample(clientX, clientY);
       }
@@ -1440,13 +2016,15 @@
         const t = performance.now();
         this._moveSamples.push({ t, x, y });
         const cutoff = t - VELOCITY_WINDOW_MS;
-        while (this._moveSamples.length && this._moveSamples[0].t < cutoff) this._moveSamples.shift();
+        while (this._moveSamples.length && this._moveSamples[0].t < cutoff) this
+._moveSamples.shift();
       }
       _computeVelocity() {
         if (this._moveSamples.length < 2) return { vx: 0, vy: 0 };
         const last = this._moveSamples[this._moveSamples.length - 1];
         let i = this._moveSamples.length - 2;
-        while (i > 0 && last.t - this._moveSamples[i].t < VELOCITY_WINDOW_MS * 0.5) i--;
+        while (i > 0 && last.t - this._moveSamples[i].t < VELOCITY_WINDOW_MS * 0
+.5) i--;
         const ref = this._moveSamples[i];
         const dt = Math.max(1, last.t - ref.t);
         return { vx: (last.x - ref.x) / dt, vy: (last.y - ref.y) / dt };
@@ -1482,8 +2060,10 @@
     }
     class ScrollZoomHandler extends Handler {
       constructor(map) { super(map); }
-      _addEvents() { this._map.canvas.addEventListener('wheel', this._onWheel = this._onWheel.bind(this), { passive: false }); }
-      _removeEvents() { this._map.canvas.removeEventListener('wheel', this._onWheel); }
+      _addEvents() { this._map.canvas.addEventListener('wheel', this._onWheel =
+this._onWheel.bind(this), { passive: false }); }
+      _removeEvents() { this._map.canvas.removeEventListener('wheel', this._onWh
+eel); }
       _onWheel(e) {
         e.preventDefault();
         const dz = (e.deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP);
@@ -1496,11 +2076,14 @@
         this._lastClickTime = 0;
         this._lastClickPos = { x: 0, y: 0 };
       }
-      _addEvents() { this._map.canvas.addEventListener('dblclick', this._onDoubleClick = this._onDoubleClick.bind(this)); }
-      _removeEvents() { this._map.canvas.removeEventListener('dblclick', this._onDoubleClick); }
+      _addEvents() { this._map.canvas.addEventListener('dblclick', this._onDoubl
+eClick = this._onDoubleClick.bind(this)); }
+      _removeEvents() { this._map.canvas.removeEventListener('dblclick', this._o
+nDoubleClick); }
       _onDoubleClick(e) {
         e.preventDefault();
-        this._map.animateZoomRotateAbout(e.clientX, e.clientY, this._map.getZoom() + 1, this._map.getBearing(), TAP_ZOOM_DURATION);
+        this._map.animateZoomRotateAbout(e.clientX, e.clientY, this._map.getZoom
+() + 1, this._map.getBearing(), TAP_ZOOM_DURATION);
       }
     }
     class TouchZoomRotateHandler extends Handler {
@@ -1520,7 +2103,8 @@
         this._lastTapPos = { x: 0, y: 0 };
         this._singleTapTimeout = null;
       }
-      _addEvents() { this._map.canvas.addEventListener('touchstart', this._onTouchStart = this._onTouchStart.bind(this), { passive: false }); }
+      _addEvents() { this._map.canvas.addEventListener('touchstart', this._onTou
+chStart = this._onTouchStart.bind(this), { passive: false }); }
       _removeEvents() {
         this._map.canvas.removeEventListener('touchstart', this._onTouchStart);
         this._removeMoveEvents();
@@ -1531,7 +2115,8 @@
         }
       }
       _removeMoveEvents() {
-        document.removeEventListener('touchmove', this._onTouchMove, { passive: false });
+        document.removeEventListener('touchmove', this._onTouchMove, { passive:
+false });
         document.removeEventListener('touchend', this._onTouchEnd);
         document.removeEventListener('touchcancel', this._onTouchEnd);
       }
@@ -1549,11 +2134,13 @@
           // Check if this is a double-tap
           if (
             now - this._lastTapTime < DOUBLE_TAP_MAX_DELAY &&
-            Math.hypot(clientX - this._lastTapPos.x, clientY - this._lastTapPos.y) < DOUBLE_TAP_MAX_MOVE
+            Math.hypot(clientX - this._lastTapPos.x, clientY - this._lastTapPos.
+y) < DOUBLE_TAP_MAX_MOVE
           ) {
             // It's a double-tap! Prevent default and zoom in.
             e.preventDefault();
-            this._map.animateZoomRotateAbout(clientX, clientY, this._map.getZoom() + 1, this._map.getBearing(), TAP_ZOOM_DURATION);
+            this._map.animateZoomRotateAbout(clientX, clientY, this._map.getZoom
+() + 1, this._map.getBearing(), TAP_ZOOM_DURATION);
             // Reset double-tap state
             this._lastTapTime = 0;
             this._lastTapPos = { x: 0, y: 0 };
@@ -1562,7 +2149,8 @@
             // It's a potential first tap of a double-tap. Record it.
             this._lastTapTime = now;
             this._lastTapPos = { x: clientX, y: clientY };
-            // Set a timeout to clear the tap state if the second tap doesn't come soon
+            // Set a timeout to clear the tap state if the second tap doesn't co
+me soon
             this._singleTapTimeout = setTimeout(() => {
               this._lastTapTime = 0;
               this._lastTapPos = { x: 0, y: 0 };
@@ -1574,38 +2162,52 @@
         if (e.touches.length < 2) return;
         e.preventDefault();
         this._startPinch(e);
-        document.addEventListener('touchmove', this._onTouchMove = this._onTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this._onTouchEnd = this._onTouchEnd.bind(this));
+        document.addEventListener('touchmove', this._onTouchMove = this._onTouch
+Move.bind(this), { passive: false });
+        document.addEventListener('touchend', this._onTouchEnd = this._onTouchEn
+d.bind(this));
         document.addEventListener('touchcancel', this._onTouchEnd);
       }
       _startPinch(e) {
         this._map.stopAnimations();
         this._isPinching = true;
         const t1 = e.touches[0], t2 = e.touches[1];
-        this._pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        this._pinchStartAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
+        this._pinchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY -
+t1.clientY);
+        this._pinchStartAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX -
+ t1.clientX);
         this._pinchStartZoom = this._map.getZoom();
         this._pinchStartBearing = this._map.getBearing();
         this._pinchStartTime = performance.now();
-        this._pinchLastCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
-        this._pinchAnchorLL = this._map.screenToLatLon(this._pinchLastCenter.x, this._pinchLastCenter.y, this._map.getZoom(), this._map.getBearing(), this._map.getCenter());
+        this._pinchLastCenter = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clien
+tY + t2.clientY) / 2 };
+        this._pinchAnchorLL = this._map.screenToLatLon(this._pinchLastCenter.x,
+this._pinchLastCenter.y, this._map.getZoom(), this._map.getBearing(), this._map.
+getCenter());
         this._pinchMoved = false;
       }
       _onTouchMove(e) {
         if (!this._isPinching || e.touches.length < 2) return;
         e.preventDefault();
         const t1 = e.touches[0], t2 = e.touches[1];
-        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-        const angle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX);
-        const center = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
-        const targetZoom = this._pinchStartZoom + Math.log2(dist / Math.max(1, this._pinchStartDist));
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY
+);
+        const angle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.client
+X);
+        const center = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.c
+lientY) / 2 };
+        const targetZoom = this._pinchStartZoom + Math.log2(dist / Math.max(1, t
+his._pinchStartDist));
         const deltaAngle = normalizeAngle(angle - this._pinchStartAngle);
-        const targetBearing = normalizeAngle(this._pinchStartBearing + deltaAngle);
-        if (Math.abs(Math.log(dist / Math.max(1, this._pinchStartDist))) > Math.log(1 + TWO_FINGER_TAP_MOVE_THRESH / Math.max(1, this._pinchStartDist)) ||
+        const targetBearing = normalizeAngle(this._pinchStartBearing + deltaAngl
+e);
+        if (Math.abs(Math.log(dist / Math.max(1, this._pinchStartDist))) > Math.
+log(1 + TWO_FINGER_TAP_MOVE_THRESH / Math.max(1, this._pinchStartDist)) ||
           Math.abs(deltaAngle) > ROTATE_MOVE_THRESH_RAD) {
           this._pinchMoved = true;
         }
-        this._map.applyZoomRotateAbout(center.x, center.y, targetZoom, targetBearing, this._pinchAnchorLL);
+        this._map.applyZoomRotateAbout(center.x, center.y, targetZoom, targetBea
+ring, this._pinchAnchorLL);
         this._pinchLastCenter = center;
         this._map.render();
       }
@@ -1613,9 +2215,12 @@
         if (!this._isPinching) return;
         const dt = performance.now() - this._pinchStartTime;
         if (dt <= TWO_FINGER_TAP_MAX_DELAY && !this._pinchMoved) {
-          const ax = this._pinchLastCenter ? this._pinchLastCenter.x : (this._map.canvas.width / this._map.dpr) / 2;
-          const ay = this._pinchLastCenter ? this._pinchLastCenter.y : (this._map.canvas.height / this._map.dpr) / 2;
-          this._map.animateZoomRotateAbout(ax, ay, this._map.getZoom() - 1, this._map.getBearing(), TAP_ZOOM_DURATION);
+          const ax = this._pinchLastCenter ? this._pinchLastCenter.x : (this._ma
+p.canvas.width / this._map.dpr) / 2;
+          const ay = this._pinchLastCenter ? this._pinchLastCenter.y : (this._ma
+p.canvas.height / this._map.dpr) / 2;
+          this._map.animateZoomRotateAbout(ax, ay, this._map.getZoom() - 1, this
+._map.getBearing(), TAP_ZOOM_DURATION);
         }
         this._isPinching = false;
         this._removeMoveEvents();
@@ -1623,8 +2228,10 @@
     }
     class KeyboardPanHandler extends Handler {
       constructor(map) { super(map); }
-      _addEvents() { window.addEventListener('keydown', this._onKeyDown = this._onKeyDown.bind(this)); }
-      _removeEvents() { window.removeEventListener('keydown', this._onKeyDown); }
+      _addEvents() { window.addEventListener('keydown', this._onKeyDown = this._
+onKeyDown.bind(this)); }
+      _removeEvents() { window.removeEventListener('keydown', this._onKeyDown);
+}
       _onKeyDown(e) {
         let dx = 0, dy = 0;
         const step = 1;
@@ -1633,11 +2240,15 @@
         else if (e.key === "ArrowLeft") dx = -step;
         else if (e.key === "ArrowRight") dx = step;
         else if (e.key.toLowerCase() === "n") {
-          const w = this._map.canvas.width / this._map.dpr, h = this._map.canvas.height / this._map.dpr;
-          this._map.animateZoomRotateAbout(w / 2, h / 2, this._map.getZoom(), 0, SNAP_DURATION);
+          const w = this._map.canvas.width / this._map.dpr, h = this._map.canvas
+.height / this._map.dpr;
+          this._map.animateZoomRotateAbout(w / 2, h / 2, this._map.getZoom(), 0,
+ SNAP_DURATION);
           return;
-        } else if (e.key === "r") { this._map.setBearing(this._map.getBearing() + DEG2RAD * 15); return; }
-        else if (e.key === "l") { this._map.setBearing(this._map.getBearing() - DEG2RAD * 15); return; }
+        } else if (e.key === "r") { this._map.setBearing(this._map.getBearing()
++ DEG2RAD * 15); return; }
+        else if (e.key === "l") { this._map.setBearing(this._map.getBearing() -
+DEG2RAD * 15); return; }
         else if (e.key === "s") {
           const current = this._map.getBaseLayer();
           let nextLayerKey;
@@ -1652,13 +2263,17 @@
           if (layerConfig) {
             let finalUrl;
             if (nextLayerKey === "ESRI") {
-              finalUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+              finalUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/W
+orld_Imagery/MapServer/tile/{z}/{y}/{x}";
             } else if (nextLayerKey === "ESRI_TOPO") {
-              finalUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}";
+              finalUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/W
+orld_Topo_Map/MapServer/tile/{z}/{y}/{x}";
             } else { // OSM
               const subdomains = ['a', 'b', 'c'];
-              const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-              finalUrl = `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`;
+              const randomSubdomain = subdomains[Math.floor(Math.random() * subd
+omains.length)];
+              finalUrl = `https://${randomSubdomain}.tile.openstreetmap.org/{z}/
+{x}/{y}.png`;
             }
             const newLayer = new TileLayer(finalUrl, {
               minZoom: layerConfig.minZoom,
@@ -1700,7 +2315,8 @@
         this._selectionRect = null;
       }
       _addEvents() {
-        this._map.canvas.addEventListener('mousedown', this._onMouseDown = this._onMouseDown.bind(this));
+        this._map.canvas.addEventListener('mousedown', this._onMouseDown = this.
+_onMouseDown.bind(this));
       }
       _removeEvents() {
         this._map.canvas.removeEventListener('mousedown', this._onMouseDown);
@@ -1712,8 +2328,10 @@
         if (!e.shiftKey) return;
         e.preventDefault();
         this._startDrag(e.clientX, e.clientY);
-        document.addEventListener('mousemove', this._onMouseMove = this._onMouseMove.bind(this));
-        document.addEventListener('mouseup', this._onMouseUp = this._onMouseUp.bind(this));
+        document.addEventListener('mousemove', this._onMouseMove = this._onMouse
+Move.bind(this));
+        document.addEventListener('mouseup', this._onMouseUp = this._onMouseUp.b
+ind(this));
       }
       _onMouseMove(e) {
         if (!this._isSelecting) return;
@@ -1730,7 +2348,8 @@
         this._isSelecting = true;
         this._startPoint = { x, y };
         this._map.canvas.style.cursor = 'crosshair';
-        this._map.container.classList.add('selecting'); // Add CSS for visual feedback
+        this._map.container.classList.add('selecting'); // Add CSS for visual fe
+edback
         this._map.stopAnimations(); // Cancel any ongoing animations
       }
       _updateSelection(x, y) {
@@ -1748,7 +2367,8 @@
         this._map.container.classList.remove('selecting');
       }
       _getSelectionRect() {
-        if (!this._startPoint || !this._endPoint) return { x: 0, y: 0, width: 0, height: 0 };
+        if (!this._startPoint || !this._endPoint) return { x: 0, y: 0, width: 0,
+ height: 0 };
         const x1 = this._startPoint.x, y1 = this._startPoint.y;
         const x2 = this._endPoint.x, y2 = this._endPoint.y;
         return {
@@ -1798,9 +2418,12 @@
         const lonSpan = Math.abs(GISUtils.wrapLongitude(ne.lon - sw.lon));
         // Simple formula to calculate zoom level based on span
         // This is an approximation and can be refined
-        const zoomLat = Math.log2(EARTH_CIRCUMFERENCE * 0.9 / (latSpan * 111000)); // 111km per degree
-        const zoomLon = Math.log2(EARTH_CIRCUMFERENCE * Math.cos(centerLat * DEG2RAD) / (lonSpan * 111000));
-        const targetZoom = Math.min(zoomLat, zoomLon) - 0.5; // Subtract a bit for padding
+        const zoomLat = Math.log2(EARTH_CIRCUMFERENCE * 0.9 / (latSpan * 111000)
+); // 111km per degree
+        const zoomLon = Math.log2(EARTH_CIRCUMFERENCE * Math.cos(centerLat * DEG
+2RAD) / (lonSpan * 111000));
+        const targetZoom = Math.min(zoomLat, zoomLon) - 0.5; // Subtract a bit f
+or padding
         // Animate to the new view
         this._map.flyTo({
           center: { lat: centerLat, lon: centerLon },
@@ -1816,7 +2439,8 @@
         this.canvas = document.getElementById(id);
         this.ctx = this.canvas.getContext("2d");
         this.container = document.getElementById("map-container");
-        this.center = { lon: GISUtils.wrapLongitude(CONFIG.defaultCenter.lon), lat: GISUtils.clampLatitude(CONFIG.defaultCenter.lat) };
+        this.center = { lon: GISUtils.wrapLongitude(CONFIG.defaultCenter.lon), l
+at: GISUtils.clampLatitude(CONFIG.defaultCenter.lat) };
         this.zoom = CONFIG.defaultZoom;
         this.bearing = 0;
         this.renderScheduled = false;
@@ -1829,6 +2453,8 @@
         this._controls = [];
         this._controlCorners = {};
         this._handlers = {};
+        this._panes = {};
+        this._popup = null;
         this.projection = DEFAULT_PROJECTION;
         this.addHandler('dragPan', DragPanHandler);
         this.addHandler('scrollZoom', ScrollZoomHandler);
@@ -1856,21 +2482,36 @@
         this.addControl(new CompassControl({ position: 'top-right' }));
         // >>>> MOVED: Search control to the left side <<<<
         this.addControl(new SearchControl({ position: 'top-left' }));
+        this.addControl(new ScaleControl());
         this.updateAttribution();
+        this.on('click', this._closeCurrentPopup, this);
         this.render();
         this.fire('load');
       }
-      on(type, fn) { if (!this._events[type]) this._events[type] = []; this._events[type].push(fn); return this; }
-      off(type, fn) { if (!this._events[type]) return this; this._events[type] = this._events[type].filter(cb => cb !== fn); return this; }
-      fire(type, data = {}) { if (!this._events[type]) return; data.type = type; data.target = this; this._events[type].forEach(fn => fn(data)); }
+      on(type, fn, context = this) { if (!this._events[type]) this._events[type] = []; this._eve
+nts[type].push({ fn, context }); return this; }
+      off(type, fn, context = this) {
+        if (!this._events[type]) return this;
+        this._events[type] = this._events[type].filter(listener => listener.fn !== fn || listener.context !== context);
+        return this;
+      }
+      fire(type, data = {}) {
+        if (!this._events[type]) return;
+        data.type = type;
+        data.target = this;
+        // Create a copy of the listeners array to prevent issues if a listener modifies the array
+        [...this._events[type]].forEach(listener => listener.fn.call(listener.context, data));
+      }
       addLayer(layer) {
-        if (!(layer instanceof Layer)) throw new Error('Argument must be an instance of Layer');
+        if (!(layer instanceof Layer)) throw new Error('Argument must be an inst
+ance of Layer');
         if (!this._layers.includes(layer)) {
           this._layers.push(layer);
           layer._map = this;
           layer.onAdd();
           this.render();
-          if (!this._baseLayer || (layer instanceof TileLayer && !this._baseLayer)) {
+          if (!this._baseLayer || (layer instanceof TileLayer && !this._baseLaye
+r)) {
             this._baseLayer = layer;
             this.container.style.background = layer.getBackground();
           }
@@ -1884,28 +2525,34 @@
           layer.onRemove();
           layer._map = null;
           if (this._baseLayer === layer) {
-            this._baseLayer = this._layers.find(l => l instanceof TileLayer) || null;
-            if (this._baseLayer) this.container.style.background = this._baseLayer.getBackground();
+            this._baseLayer = this._layers.find(l => l instanceof TileLayer) ||
+null;
+            if (this._baseLayer) this.container.style.background = this._baseLay
+er.getBackground();
           }
           this.render();
         }
         return this;
       }
       setBaseLayer(newLayer) {
-        if (!(newLayer instanceof TileLayer)) throw new Error('Argument must be an instance of TileLayer');
-        if (this._baseLayer && this._baseLayer !== newLayer) this.removeLayer(this._baseLayer);
+        if (!(newLayer instanceof TileLayer)) throw new Error('Argument must be
+an instance of TileLayer');
+        if (this._baseLayer && this._baseLayer !== newLayer) this.removeLayer(th
+is._baseLayer);
         if (!this._layers.includes(newLayer)) this.addLayer(newLayer);
         else {
           this._baseLayer = newLayer;
           this.container.style.background = newLayer.getBackground();
-          this.zoom = Math.max(newLayer.getMinZoom(), Math.min(newLayer.getMaxZoom(), this.zoom));
+          this.zoom = Math.max(newLayer.getMinZoom(), Math.min(newLayer.getMaxZo
+om(), this.zoom));
           this.render();
         }
         return this;
       }
       getBaseLayer() { return this._baseLayer; }
       addControl(control) {
-        if (!(control instanceof Control)) throw new Error('Argument must be an instance of Control');
+        if (!(control instanceof Control)) throw new Error('Argument must be an
+instance of Control');
         this._controls.push(control);
         control.addTo(this);
         return this;
@@ -1920,7 +2567,8 @@
       }
       getControls() { return [...this._controls]; }
       addHandler(name, HandlerClass) {
-        if (this._handlers[name]) { console.warn(`Handler '${name}' already exists.`); return this; }
+        if (this._handlers[name]) { console.warn(`Handler '${name}' already exis
+ts.`); return this; }
         this._handlers[name] = new HandlerClass(this);
         this._handlers[name].enable();
         return this;
@@ -1932,9 +2580,50 @@
         return this;
       }
       getHandler(name) { return this._handlers[name] || null; }
-      enableHandler(name) { const handler = this.getHandler(name); if (handler) handler.enable(); return this; }
-      disableHandler(name) { const handler = this.getHandler(name); if (handler) handler.disable(); return this; }
+      enableHandler(name) { const handler = this.getHandler(name); if (handler)
+handler.enable(); return this; }
+      disableHandler(name) { const handler = this.getHandler(name); if (handler)
+ handler.disable(); return this; }
       getHandlers() { return { ...this._handlers }; }
+
+      hasLayer(layer) {
+          return this._layers.includes(layer);
+      }
+
+      openPopup(popup) {
+          this._closeCurrentPopup();
+          this._popup = popup;
+          return this.addLayer(popup);
+      }
+
+      closePopup(popup) {
+          if (!popup || this._popup === popup) {
+              this._closeCurrentPopup();
+          }
+          return this;
+      }
+
+      _closeCurrentPopup() {
+          if (this._popup) {
+              this.removeLayer(this._popup);
+              this._popup = null;
+          }
+      }
+
+      getPane(name) {
+          if (!this._panes[name]) {
+              this._panes[name] = this._createPane(`atlas-${name}-pane`, this.container);
+          }
+          return this._panes[name];
+      }
+
+      _createPane(className, container) {
+          const pane = document.createElement('div');
+          pane.className = className;
+          container.appendChild(pane);
+          return pane;
+      }
+
       setZoom(z) {
         const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
         const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
@@ -1954,7 +2643,8 @@
         this.fire('rotate');
       }
       showZoomOverlay() {}
-      stopInertia() { if (this._inertiaRAF) cancelAnimationFrame(this._inertiaRAF); this._inertiaRAF = null; }
+      stopInertia() { if (this._inertiaRAF) cancelAnimationFrame(this._inertiaRA
+F); this._inertiaRAF = null; }
       stopAnimations() {
         this.stopInertia();
         if (this._zoomAnim?.raf) cancelAnimationFrame(this._zoomAnim.raf);
@@ -1991,14 +2681,17 @@
         this.ctx.translate(snapX, snapY);
       }
       _draw() {
-        const backgroundColor = this._baseLayer ? this._baseLayer.getBackground() : '#000';
-        const w = this.canvas.width / this.dpr, h = this.canvas.height / this.dpr;
+        const backgroundColor = this._baseLayer ? this._baseLayer.getBackground(
+) : '#000';
+        const w = this.canvas.width / this.dpr, h = this.canvas.height / this.dp
+r;
         this.ctx.fillStyle = backgroundColor;
         this.ctx.fillRect(0, 0, w, h);
         for (const layer of this._layers) layer.render();
         this._snapCanvasToPixelGrid();
         let loadingCount = 0;
-        if (this._baseLayer && this._baseLayer instanceof TileLayer) loadingCount = this._baseLayer.loadingTiles.size;
+        if (this._baseLayer && this._baseLayer instanceof TileLayer) loadingCoun
+t = this._baseLayer.loadingTiles.size;
         this.loadingEl.classList.toggle("visible", loadingCount > 0);
         this.loadingCountEl.textContent = loadingCount;
         this.updateControlsUI();
@@ -2006,7 +2699,8 @@
       }
       updateAttribution() {
         for (const control of this._controls) {
-          if (control instanceof AttributionControl && typeof control._update === 'function') control._update();
+          if (control instanceof AttributionControl && typeof control._update ==
+= 'function') control._update();
         }
       }
       updateControlsUI() {
@@ -2017,7 +2711,8 @@
       getCenter() { return { ...this.center }; }
       getZoom() { return this.zoom; }
       getBearing() { return this.bearing; }
-      screenToLatLon(ax, ay, zoom = this.zoom, bearing = this.bearing, center = this.center) {
+      screenToLatLon(ax, ay, zoom = this.zoom, bearing = this.bearing, center =
+this.center) {
         const w = this.canvas.width / this.dpr;
         const h = this.canvas.height / this.dpr;
         const zInt = Math.floor(zoom);
@@ -2027,9 +2722,11 @@
         const v = rot(anchorVec.x / ts, anchorVec.y / ts, -bearing);
         const tpt = { x: ct.x + v.x, y: ct.y + v.y };
         const ll = this.projection.tileToLatLng(tpt.x, tpt.y, zInt);
-        return { lon: GISUtils.wrapLongitude(ll.lon), lat: GISUtils.clampLatitude(ll.lat) };
+        return { lon: GISUtils.wrapLongitude(ll.lon), lat: GISUtils.clampLatitud
+e(ll.lat) };
       }
-      lonLatToTile(lon, lat, z) { return this.projection.latLngToTile({ lat, lon }, z); }
+      lonLatToTile(lon, lat, z) { return this.projection.latLngToTile({ lat, lon
+ }, z); }
       latLngToContainerPoint(latlng) {
         const w = this.canvas.width / this.dpr;
         const h = this.canvas.height / this.dpr;
@@ -2049,19 +2746,22 @@
         const w = this.canvas.width / this.dpr;
         const h = this.canvas.height / this.dpr;
         const anchorVec = { x: ax - w / 2, y: ay - h / 2 };
-        const currAnchorLL = anchorLL || this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
+        const currAnchorLL = anchorLL || this.screenToLatLon(ax, ay, this.zoom,
+this.bearing, this.center);
         const zInt = Math.floor(newZoom);
         const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
         const Ptile = this.projection.latLngToTile(currAnchorLL, zInt);
         const v = rot(anchorVec.x / ts, anchorVec.y / ts, -newBearing);
         const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
         const newCenter = this.projection.tileToLatLng(ctNew.x, ctNew.y, zInt);
-        this.center = { lon: GISUtils.wrapLongitude(newCenter.lon), lat: GISUtils.clampLatitude(newCenter.lat) };
+        this.center = { lon: GISUtils.wrapLongitude(newCenter.lon), lat: GISUtil
+s.clampLatitude(newCenter.lat) };
         this.zoom = newZoom;
         this.bearing = normalizeAngle(newBearing);
       }
       showZoomIndicator(x, y) {
-        if (this._zoomIndicator) this.container.removeChild(this._zoomIndicator);
+        if (this._zoomIndicator) this.container.removeChild(this._zoomIndicator)
+;
         const indicator = document.createElement("div");
         indicator.style.position = "absolute";
         indicator.style.left = (x - 15) + "px";
@@ -2083,14 +2783,16 @@
           }
         }, 600);
       }
-      animateZoomRotateAbout(ax, ay, toZoom, toBearing = this.bearing, duration = WHEEL_ZOOM_DURATION, easing = EASING.easeInOutCubic) {
+      animateZoomRotateAbout(ax, ay, toZoom, toBearing = this.bearing, duration
+= WHEEL_ZOOM_DURATION, easing = EASING.easeInOutCubic) {
         this.showZoomIndicator(ax, ay);
         this.stopAnimations();
         const startT = performance.now();
         const sZoom = this.zoom;
         const sBear = this.bearing;
         const deltaBear = shortestAngleDiff(sBear, toBearing);
-        const anchorLL = this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
+        const anchorLL = this.screenToLatLon(ax, ay, this.zoom, this.bearing, th
+is.center);
         const step = () => {
           const t = (performance.now() - startT) / Math.max(1, duration);
           const p = t >= 1 ? 1 : easing(Math.max(0, Math.min(1, t)));
@@ -2113,9 +2815,11 @@
         const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
         const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
         const target = Math.max(minZoom, Math.min(maxZoom, this.zoom + deltaZ));
-        this.animateZoomRotateAbout(ax, ay, target, this.bearing, WHEEL_ZOOM_DURATION, EASING.easeInOutCubic);
+        this.animateZoomRotateAbout(ax, ay, target, this.bearing, WHEEL_ZOOM_DUR
+ATION, EASING.easeInOutCubic);
       }
-      flyTo({ center = this.center, zoom = this.zoom, bearing = this.bearing, duration = FLYTO_DURATION, easing = EASING.easeInOutCubic } = {}) {
+      flyTo({ center = this.center, zoom = this.zoom, bearing = this.bearing, du
+ration = FLYTO_DURATION, easing = EASING.easeInOutCubic } = {}) {
         const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
         const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
         const targetZoom = Math.max(minZoom, Math.min(maxZoom, zoom));
@@ -2154,7 +2858,8 @@
         for (const control of [...this._controls]) this.removeControl(control);
         for (const corner in this._controlCorners) {
           const container = this._controlCorners[corner];
-          if (container && container.parentNode) container.parentNode.removeChild(container);
+          if (container && container.parentNode) container.parentNode.removeChil
+d(container);
         }
         this._controlCorners = {};
         for (const name in this._handlers) this.removeHandler(name);
@@ -2166,19 +2871,32 @@
     function initializeAtlas() {
       atlasInstance = new Atlas("map");
       const subdomains = ['a', 'b', 'c'];
-      const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
+      const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.l
+ength)];
       const osmLayer = new TileLayer(
         `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
         {
           minZoom: 0,
           maxZoom: 19,
-          attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+          attribution: '© <a href="https://www.openstreetmap.org/copyright" targ
+et="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
           background: "#e6e6e6",
           supportsRetina: true,
           maxCacheSize: 800
         }
       );
       atlasInstance.setBaseLayer(osmLayer);
+
+      // --- Example Usage of New Features ---
+      const marker = new Marker({ lat: 51.5, lon: -0.09 }, { draggable: true })
+          .bindPopup("<b>Hello world!</b><br>I am a draggable marker.")
+          .addTo(atlasInstance);
+
+      marker.on('dragend', () => {
+          console.log('Marker dragged to:', marker.getLatLng());
+      });
+
+      atlasInstance.flyTo({ center: { lat: 51.505, lon: -0.09 }, zoom: 13 });
     }
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initializeAtlas);
