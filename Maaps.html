@@ -329,6 +329,20 @@
       static getResolution(lat, z) { return (EARTH_CIRCUMFERENCE * Math.cos(lat * DEG2RAD)) / (Math.pow(2, z) * TILE_SIZE); }
       static formatDistance(m) { return m < 1000 ? Math.round(m) + " m" : (m / 1000).toFixed(1) + " km"; }
       static tileToLonLat(x, y, z) { return DEFAULT_PROJECTION.tileToLatLng(x, y, z); }
+      static haversineDistance(coords1, coords2) {
+        const R = EARTH_RADIUS;
+        const φ1 = coords1.lat * DEG2RAD;
+        const φ2 = coords2.lat * DEG2RAD;
+        const Δφ = (coords2.lat - coords1.lat) * DEG2RAD;
+        const Δλ = (coords2.lon - coords1.lon) * DEG2RAD;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c; // in metres
+      }
     }
     class Layer {
       constructor(options = {}) { this.options = options; this._map = null; this._events = {}; }
@@ -357,12 +371,79 @@
         this.options = { minZoom: options.minZoom || 0, maxZoom: options.maxZoom || 18, attribution: options.attribution || '', background: options.background || '#ffffff', supportsRetina: options.supportsRetina || false, maxCacheSize: options.maxCacheSize || 800, ...options };
         this.tileCache = new Map();
         this.loadingTiles = new Set();
-        this.loadingControllers = new Map();
         this._retinaAvailable = true;
         this._lastRenderedCenter = null;
         this._lastRenderedZoom = null;
         this._lastRenderedBearing = null;
+        this._initWorker();
       }
+
+      _initWorker() {
+        const workerCode = `
+            const controllers = new Map();
+
+            self.onmessage = async (e) => {
+              const { url, key, command, isReload } = e.data;
+
+              if (command === 'abort') {
+                const controller = controllers.get(key);
+                if (controller) {
+                  controller.abort();
+                  controllers.delete(key);
+                }
+                return;
+              }
+
+              const controller = new AbortController();
+              controllers.set(key, controller);
+
+              try {
+                const response = await fetch(url, { signal: controller.signal });
+                if (!response.ok) {
+                  throw new Error(\`HTTP error! status: \${response.status}\`);
+                }
+                const blob = await response.blob();
+                const imageBitmap = await createImageBitmap(blob);
+                self.postMessage({ key, imageBitmap, isReload }, [imageBitmap]);
+              } catch (error) {
+                if (error.name !== 'AbortError') {
+                  self.postMessage({ key, error: error.message, isReload });
+                }
+              } finally {
+                controllers.delete(key);
+              }
+            };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        this._worker = new Worker(URL.createObjectURL(blob));
+        this._worker.onmessage = (e) => {
+          const { key, imageBitmap, error, isReload } = e.data;
+
+          if (error) {
+            console.warn(`[Atlas] Failed to load tile from worker: ${key}`, error);
+            this.loadingTiles.delete(key);
+            if (this.tileCache.has(key)) this.tileCache.delete(key);
+            this.fire('tileerror', { tile: key, error: new Error(error) });
+            return;
+          }
+
+          const tile = isReload ? this.tileCache.get(key) : { loaded: false, lastUsed: Date.now() };
+          if (!tile) return; // Could have been evicted
+
+          tile.img = imageBitmap;
+          tile.loaded = true;
+          tile.loadedAt = Date.now();
+
+          if (!isReload) {
+              this.tileCache.set(key, tile);
+          }
+
+          this.loadingTiles.delete(key);
+          if (this._map) this._map.scheduleRender();
+          this.fire('tileload', { tile: key });
+        };
+      }
+
       _getTileUrl(x, y, z) {
         const scale = Math.pow(2, z);
         let wrappedX = ((x % scale) + scale) % scale;
@@ -376,83 +457,25 @@
         const mode = CONFIG.retina;
         return (mode === true) || (mode === "auto" && (window.devicePixelRatio || 1) > 1.5);
       }
-      async _loadTile(key, url) {
-        if (this.tileCache.has(key)) return this.tileCache.get(key);
-        const controller = new AbortController();
-        const signal = controller.signal;
-        this.loadingControllers.set(key, controller);
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        const tile = { img, loaded: false, loadedAt: Date.now(), lastUsed: Date.now(), controller };
-        this.tileCache.set(key, tile);
+      _loadTile(key, url) {
+        if (this.tileCache.has(key) || this.loadingTiles.has(key)) return;
+
         this.loadingTiles.add(key);
-        const start = performance.now();
-        const loadPromise = new Promise((resolve, reject) => {
-          img.onload = () => {
-            const loadTime = performance.now() - start;
-            console.log(`[Atlas] Tile ${key} loaded in ${loadTime.toFixed(2)}ms`);
-            tile.loaded = true;
-            tile.loadedAt = Date.now();
-            this.loadingTiles.delete(key);
-            this.loadingControllers.delete(key);
-            if (this._map) this._map.scheduleRender();
-            this.fire('tileload', { tile: key, url });
-            resolve(tile);
-          };
-          img.onerror = (e) => {
-            if (signal.aborted) return;
-            console.warn(`[Atlas] Failed to load tile: ${url}`, e);
-            if (this.options.supportsRetina && url.includes(CONFIG.retinaSuffix)) {
-              this._retinaAvailable = false;
-              img.src = url.replace(CONFIG.retinaSuffix, "");
-              return;
-            }
-            this.loadingTiles.delete(key);
-            this.loadingControllers.delete(key);
-            this.fire('tileerror', { tile: key, url, error: e });
-            reject(e);
-          };
-          img.src = url;
+        this._worker.postMessage({
+            key,
+            url,
+            isReload: false
         });
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
-            if (this.loadingTiles.has(key)) {
-              controller.abort();
-              console.warn(`[Atlas] Tile load timeout for: ${url}`);
-              this.loadingTiles.delete(key);
-              this.loadingControllers.delete(key);
-              if (this.tileCache.has(key)) this.tileCache.delete(key);
-              this.fire('tileerror', { tile: key, url, error: new Error('Timeout') });
-              reject(new Error(`Timeout loading tile: ${url}`));
-            }
-          }, TILE_LOAD_TIMEOUT_MS);
-        });
-        try { await Promise.race([loadPromise, timeoutPromise]); }
-        catch (error) { if (!signal.aborted) console.error("[Atlas] Tile loading failed or timed out:", error.message); }
-        return tile;
       }
       _reloadTile(key, url) {
-        const existing = this.tileCache.get(key);
-        if (!existing) return;
-        const token = key + "#r";
-        if (this.loadingTiles.has(token)) return;
-        const doReload = () => {
-          const controller = new AbortController();
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          this.loadingTiles.add(token);
-          img.onload = () => {
-            existing.img = img;
-            existing.loaded = true;
-            existing.loadedAt = Date.now();
-            this.loadingTiles.delete(token);
-            if (this._map) this._map.scheduleRender();
-          };
-          img.onerror = () => this.loadingTiles.delete(token);
-          img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
-        };
-        if ('requestIdleCallback' in window) requestIdleCallback(doReload, { timeout: 2000 });
-        else setTimeout(doReload, 100);
+        if (!this.tileCache.has(key) || this.loadingTiles.has(key)) return;
+
+        this.loadingTiles.add(key);
+        this._worker.postMessage({
+            key,
+            url: url + (url.includes("?") ? "&" : "?") + "v=" + Date.now(),
+            isReload: true
+        });
       }
       _evict() {
         if (this.tileCache.size <= this.options.maxCacheSize) return;
@@ -505,9 +528,22 @@
         const ct = this._map.projection.latLngToTile({ lat: this._map.center.lat, lon: wrappedCenterLon }, zInt);
         const absCos = Math.abs(Math.cos(this._map.bearing)), absSin = Math.abs(Math.sin(this._map.bearing));
         const needW = w * absCos + h * absSin;
-        const needH = w * absSin + h * absCos;
         const cols = Math.ceil(needW / (ts * scaleFactor)) + TILE_BUFFER;
-        const rows = Math.ceil(needH / (ts * scaleFactor)) + TILE_BUFFER;
+
+        // Correctly calculate rows based on visible latitude span to prevent over-drawing at poles
+        const topLeft = this._map.screenToLatLon(0, 0);
+        const topRight = this._map.screenToLatLon(w, 0);
+        const bottomLeft = this._map.screenToLatLon(0, h);
+        const bottomRight = this._map.screenToLatLon(w, h);
+
+        const maxLat = Math.max(topLeft.lat, topRight.lat, bottomLeft.lat, bottomRight.lat);
+        const minLat = Math.min(topLeft.lat, topRight.lat, bottomLeft.lat, bottomRight.lat);
+
+        const topTile = this._map.projection.latLngToTile({lon: 0, lat: maxLat}, zInt);
+        const bottomTile = this._map.projection.latLngToTile({lon: 0, lat: minLat}, zInt);
+
+        const tileSpanY = Math.abs(topTile.y - bottomTile.y);
+        const rows = Math.ceil(tileSpanY) + TILE_BUFFER;
         const startX = Math.floor(ct.x - cols / 2);
         const startY = Math.floor(ct.y - rows / 2);
         if (!this._renderTilesArray) this._renderTilesArray = [];
@@ -553,9 +589,11 @@
       }
       onAdd() { this.fire('add'); }
       onRemove() {
-        for (const controller of this.loadingControllers.values()) controller.abort();
+        for (const key of this.loadingTiles) {
+            this._worker.postMessage({ command: 'abort', key });
+        }
         this.loadingTiles.clear();
-        this.loadingControllers.clear();
+        this._worker.terminate();
         this.tileCache.clear();
         this.fire('remove');
       }
@@ -1981,28 +2019,42 @@
       _startInertia(vx, vy) {
         const speed = Math.hypot(vx, vy);
         if (speed < INERTIA_STOP_SPEED) return;
+
         let lastT = performance.now();
         const step = () => {
-          const now = performance.now();
-          const dt = now - lastT;
-          lastT = now;
-          const dx = vx * dt, dy = vy * dt;
-          const w = this._map.canvas.width / this._map.dpr;
-          const h = this._map.canvas.height / this._map.dpr;
-          this._map.center = this._map.screenToLatLon(w / 2 - dx, h / 2 - dy);
-          const vmag = Math.hypot(vx, vy);
-          const newVmag = Math.max(0, vmag - INERTIA_DECEL * dt);
-          if (newVmag <= INERTIA_STOP_SPEED) {
+            const now = performance.now();
+            const dt = now - lastT;
+            lastT = now;
+
+            const dx = vx * dt, dy = vy * dt;
+            const w = this._map.canvas.width / this._map.dpr;
+            const h = this._map.canvas.height / this._map.dpr;
+
+            const newCenter = this._map.screenToLatLon(w / 2 - dx, h / 2 - dy);
+
+            // Bounce effect at poles
+            if (newCenter.lat >= MAX_LATITUDE || newCenter.lat <= MIN_LATITUDE) {
+                vy *= -0.5; // Reverse and dampen vertical velocity
+            }
+
+            this._map.center = newCenter;
+
+            const vmag = Math.hypot(vx, vy);
+            const newVmag = Math.max(0, vmag - INERTIA_DECEL * dt);
+
+            if (newVmag <= INERTIA_STOP_SPEED) {
+                this._map.render();
+                this._map._inertiaRAF = null;
+                this._map.fire('moveend');
+                return;
+            }
+
+            const s = newVmag / (vmag || 1);
+            vx *= s;
+            vy *= s;
+
             this._map.render();
-            this._map._inertiaRAF = null;
-            this._map.fire('moveend');
-            return;
-          }
-          const s = newVmag / (vmag || 1);
-          vx *= s;
-          vy *= s;
-          this._map.render();
-          this._map._inertiaRAF = requestAnimationFrame(step);
+            this._map._inertiaRAF = requestAnimationFrame(step);
         };
         this._map._inertiaRAF = requestAnimationFrame(step);
       }
@@ -2698,35 +2750,50 @@
         this.animateZoomRotateAbout(ax, ay, target, this.bearing, WHEEL_ZOOM_DURATION, EASING.easeInOutCubic);
       }
       flyTo({ center = this.center, zoom = this.zoom, bearing = this.bearing, duration = FLYTO_DURATION, easing = EASING.easeInOutCubic } = {}) {
-        const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
-        const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
-        const targetZoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+        const start = { center: this.getCenter(), zoom: this.getZoom(), bearing: this.getBearing() };
+        const end = { center, zoom, bearing };
+
+        const dist = GISUtils.haversineDistance(start.center, end.center);
+        const longDistance = dist > EARTH_CIRCUMFERENCE / 4;
+
+        duration = longDistance ? duration * 1.5 : duration;
+
         this.stopAnimations();
         const startT = performance.now();
-        const sC = { ...this.center };
-        const eC = { ...center };
-        const dLon = wrapDeltaLon(eC.lon - sC.lon);
-        const dLat = eC.lat - sC.lat;
-        const sZ = this.zoom, eZ = targetZoom;
-        const sB = this.bearing, dB = shortestAngleDiff(sB, bearing);
+
         const step = () => {
-          const t = (performance.now() - startT) / Math.max(1, duration);
-          const p = t >= 1 ? 1 : easing(Math.max(0, Math.min(1, t)));
-          this.center = {
-            lon: GISUtils.wrapLongitude(sC.lon + dLon * p),
-            lat: GISUtils.clampLatitude(sC.lat + dLat * p)
-          };
-          this.zoom = sZ + (eZ - sZ) * p;
-          this.bearing = normalizeAngle(sB + dB * p);
-          this.render();
-          if (t < 1) {
-            this._flyAnim = { raf: requestAnimationFrame(step) };
-          } else {
-            this._flyAnim = null;
-            this.updateControlsUI();
-            this.fire('moveend');
-          }
+            const t = Math.min(1, (performance.now() - startT) / duration);
+            const p = easing(t);
+
+            if (longDistance) {
+                // Fly high for long distances
+                const peakZoom = Math.max(0, start.zoom - 2.5, end.zoom - 2.5);
+                const zoomProgress = -4 * (p - 0.5) * (p - 0.5) + 1; // Parabolic path for zoom
+                this.zoom = start.zoom + (peakZoom - start.zoom) * zoomProgress + (end.zoom - peakZoom) * p;
+            } else {
+                this.zoom = start.zoom + (end.zoom - start.zoom) * p;
+            }
+
+            const dLon = wrapDeltaLon(end.center.lon - start.center.lon);
+            this.center = {
+                lon: GISUtils.wrapLongitude(start.center.lon + dLon * p),
+                lat: GISUtils.clampLatitude(start.center.lat + (end.center.lat - start.center.lat) * p)
+            };
+
+            const dBearing = shortestAngleDiff(start.bearing, end.bearing);
+            this.bearing = normalizeAngle(start.bearing + dBearing * p);
+
+            this.render();
+
+            if (t < 1) {
+                this._flyAnim = { raf: requestAnimationFrame(step) };
+            } else {
+                this._flyAnim = null;
+                this.updateControlsUI();
+                this.fire('moveend');
+            }
         };
+
         this._flyAnim = { raf: requestAnimationFrame(step) };
         this.fire('movestart');
       }
