@@ -5,7 +5,6 @@ import { Layer } from '../layers/Layer.js';
 import { TileLayer } from '../layers/TileLayer.js';
 import { Control } from '../controls/Control.js';
 import { ZoomControl } from '../controls/ZoomControl.js';
-import { LayerControl } from '../controls/LayerControl.js';
 import { FullscreenControl } from '../controls/FullscreenControl.js';
 import { AttributionControl } from '../controls/AttributionControl.js';
 import { CompassControl } from '../controls/CompassControl.js';
@@ -56,6 +55,8 @@ export class Atlas {
         return false;
       }
     )();
+    this.isDragging = false;
+    this._createPane('tooltipPane');
     // add handlers (use pointer handler instead of separate drag/touch)
     this.addHandler('pointer', PointerHandler);
     this.addHandler('scrollZoom', ScrollZoomHandler);
@@ -64,7 +65,6 @@ export class Atlas {
     this.addHandler('areaZoom', AreaZoomHandler);
     this.resize();
     this.addControl(new ZoomControl({ position: 'top-right' }));
-    this.addControl(new LayerControl({ position: 'top-right' }));
     this.addControl(new FullscreenControl({ position: 'top-right' }));
     this.addControl(new AttributionControl({ position: 'bottom-left' }));
     this.addControl(new CompassControl({ position: 'top-right' }));
@@ -435,6 +435,12 @@ export class Atlas {
     for (const name in this._handlers) this.removeHandler(name);
     if (this._resizeObserver) { this._resizeObserver.disconnect(); this._resizeObserver = null; }
     this.fire('unload');
+  }
+  _createPane(name) {
+    const pane = document.createElement('div');
+    pane.className = `leaflet-pane leaflet-${name}`;
+    this.container.appendChild(pane);
+    this[name] = pane;
   }
   locate() {
     if (navigator.geolocation) {
