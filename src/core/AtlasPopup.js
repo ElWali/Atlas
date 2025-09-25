@@ -56,6 +56,13 @@ export class AtlasPopup {
     this._updatePosition();
     this._element.style.display = 'block';
     this._isOpen = true;
+
+    const popupBottom = this._element.getBoundingClientRect().bottom;
+    const mapBottom = this._map.container.getBoundingClientRect().bottom;
+    if (popupBottom > mapBottom) {
+      this._map.panBy([0, popupBottom - mapBottom]);
+    }
+
     this.fire('open');
     return this;
   }

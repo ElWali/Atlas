@@ -12,8 +12,8 @@ window.AtlasMarker = AtlasMarker;
 // Auto-init if #map exists
 if (document.getElementById('map')) {
   const atlas = new Atlas('map', { debug: DEFAULT_CONFIG.debug });
-  const osmLayer = new TileLayer(LAYERS.OSM.tileServers[0], LAYERS.OSM);
-  const esriLayer = new TileLayer(LAYERS.ESRI.tileServers[0], LAYERS.ESRI);
+  const osmLayer = new TileLayer(LAYERS.OSM.tileServers[0], {...LAYERS.OSM, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/wcAAwAB/epv2AAAAABJRU5ErkJggg=='});
+  const esriLayer = new TileLayer(LAYERS.ESRI.tileServers[0], {...LAYERS.ESRI, errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/wcAAwAB/epv2AAAAABJRU5ErkJggg=='});
 
   const baseLayers = {
     "OpenStreetMap": osmLayer,

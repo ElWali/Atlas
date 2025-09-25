@@ -16,6 +16,7 @@ export class TileLayer extends Layer {
       supportsRetina: options.supportsRetina || false,
       maxCacheSize: options.maxCacheSize || 800,
       tileLoader: options.tileLoader || null, // optional custom loader: async (url, key, signal) => ({ img, blobUrl })
+      errorTileUrl: options.errorTileUrl || '',
       ...options
     };
     this.tileCache = new LRUCache(this.options.maxCacheSize);
@@ -147,6 +148,7 @@ export class TileLayer extends Layer {
       tileEntry.loadingPromise = null;
       this.loadingTiles.delete(key);
       this.loadingControllers.delete(key);
+      this._tileFadeIn(tileEntry);
       if (this._map) this._map.debouncedRender(16);
       this.fire('tileload', { tile: key, url });
     } catch (err) {
@@ -162,6 +164,9 @@ export class TileLayer extends Layer {
       // normal error: remove placeholder and emit tileerror
       this.tileCache.delete(key);
       this.fire('tileerror', { tile: key, url, error: err });
+      if (this.options.errorTileUrl) {
+        this._fetchErrorTile(key);
+      }
     } finally {
       this._ongoingLoads = Math.max(0, this._ongoingLoads - 1);
       // schedule next queued loads
@@ -354,15 +359,11 @@ export class TileLayer extends Layer {
           // TTL reload check
           if (tile.loadedAt && (Date.now() - tile.loadedAt > TILE_TTL)) this._reloadTile(key, url, retinaScale);
 
-          if (!tile.animated) {
-            ctx.globalAlpha = 0;
-            ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
-            ctx.globalAlpha = 1;
-            tile.animated = true;
-            this._fadeInTile(tile, (X - ct.x) * ts, (Y - ct.y) * ts, ts);
-          } else {
-            ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
-          }
+          // draw
+          ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
+          tile.lastUsed = Date.now();
+          // TTL reload check
+          if (tile.loadedAt && (Date.now() - tile.loadedAt > TILE_TTL)) this._reloadTile(key, url, retinaScale);
         } catch (err) {
           // drawing errors should not crash the render
         }
@@ -473,21 +474,26 @@ export class TileLayer extends Layer {
     return Math.max(1, Math.min(5, buffer));
   }
 
-  _fadeInTile(tile, x, y, size) {
-    const duration = 300;
-    const startTime = performance.now();
-    const step = () => {
-      const now = performance.now();
-      const elapsed = now - startTime;
-      const alpha = Math.min(elapsed / duration, 1);
-      const ctx = this._map.ctx;
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(tile.img, x, y, size, size);
-      ctx.globalAlpha = 1;
-      if (alpha < 1) {
-        requestAnimationFrame(step);
-      }
+  _tileFadeIn(tile) {
+    tile.img.style.opacity = 0;
+    setTimeout(() => {
+      tile.img.style.transition = 'opacity 0.3s ease-in';
+      tile.img.style.opacity = 1;
+    }, 16);
+  }
+
+  _fetchErrorTile(key) {
+    const img = new Image();
+    img.onload = () => {
+      this.tileCache.set(key, {
+        img: img,
+        loaded: true,
+        loadedAt: Date.now(),
+        lastUsed: Date.now(),
+        error: true
+      });
+      if (this._map) this._map.scheduleRender();
     };
-    requestAnimationFrame(step);
+    img.src = this.options.errorTileUrl;
   }
 }

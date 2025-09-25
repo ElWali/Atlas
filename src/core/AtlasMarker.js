@@ -126,8 +126,10 @@ export class AtlasMarker {
   _updatePosition() {
     if (!this._map || !this._element) return;
     const point = this._map.latLngToContainerPoint(this.latlng);
-    this._element.style.left = point.x + 'px';
-    this._element.style.top = point.y + 'px';
+    this.setPos(point);
+  }
+  setPos(pos) {
+    this._element.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
   }
   _onMouseDown(e) {
     if (!this.options.draggable || e.button !== 0) return;
