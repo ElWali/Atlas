@@ -24,20 +24,44 @@
     .atlas-control-vertical { display: flex; flex-direction: column; gap: 5px; }
     .atlas-control-horizontal { display: flex; flex-direction: row; gap: 5px; }
     .control-btn {
-      background: rgba(255,255,255,0.9);
-      border: 1px solid #ccc;
-      font-size: 16px;
-      padding: 4px 8px;
-      cursor: pointer;
-      border-radius: 4px;
-      user-select: none;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      transition: all 0.15s ease;
-      min-width: 30px;
-      text-align: center;
+        background-color: #fff;
+        border: none;
+        width: 30px;
+        height: 30px;
+        font-size: 1.2rem;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
-    .control-btn:hover { background: rgba(240,240,240,0.95); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
-    .control-btn:active { background: rgba(224,224,224,0.95); transform: scale(0.98); }
+    .control-btn:hover {
+        background-color: #f4f4f4;
+    }
+    .control-btn:active {
+        background-color: #e8e8e8;
+        transform: scale(0.98);
+    }
+    .atlas-zoom-control {
+        display: flex;
+        flex-direction: column;
+        border-radius: 4px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+    .atlas-zoom-control .control-btn {
+        box-shadow: none;
+        border-radius: 0;
+    }
+    .atlas-zoom-control .control-btn:first-child {
+        border-bottom: 1px solid #ddd;
+    }
+    .control-btn svg {
+        width: 18px;
+        height: 18px;
+        stroke: #333;
+    }
     .control-btn:focus { outline: 2px solid #0078A8; outline-offset: 2px; }
     .control-btn:disabled { background: rgba(245,245,245,0.9); color: #aaa; cursor: not-allowed; }
     #loading {
@@ -450,26 +474,40 @@
         return R * c; // in metres
       }
     }
+
+    const Evented = {
+        on(type, fn, context) {
+            this._events = this._events || {};
+            this._events[type] = this._events[type] || [];
+            this._events[type].push({ fn, context: context || this });
+            return this;
+        },
+        off(type, fn, context) {
+            if (!this._events || !this._events[type]) return this;
+            this._events[type] = this._events[type].filter(listener =>
+                listener.fn !== fn || (context && listener.context !== context)
+            );
+            return this;
+        },
+        fire(type, data = {}) {
+            if (!this._events || !this._events[type]) return;
+            data.type = type;
+            data.target = this;
+            [...this._events[type]].forEach(listener => {
+                listener.fn.call(listener.context, data);
+            });
+        }
+    };
+
     class Layer {
-      constructor(options = {}) { this.options = options; this._map = null; this._events = {}; }
+      constructor(options = {}) { this.options = options; this._map = null; }
       addTo(map) { if (this._map) this._map.removeLayer(this); this._map = map; map.addLayer(this); return this; }
       remove() { if (this._map) { this._map.removeLayer(this); this._map = null; } return this; }
-      on(type, fn, context = this) { if (!this._events[type]) this._events[type] = []; this._events[type].push({ fn, context }); return this; }
-      off(type, fn, context = this) {
-        if (!this._events[type]) return this;
-        this._events[type] = this._events[type].filter(listener => listener.fn !== fn || listener.context !== context);
-        return this;
-      }
-      fire(type, data = {}) {
-        if (!this._events[type]) return;
-        data.type = type;
-        data.target = this;
-        [...this._events[type]].forEach(listener => listener.fn.call(listener.context, data));
-      }
       onAdd() {}
       onRemove() {}
       render() {}
     }
+    Object.assign(Layer.prototype, Evented);
     class TileLayer extends Layer {
       constructor(urlTemplate, options = {}) {
         super(options);
@@ -636,19 +674,14 @@
         const absCos = Math.abs(Math.cos(this._map.bearing)), absSin = Math.abs(Math.sin(this._map.bearing));
         const needW = w * absCos + h * absSin;
         const cols = Math.ceil(needW / (ts * scaleFactor)) + TILE_BUFFER;
-
-        // Correctly calculate rows based on visible latitude span to prevent over-drawing at poles
         const topLeft = this._map.screenToLatLon(0, 0);
         const topRight = this._map.screenToLatLon(w, 0);
         const bottomLeft = this._map.screenToLatLon(0, h);
         const bottomRight = this._map.screenToLatLon(w, h);
-
         const maxLat = Math.max(topLeft.lat, topRight.lat, bottomLeft.lat, bottomRight.lat);
         const minLat = Math.min(topLeft.lat, topRight.lat, bottomLeft.lat, bottomRight.lat);
-
         const topTile = this._map.projection.latLngToTile({lon: 0, lat: maxLat}, zInt);
         const bottomTile = this._map.projection.latLngToTile({lon: 0, lat: minLat}, zInt);
-
         const tileSpanY = Math.abs(topTile.y - bottomTile.y);
         const rows = Math.ceil(tileSpanY) + TILE_BUFFER;
         const startX = Math.floor(ct.x - cols / 2);
@@ -670,38 +703,54 @@
         ctx.translate(w / 2, h / 2);
         ctx.rotate(this._map.bearing);
         ctx.scale(scaleFactor, scaleFactor);
-        ctx.imageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'low';
+
+        for (const { X, Y } of this._renderTilesArray) {
+            const key = `${zInt}/${X}/${Y}`;
+            const tile = this.tileCache.get(key);
+
+            if (!tile || !tile.loaded) {
+                this._loadTile(key, this._getTileUrl(X, Y, zInt));
+                let foundFallback = false;
+                for (let i = 1; i <= 3; i++) {
+                    const parentZ = zInt - i;
+                    if (parentZ < this.options.minZoom) break;
+                    const scale = Math.pow(2, i);
+                    const parentX = Math.floor(X / scale);
+                    const parentY = Math.floor(Y / scale);
+                    const parentKey = `${parentZ}/${parentX}/${parentY}`;
+                    const parentTile = this.tileCache.get(parentKey);
+                    if (parentTile && parentTile.loaded) {
+                        const clipX = (X % scale) * (TILE_SIZE / scale);
+                        const clipY = (Y % scale) * (TILE_SIZE / scale);
+                        const clipSize = TILE_SIZE / scale;
+                        ctx.drawImage(parentTile.img, clipX, clipY, clipSize, clipSize, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
+                        foundFallback = true;
+                        break;
+                    }
+                }
+            }
+        }
+
         for (const { X, Y } of this._renderTilesArray) {
           const key = `${zInt}/${X}/${Y}`;
-          const url = this._getTileUrl(X, Y, zInt);
-          let tile = this.tileCache.get(key);
-          if (!tile) {
-            this._loadTile(key, url);
-            continue;
-          }
-          if (tile.loaded) {
-            const FADE_DURATION = 250;
+          const tile = this.tileCache.get(key);
+          if (tile && tile.loaded) {
+            const FADE_DURATION = 200;
             const timeSinceLoad = Date.now() - tile.loadedAt;
-            let opacity = 1;
-
-            if (timeSinceLoad < FADE_DURATION) {
-                opacity = timeSinceLoad / FADE_DURATION;
+            let opacity = timeSinceLoad < FADE_DURATION ? timeSinceLoad / FADE_DURATION : 1;
+            if (opacity < 1) {
                 needsReRender = true;
-            }
-
-            if (opacity < 1) {
                 ctx.globalAlpha = opacity;
+                ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
+                ctx.globalAlpha = 1;
+            } else {
+                ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
             }
-
-            ctx.drawImage(tile.img, (X - ct.x) * ts, (Y - ct.y) * ts, ts, ts);
-
-            if (opacity < 1) {
-                ctx.globalAlpha = 1; // Reset for next tile
-            }
-
             tile.lastUsed = Date.now();
             if (tile.loadedAt && (Date.now() - tile.loadedAt > TILE_TTL)) {
-              this._reloadTile(key, url);
+              this._reloadTile(key, this._getTileUrl(X, Y, zInt));
             }
           }
         }
@@ -1401,6 +1450,8 @@
     class Popup extends Layer {
         constructor(options = {}, source) {
             super(options);
+            this.options.offset = options.offset || [0, -7];
+            this.options.className = options.className || '';
             this._source = source;
             this._content = options.content || '';
         }
@@ -1436,7 +1487,7 @@
 
         _initLayout() {
             this._container = document.createElement('div');
-            this._container.className = 'atlas-popup';
+            this._container.className = 'atlas-popup ' + (this.options.className || '');
 
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'atlas-popup-content-wrapper';
@@ -1471,8 +1522,10 @@
             const pos = this._map.latLngToContainerPoint(this._latlng || this._source.getLatLng());
             const icon = this._source.options.icon;
             const yOffset = icon ? icon.options.iconAnchor[1] : 20;
+            const xOffset = this.options.offset[0];
+            const yFinalOffset = yOffset + this.options.offset[1];
 
-            this._container.style.transform = `translate3d(${pos.x}px, ${pos.y - yOffset}px, 0)`;
+            this._container.style.transform = `translate3d(${pos.x + xOffset}px, ${pos.y - yFinalOffset}px, 0)`;
         }
     }
 
@@ -1636,13 +1689,14 @@
         zoomInBtn.className = 'control-btn';
         zoomInBtn.title = this.options.zoomInTitle;
         zoomInBtn.setAttribute('aria-label', this.options.zoomInTitle);
-        zoomInBtn.textContent = '+';
+        zoomInBtn.innerHTML = '<svg viewBox="0 0 24 24"><path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m-7-7h14"/></svg>';
         zoomInBtn.onclick = () => { if (this._map) { this._map.stopAnimations(); this._map.setZoom(this._map.getZoom() + 1); } };
+
         const zoomOutBtn = document.createElement('button');
         zoomOutBtn.className = 'control-btn';
         zoomOutBtn.title = this.options.zoomOutTitle;
         zoomOutBtn.setAttribute('aria-label', this.options.zoomOutTitle);
-        zoomOutBtn.textContent = '−';
+        zoomOutBtn.innerHTML = '<svg viewBox="0 0 24 24"><path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14"/></svg>';
         zoomOutBtn.onclick = () => { if (this._map) { this._map.stopAnimations(); this._map.setZoom(this._map.getZoom() - 1); } };
         container.appendChild(zoomInBtn);
         container.appendChild(zoomOutBtn);
@@ -1807,7 +1861,16 @@
         fullscreenBtn.className = 'control-btn';
         fullscreenBtn.title = this.options.title;
         fullscreenBtn.setAttribute('aria-label', this.options.title);
-        fullscreenBtn.textContent = '⛶';
+        fullscreenBtn.innerHTML = '<svg viewBox="0 0 24 24"><path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+
+        const updateIcon = () => {
+            if (document.fullscreenElement === this._map.container) {
+                fullscreenBtn.innerHTML = '<svg viewBox="0 0 24 24"><path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h3a2 2 0 0 0 2-2V3m11 5h-3a2 2 0 0 1-2-2V3m-2 18v-3a2 2 0 0 1 2-2h3M3 14v-3a2 2 0 0 1 2-2h3"/></svg>';
+            } else {
+                fullscreenBtn.innerHTML = '<svg viewBox="0 0 24 24"><path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+            }
+        };
+
         fullscreenBtn.onclick = () => {
           if (!document.fullscreenElement) {
             this._map.container.requestFullscreen().catch(err => console.warn(`[Atlas] Error enabling fullscreen: ${err.message}`));
@@ -1815,6 +1878,9 @@
             document.exitFullscreen().catch(err => console.warn(`[Atlas] Error exiting fullscreen: ${err.message}`));
           }
         };
+
+        document.addEventListener('fullscreenchange', updateIcon);
+
         container.appendChild(fullscreenBtn);
         this._fullscreenBtn = fullscreenBtn;
         return container;
@@ -1868,8 +1934,9 @@
         compassBtn.className = 'control-btn';
         compassBtn.title = this.options.title;
         compassBtn.setAttribute('aria-label', this.options.title);
-        compassBtn.textContent = 'N';
+        compassBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2L6 22l6-5 6 5-6-20z" fill="#666"/><path d="M12 2L6 22l6-5" fill="#f44336"/></svg>';
         compassBtn.style.display = 'none';
+        compassBtn.style.padding = '6px'; // Adjust padding for the SVG
         compassBtn.onclick = () => {
           if (this._map) {
             const w = this._map.canvas.width / this._map.dpr;
@@ -2929,7 +2996,6 @@
         this._inertiaRAF = null;
         this._layers = [];
         this._baseLayer = null;
-        this._events = {};
         this._controls = [];
         this._controlCorners = {};
         this._handlers = {};
@@ -2969,19 +3035,6 @@
         this.on('click', this._closeCurrentPopup, this);
         this.render();
         this.fire('load');
-      }
-      on(type, fn, context = this) { if (!this._events[type]) this._events[type] = []; this._events[type].push({ fn, context }); return this; }
-      off(type, fn, context = this) {
-        if (!this._events[type]) return this;
-        this._events[type] = this._events[type].filter(listener => listener.fn !== fn || listener.context !== context);
-        return this;
-      }
-      fire(type, data = {}) {
-        if (!this._events[type]) return;
-        data.type = type;
-        data.target = this;
-        // Create a copy of the listeners array to prevent issues if a listener modifies the array
-        [...this._events[type]].forEach(listener => listener.fn.call(listener.context, data));
       }
       addLayer(layer) {
         if (!(layer instanceof Layer)) throw new Error('Argument must be an instance of Layer');
@@ -3364,6 +3417,7 @@
         console.log("[Atlas] Instance destroyed.");
       }
     }
+    Object.assign(Atlas.prototype, Evented);
     let atlasInstance = null;
     function initializeAtlas() {
         atlasInstance = new Atlas("map");
