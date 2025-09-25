@@ -1,3 +1,5 @@
+import { Tooltip } from '../core/Tooltip.js';
+
 // Base Layer class
 export class Layer {
   constructor(options = {}) { this.options = options; this._map = null; this._events = {}; this._domListeners = []; }
@@ -20,5 +22,24 @@ export class Layer {
       try { rec.el.removeEventListener(rec.type, rec.handler, rec.options); } catch (err) {}
     }
     this._domListeners.length = 0;
+  }
+
+  bindTooltip(content, options) {
+    if (this._tooltip) {
+      this.unbindTooltip();
+    }
+    this._tooltip = new Tooltip(options, this);
+    this._tooltip.setContent(content);
+    this.on('remove', this.unbindTooltip, this);
+    return this;
+  }
+
+  unbindTooltip() {
+    if (this._tooltip) {
+      this._tooltip.remove();
+      this._tooltip = null;
+      this.off('remove', this.unbindTooltip, this);
+    }
+    return this;
   }
 }
