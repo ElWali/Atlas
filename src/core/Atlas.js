@@ -46,6 +46,16 @@ export class Atlas {
     this._resizeObserver.observe(this.container);
     // map-level state used by handlers
     this.isDragging = false;
+    this.supportsWebP = (
+      () => {
+        const elem = document.createElement('canvas');
+        if (!!(elem.getContext && elem.getContext('2d'))) {
+            // was 'image/webp'
+            return elem.toDataURL('image/webp').indexOf('data:image/webp') == 0;
+        }
+        return false;
+      }
+    )();
     // add handlers (use pointer handler instead of separate drag/touch)
     this.addHandler('pointer', PointerHandler);
     this.addHandler('scrollZoom', ScrollZoomHandler);
