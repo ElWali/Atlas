@@ -26,6 +26,12 @@ export class AtlasMarker {
     this._createMarkerElement();
     this._updatePosition();
     this._map.container.appendChild(this._element);
+    // Add animation class with a timeout to ensure it plays
+    setTimeout(() => {
+        if (this._element) {
+            this._element.classList.add('atlas-marker-animated');
+        }
+    }, 0);
     return this;
   }
   remove() {
@@ -129,7 +135,8 @@ export class AtlasMarker {
     this.setPos(point);
   }
   setPos(pos) {
-    this._element.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+    this._element.style.left = `${pos.x}px`;
+    this._element.style.top = `${pos.y}px`;
   }
   _onMouseDown(e) {
     if (!this.options.draggable || e.button !== 0) return;
@@ -144,6 +151,7 @@ export class AtlasMarker {
     document.addEventListener('mousemove', this._onMouseMove);
     document.addEventListener('mouseup', this._onMouseUp);
     this._element.style.cursor = 'grabbing';
+    this._element.classList.add('dragging');
     this.fire('dragstart', { originalEvent: e });
   }
   _onMouseMove(e) {
@@ -172,6 +180,7 @@ export class AtlasMarker {
     this._isDragging = false;
     this._dragStart = null;
     this._element.style.cursor = 'move';
+    this._element.classList.remove('dragging');
     this.fire('dragend', { originalEvent: e, latlng: this.latlng });
   }
   _onClick(e) {

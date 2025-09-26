@@ -14,6 +14,7 @@ export class AtlasPopup {
     this._latlng = null;
     this._events = {};
     this._onCloseClick = this._onCloseClick.bind(this);
+    this._closeTimeout = null;
   }
   addTo(map) {
     this._map = map;
@@ -47,30 +48,58 @@ export class AtlasPopup {
   }
   open() {
     if (!this._map || !this._latlng) return this;
+    if (this._closeTimeout) {
+        clearTimeout(this._closeTimeout);
+        this._closeTimeout = null;
+    }
     if (!this._element) {
-      this._createPopupElement();
+        this._createPopupElement();
     }
     if (!this._element.parentNode) {
-      this._map.container.appendChild(this._element);
+        this._map.container.appendChild(this._element);
     }
     this._updatePosition();
     this._element.style.display = 'block';
+    this._element.classList.remove('atlas-popup-close-animation');
     this._isOpen = true;
 
-    const popupBottom = this._element.getBoundingClientRect().bottom;
-    const mapBottom = this._map.container.getBoundingClientRect().bottom;
-    if (popupBottom > mapBottom) {
-      this._map.panBy([0, popupBottom - mapBottom]);
+    // Pan map to keep popup in view
+    const popupRect = this._element.getBoundingClientRect();
+    const mapRect = this._map.container.getBoundingClientRect();
+    let panBy = { x: 0, y: 0 };
+
+    if (popupRect.top < mapRect.top) {
+        panBy.y = popupRect.top - mapRect.top - 10;
+    } else if (popupRect.bottom > mapRect.bottom) {
+        panBy.y = popupRect.bottom - mapRect.bottom + 10;
+    }
+    if (popupRect.left < mapRect.left) {
+        panBy.x = popupRect.left - mapRect.left - 10;
+    } else if (popupRect.right > mapRect.right) {
+        panBy.x = popupRect.right - mapRect.right + 10;
+    }
+
+    if (panBy.x !== 0 || panBy.y !== 0) {
+        this._map.panBy(panBy);
     }
 
     this.fire('open');
     return this;
   }
   close() {
-    if (this._element) {
-      this._element.style.display = 'none';
-      this._isOpen = false;
-      this.fire('close');
+    if (this._element && this._isOpen) {
+        this._element.classList.add('atlas-popup-close-animation');
+        this._isOpen = false;
+        if (this._closeTimeout) {
+            clearTimeout(this._closeTimeout);
+        }
+        this._closeTimeout = setTimeout(() => {
+            if (this._element) {
+                this._element.style.display = 'none';
+            }
+            this._closeTimeout = null;
+        }, 200); // Match CSS animation duration
+        this.fire('close');
     }
     return this;
   }
@@ -143,9 +172,8 @@ export class AtlasPopup {
   _updatePosition() {
     if (!this._map || !this._element || !this._latlng) return;
     const point = this._map.latLngToContainerPoint(this._latlng);
-    // Position the popup above the marker
-    this._element.style.left = point.x + 'px';
-    this._element.style.top = (point.y - 10) + 'px'; // 10px above marker tip
+    this._element.style.left = `${point.x}px`;
+    this._element.style.top = `${point.y}px`;
   }
   _onCloseClick(e) {
     e.stopPropagation();
