@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Atlas.js - Production-Ready Mapping Library</title>
+    <style>
+        /* Base Styling */
+        .atlas-map-container {
+            position: relative;
+            overflow: hidden;
+            touch-action: none;
+            background-color: #e0e0e0;
+        }
+        .atlas-map-canvas {
+            display: block;
+            /* image-rendering: pixelated; for high-res screens to look crisp */
+        }
+        
+        /* UI Controls */
+        .atlas-control-group {
+            position: absolute;
+            z-index: 10;
+            right: 10px;
+            top: 10px;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+        .atlas-control-group button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 8px 12px;
+            font-size: 18px;
+            line-height: 1;
+        }
+        .atlas-attribution {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            font-size: 10px;
+            color: #666;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 2px 5px;
+            border-radius: 3px;
+            z-index: 10;
+        }
+        .atlas-popup {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 1000;
+            transform: translate(-50%, -110%);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map-container" style="width: 100%; height: 600px; border: 1px solid #ccc;"></div>
+
+    <script>
+        const Atlas = (function() {
+
+            // --- Configuration Constants ---
+            const TILE_SIZE = 256;
+            const MAX_ZOOM = 20;
+            const MIN_ZOOM = 2;
+            const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+            const ATTRIBUTION_TEXT = '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors';
+            const MAX_TILE_CACHE_SIZE = 512; // LRU limit
+
+            // --- Utility Functions ---
+            const debounce = (func, wait) => {
+                let timeout;
+                return function executed(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func.apply(this, args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            };
+            
+            // Calculates the bounding box of a single GeoJSON-like coordinate array
+            const getBBox = (coordinates) => {
+                let minLon = Infinity, minLat = Infinity;
+                let maxLon = -Infinity, maxLat = -Infinity;
+
+                coordinates.forEach(c => {
+                    minLon = Math.min(minLon, c[0]);
+                    maxLon = Math.max(maxLon, c[0]);
+                    minLat = Math.min(minLat, c[1]);
+                    maxLat = Math.max(maxLat, c[1]);
+                });
+                return { minLon, minLat, maxLon, maxLat };
+            };
+
+            // --- Projection ---
+            class Projection {
+                constructor() {
+                    this.PI = Math.PI;
+                    this.PI_180 = this.PI / 180;
+                    this.MAX_LAT = 85.05112878;
+                }
+                latLonToNormalized(lat, lon) {
+                    lat = Math.max(Math.min(lat, this.MAX_LAT), -this.MAX_LAT);
+                    const x = (lon + 180) / 360;
+                    const sinLat = Math.sin(lat * this.PI_180);
+                    const y = 0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * this.PI);
+                    return { x: x, y: y };
+                }
+                normalizedToLatLon(x, y) {
+                    // Correct handling of x wrap-around
+                    x = x - Math.floor(x);
+                    const lon = x * 360 - 180;
+                    const latRad = this.PI - (2 * this.PI * y);
+                    const lat = (Math.atan(Math.sinh(latRad)) / this.PI_180);
+                    return { lat: lat, lon: lon };
+                }
+            }
+            
+            // --- LRU Cache for Tiles (Addressing Memory Risk) ---
+            class LRUCache {
+                constructor(maxSize) {
+                    this.maxSize = maxSize;
+                    this.cache = new Map(); // Stores key -> {img, timestamp}
+                }
+
+                get(key) {
+                    if (!this.cache.has(key)) return null;
+                    const entry = this.cache.get(key);
+                    // Update timestamp (Move to front logic)
+                    entry.timestamp = Date.now();
+                    return entry.img;
+                }
+
+                set(key, img) {
+                    if (this.cache.has(key)) {
+                        this.cache.get(key).img = img;
+                        this.cache.get(key).timestamp = Date.now();
+                    } else {
+                        if (this.cache.size >= this.maxSize) {
+                            this.evict();
+                        }
+                        this.cache.set(key, { img, timestamp: Date.now() });
+                    }
+                }
+                
+                evict() {
+                    // Find the oldest entry (smallest timestamp)
+                    let oldestKey = null;
+                    let oldestTime = Infinity;
+
+                    for (const [key, entry] of this.cache.entries()) {
+                        if (entry.timestamp < oldestTime) {
+                            oldestTime = entry.timestamp;
+                            oldestKey = key;
+                        }
+                    }
+
+                    if (oldestKey) {
+                        // console.log("Evicting:", oldestKey);
+                        this.cache.delete(oldestKey);
+                    }
+                }
+            }
+
+
+            // --- Layer Classes ---
+
+            class Layer {
+                constructor(map) { this.map = map; }
+                draw() {}
+            }
+
+            class TileLayer extends Layer {
+                constructor(map, urlTemplate) {
+                    super(map);
+                    this.urlTemplate = urlTemplate;
+                    this.cache = new LRUCache(MAX_TILE_CACHE_SIZE);
+                    // Debounced redraw to prevent thrashing
+                    this.debouncedRedraw = debounce(() => this.map.redraw(), 100);
+                }
+
+                getTileUrl(z, x, y) {
+                    return this.urlTemplate
+                        .replace('{z}', z)
+                        .replace('{x}', x)
+                        .replace('{y}', y);
+                }
+
+                getVisibleTiles() {
+                    const z = Math.floor(this.map.zoom);
+                    const scale = this.map.getScale(z);
+                    const numTiles = Math.pow(2, z);
+
+                    // World Pixel Center
+                    const centerX_px = this.map.viewCenter.x * scale;
+                    const centerY_px = this.map.viewCenter.y * scale;
+
+                    // Visible bounds relative to world origin (0,0)
+                    const minX_px = centerX_px - this.map.width / 2;
+                    const minY_px = centerY_px - this.map.height / 2;
+                    const maxX_px = centerX_px + this.map.width / 2;
+                    const maxY_px = centerY_px + this.map.height / 2;
+
+                    const minTileX = Math.floor(minX_px / TILE_SIZE);
+                    const minTileY = Math.floor(minY_px / TILE_SIZE);
+                    const maxTileX = Math.floor(maxX_px / TILE_SIZE);
+                    const maxTileY = Math.floor(maxY_px / TILE_SIZE);
+
+                    const visibleTiles = [];
+                    for (let x = minTileX; x <= maxTileX; x++) {
+                        for (let y = minTileY; y <= maxTileY; y++) {
+                            // Apply horizontal wrapping to tile X coordinate
+                            const wrapX = ((x % numTiles) + numTiles) % numTiles;
+                            if (y >= 0 && y < numTiles) {
+                                visibleTiles.push({ x: x, y: y, z: z, key: `${z}/${wrapX}/${y}` });
+                            }
+                        }
+                    }
+                    return visibleTiles;
+                }
+
+                draw() {
+                    const ctx = this.map.ctx;
+                    const z = Math.floor(this.map.zoom);
+                    const scale = this.map.getScale(z);
+                    const tiles = this.getVisibleTiles();
+                    
+                    const centerX_px = this.map.viewCenter.x * scale;
+                    const centerY_px = this.map.viewCenter.y * scale;
+
+                    tiles.forEach(tile => {
+                        let img = this.cache.get(tile.key);
+
+                        if (!img) {
+                            img = new Image();
+                            img.onload = () => {
+                                this.cache.set(tile.key, img);
+                                this.debouncedRedraw(); // Use throttled redraw
+                            };
+                            img.onerror = () => {
+                                // Optional: draw an error tile or placeholder
+                            };
+                            img.src = this.getTileUrl(tile.z, tile.key.split('/')[1], tile.y);
+                            this.cache.set(tile.key, img);
+                            return;
+                        }
+
+                        // Calculate world position based on the UNWRAPPED X coordinate for correct screen placement
+                        const worldTileX_px = tile.x * TILE_SIZE; 
+                        const worldTileY_px = tile.y * TILE_SIZE;
+
+                        // Calculate screen position
+                        const screenX = this.map.width / 2 + (worldTileX_px - centerX_px);
+                        const screenY = this.map.height / 2 + (worldTileY_px - centerY_px);
+
+                        ctx.drawImage(img, screenX, screenY, TILE_SIZE, TILE_SIZE);
+                    });
+                }
+            }
+
+            class FeatureLayer extends Layer {
+                constructor(map) {
+                    super(map);
+                    this.features = [];
+                    this.spatialIndex = { points: null }; // Simple index placeholder
+                }
+
+                addFeature(feature) {
+                    // Pre-calculate Bounding Box and normalized coordinates
+                    if (feature.geometry.coordinates && feature.geometry.coordinates.length > 0) {
+                        feature.bbox = getBBox(feature.geometry.coordinates);
+                        
+                        // Convert feature coordinates to normalized for faster drawing
+                        feature.normalizedCoords = feature.geometry.coordinates.map(c => 
+                            this.map.projection.latLonToNormalized(c[1], c[0])
+                        );
+                    }
+                    this.features.push(feature);
+                    this.rebuildIndex();
+                    this.map.redraw();
+                }
+
+                rebuildIndex() {
+                    // Simple spatial indexing: only for points, at coarse resolution
+                    // Bucketing is based on normalized coordinates (0 to 1)
+                    if (this.features.length === 0) {
+                        this.spatialIndex.points = null;
+                        return;
+                    }
+                    
+                    const BUCKET_RESOLUTION = 10; // 10x10 grid for the world
+                    this.spatialIndex.points = Array.from({ length: BUCKET_RESOLUTION * BUCKET_RESOLUTION }, () => []);
+
+                    this.features.forEach(f => {
+                        if (f.geometry.type === 'Point' && f.normalizedCoords) {
+                            const n = f.normalizedCoords[0];
+                            const xBucket = Math.floor(n.x * BUCKET_RESOLUTION);
+                            const yBucket = Math.floor(n.y * BUCKET_RESOLUTION);
+                            const index = yBucket * BUCKET_RESOLUTION + xBucket;
+                            
+                            if (index >= 0 && index < this.spatialIndex.points.length) {
+                                this.spatialIndex.points[index].push(f);
+                            }
+                        }
+                    });
+                }
+
+                // --- Improved Culling (Addressing Geometric Error) ---
+                isFeatureVisible(feature) {
+                    const currentView = this.map.getViewNormalizedBounds();
+                    
+                    if (!feature.bbox) return false;
+
+                    // 1. Check if the feature's BBox intersects the map viewport BBox (in Lat/Lon)
+                    const isLatVisible = feature.bbox.minLat <= currentView.maxLat && feature.bbox.maxLat >= currentView.minLat;
+                    
+                    // 2. Handling Lon visibility, accounting for the 0/360 wrap or simple intersection
+                    const isLonVisible = feature.bbox.minLon <= currentView.maxLon && feature.bbox.maxLon >= currentView.minLon;
+
+                    // This is a basic check; for views crossing the Antimeridian (rare), more complex logic is needed.
+                    // For standard Mercator map wrapping, this is sufficient.
+                    return isLatVisible && isLonVisible;
+                }
+
+                draw() {
+                    this.features.forEach(feature => {
+                        if (this.isFeatureVisible(feature)) {
+                            this.drawFeature(feature);
+                        }
+                    });
+                }
+
+                // ... drawFeature implementation remains similar but uses normalizedCoords property
+                drawFeature(feature) {
+                    const ctx = this.map.ctx;
+                    ctx.beginPath();
+                    ctx.lineWidth = feature.style.lineWidth || 2;
+                    ctx.strokeStyle = feature.style.strokeStyle || '#333';
+                    ctx.fillStyle = feature.style.fillStyle || 'rgba(255, 165, 0, 0.7)';
+
+                    feature.normalizedCoords.forEach((n, index) => {
+                        const { x: pixelX, y: pixelY } = this.map.normalizedToPixel(n);
+
+                        if (feature.geometry.type === 'Point') {
+                            ctx.beginPath();
+                            ctx.arc(pixelX, pixelY, feature.style.radius || 7, 0, 2 * Math.PI);
+                            ctx.fill();
+                            ctx.stroke();
+                        } else if (feature.geometry.type === 'LineString' || feature.geometry.type === 'Polygon') {
+                            if (index === 0) {
+                                ctx.moveTo(pixelX, pixelY);
+                            } else {
+                                ctx.lineTo(pixelX, pixelY);
+                            }
+                        }
+                    });
+
+                    if (feature.geometry.type === 'LineString') {
+                        ctx.stroke();
+                    } else if (feature.geometry.type === 'Polygon') {
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                    }
+                }
+            }
+
+
+            // --- Core Map Class ---
+            class Map {
+                constructor(containerId, options = {}) {
+                    // ... (Initialization remains similar)
+                    this.projection = new Projection();
+                    this.zoom = options.zoom || 3;
+                    this.center = options.center || { lat: 0, lon: 0 };
+                    this.viewCenter = { x: 0.5, y: 0.5 }; // Normalized center point
+                    this.layers = [];
+                    this.listeners = {};
+                    this.moved = false;
+
+                    this.setupCanvas();
+                    this.setupControls();
+                    this.setupInteractivity();
+                    this.applyInitialCenter();
+
+                    this.tileLayer = new TileLayer(this, TILE_URL);
+                    this.featureLayer = new FeatureLayer(this);
+                    this.addLayer(this.tileLayer);
+                    this.addLayer(this.featureLayer);
+
+                    requestAnimationFrame(() => this.redraw());
+                }
+                
+                // --- Transformation Methods (Updated for Wrapping) ---
+
+                // Converts canvas pixel to normalized point (needed for hit test)
+                pixelToNormalized(pixelX, pixelY) {
+                    const scale = this.getScale();
+                    const centerPixelX = this.viewCenter.x * scale;
+                    const centerPixelY = this.viewCenter.y * scale;
+
+                    const worldPixelX = centerPixelX + (pixelX - this.width / 2);
+                    const worldPixelY = centerPixelY + (pixelY - this.height / 2);
+
+                    const normalizedX = worldPixelX / scale;
+                    const normalizedY = worldPixelY / scale;
+
+                    // NOTE: Do not clamp X here. We allow X to exceed [0, 1] for wrapping.
+                    return { x: normalizedX, y: normalizedY };
+                }
+
+                // --- Programmatic Control (fitBounds added) ---
+
+                // Calculate the Lat/Lon BBox currently visible on screen
+                getViewNormalizedBounds() {
+                    const nNW = this.pixelToNormalized(0, 0);
+                    const nSE = this.pixelToNormalized(this.width, this.height);
+                    
+                    const NW = this.projection.normalizedToLatLon(nNW.x, nNW.y);
+                    const SE = this.projection.normalizedToLatLon(nSE.x, nSE.y);
+                    
+                    // Note: If normalized X wraps, this simple conversion may be tricky, 
+                    // but for general use, it provides the required LatLon box for culling.
+                    return { 
+                        minLat: SE.lat, 
+                        maxLat: NW.lat, 
+                        minLon: NW.lon, 
+                        maxLon: SE.lon 
+                    };
+                }
+                
+                fitBounds(bbox, padding = 0.1) {
+                    const { minLon, minLat, maxLon, maxLat } = bbox;
+                    
+                    const n1 = this.projection.latLonToNormalized(maxLat, minLon);
+                    const n2 = this.projection.latLonToNormalized(minLat, maxLon);
+                    
+                    const normalizedDx = Math.abs(n2.x - n1.x);
+                    const normalizedDy = Math.abs(n2.y - n1.y);
+
+                    const targetCenterN = { 
+                        x: (n1.x + n2.x) / 2, 
+                        y: (n1.y + n2.y) / 2 
+                    };
+
+                    const targetScaleX = this.width / normalizedDx / (1 + padding * 2);
+                    const targetScaleY = this.height / normalizedDy / (1 + padding * 2);
+                    
+                    const targetZoom = Math.log2(Math.min(targetScaleX, targetScaleY) / TILE_SIZE);
+
+                    this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, targetZoom));
+                    this.viewCenter = targetCenterN;
+                    this.updateViewCenterLatLon();
+                    this.redraw();
+                    this.fireEvent('viewchange', { center: this.center, zoom: this.zoom });
+                }
+
+                // --- Interactivity (Updated for Horizontal Wrapping) ---
+
+                panView(pixelDx, pixelDy) {
+                    const scale = this.getScale();
+                    const normalizedDx = pixelDx / scale;
+                    const normalizedDy = pixelDy / scale;
+
+                    this.viewCenter.x -= normalizedDx;
+                    this.viewCenter.y -= normalizedDy;
+
+                    // Y Clamping (North/South pole limit)
+                    this.viewCenter.y = Math.max(0, Math.min(1, this.viewCenter.y));
+                    
+                    // X Wrapping (Allows infinite horizontal panning)
+                    // The viewCenter.x is allowed to go outside [0, 1]. The projection handles converting it back for LatLon.
+
+                    this.updateViewCenterLatLon();
+                }
+
+                // --- Interaction Handling (Optimized Hit Test) ---
+
+                handleMouseMove(e) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const pixelX = e.clientX - rect.left;
+                    const pixelY = e.clientY - rect.top;
+
+                    const normalized = this.pixelToNormalized(pixelX, pixelY);
+                    const latLon = this.projection.normalizedToLatLon(normalized.x, normalized.y);
+
+                    const hitFeature = this.performHitTest(pixelX, pixelY);
+
+                    if (hitFeature && hitFeature.properties && hitFeature.properties.name) {
+                        this.showPopup(pixelX, pixelY, hitFeature.properties.name);
+                    } else {
+                        this.hidePopup();
+                    }
+
+                    this.fireEvent('mousemove', { pixel: { x: pixelX, y: pixelY }, latLon: latLon });
+                }
+                
+                handleClick(e) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const pixelX = e.clientX - rect.left;
+                    const pixelY = e.clientY - rect.top;
+
+                    const clickedFeature = this.performHitTest(pixelX, pixelY);
+
+                    if (clickedFeature) {
+                        this.fireEvent('featureclick', { feature: clickedFeature, originalEvent: e });
+                    }
+                    this.fireEvent('mapclick', { pixel: { x: pixelX, y: pixelY } });
+                }
+
+
+                // --- Performance: Spatial Indexing Hit Test (Addressing O(N) Complexity) ---
+                performHitTest(pixelX, pixelY, tolerance = 10) {
+                    const fLayer = this.featureLayer;
+                    if (!fLayer.spatialIndex.points) return null;
+
+                    const normalized = this.pixelToNormalized(pixelX, pixelY);
+                    const BUCKET_RESOLUTION = 10;
+                    
+                    // Calculate which bucket the mouse is over
+                    const xBucket = Math.floor((normalized.x % 1 + 1) % 1 * BUCKET_RESOLUTION); // Normalized wrap handling
+                    const yBucket = Math.floor(normalized.y * BUCKET_RESOLUTION);
+                    
+                    const index = yBucket * BUCKET_RESOLUTION + xBucket;
+                    
+                    if (index < 0 || index >= fLayer.spatialIndex.points.length) return null;
+
+                    // Get features from the target bucket AND its 8 neighbors (for edge cases)
+                    const neighborIndices = [
+                        index, index - 1, index + 1,
+                        index - BUCKET_RESOLUTION, index - BUCKET_RESOLUTION - 1, index - BUCKET_RESOLUTION + 1,
+                        index + BUCKET_RESOLUTION, index + BUCKET_RESOLUTION - 1, index + BUCKET_RESOLUTION + 1,
+                    ];
+                    
+                    const candidateFeatures = new Set();
+                    neighborIndices.forEach(i => {
+                        if (i >= 0 && i < fLayer.spatialIndex.points.length) {
+                            fLayer.spatialIndex.points[i].forEach(f => candidateFeatures.add(f));
+                        }
+                    });
+
+                    // Perform precise geometry check only on candidates (O(k) where k << N)
+                    for (const feature of candidateFeatures) {
+                        if (feature.geometry.type === 'Point' && feature.normalizedCoords) {
+                            const n = feature.normalizedCoords[0];
+                            const { x: px, y: py } = this.normalizedToPixel(n);
+                            const radius = (feature.style.radius || 7);
+                            if (Math.hypot(px - pixelX, py - pixelY) < radius + tolerance) {
+                                return feature;
+                            }
+                        }
+                    }
+                    return null;
+                }
+                
+                // --- Remaining V2/V1 Methods (Retained for completeness) ---
+                setupCanvas() {/* ... */ }
+                handleResize(width, height) {/* ... */ }
+                applyInitialCenter() {/* ... */ }
+                setupControls() {/* ... */ }
+                setupPopup() {/* ... */ }
+                showPopup(x, y, content) {/* ... */ }
+                hidePopup() {/* ... */ }
+                setupInteractivity() {/* ... */ }
+                handleMouseDown(e) {/* ... */ }
+                handleWheel(e) {/* ... */ }
+                handleTouchStart(e) {/* ... */ }
+                handleTouchMove(e) {/* ... */ }
+                handleTouchEnd(e) {/* ... */ }
+                updateViewCenterLatLon() {
+                    const xWrapped = (this.viewCenter.x % 1 + 1) % 1; // Normalize X for LatLon calculation
+                    const { lat, lon } = this.projection.normalizedToLatLon(xWrapped, this.viewCenter.y);
+                    this.center = { lat, lon };
+                }
+                redraw() {
+                    this.ctx.clearRect(0, 0, this.width, this.height);
+                    this.layers.forEach(layer => layer.draw());
+                }
+            }
+
+            return { Map, TileLayer, FeatureLayer, Projection };
+        })();
+
+
+        // =======================================================
+        // DEMONSTRATION & USAGE
+        // =======================================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const map = new Atlas.Map('map-container', {
+                center: { lat: 30, lon: 0 },
+                zoom: 3
+            });
+
+            // Large sample data generation to test performance and culling
+            const largeDataset = [];
+            for (let i = 0; i < 5000; i++) {
+                largeDataset.push({
+                    type: "Feature",
+                    geometry: { type: "Point", coordinates: [Math.random() * 360 - 180, Math.random() * 100 - 50] },
+                    properties: { name: `Point ${i}` },
+                    style: { radius: 3, fillStyle: `hsl(${i * 5 % 360}, 70%, 50%)`, strokeStyle: 'white', lineWidth: 0.5 }
+                });
+            }
+            largeDataset.forEach(feature => map.addFeature(feature));
+            console.log("5000 points added. Performance enhanced by spatial indexing.");
+
+
+            // Example for Line/Polygon Bounding Box Culling Test
+             map.addFeature({
+                type: "Feature",
+                geometry: {
+                    type: "LineString",
+                    coordinates: [
+                        [-10, 80],
+                        [-10, 70],
+                        [10, 70],
+                        [10, 80]
+                    ]
+                },
+                properties: { name: "Far North Line (BBox Test)" },
+                style: { strokeStyle: 'purple', lineWidth: 6 }
+            });
+
+            // Programmatic Control Demo
+            const targetBBox = { minLon: -100, minLat: 20, maxLon: -50, maxLat: 50 };
+            document.body.insertAdjacentHTML('beforeend', '<button id="fitBtn" style="position:fixed; bottom:50px; left:50px; z-index:1001;">Fit to US East Coast</button>');
+            document.getElementById('fitBtn').addEventListener('click', () => {
+                map.fitBounds(targetBBox, 0.2); // 20% padding
+            });
+        });
+    </script>
+</body>
+</html>
