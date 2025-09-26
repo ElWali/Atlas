@@ -106,39 +106,38 @@ export class SearchControl extends Control {
   onAdd() {
     const container = document.createElement('div');
     container.className = 'atlas-search-control';
+
     const form = document.createElement('form');
     form.className = 'atlas-search-form';
-    form.style.display = 'flex';
-    form.style.position = 'relative';
     form.setAttribute('role', 'search');
+
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'atlas-search-input-wrapper';
+
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'atlas-search-input';
     input.placeholder = this.options.placeholder;
     input.setAttribute('aria-label', this.options.placeholder);
-    input.style.padding = '6px 8px';
-    input.style.fontSize = '14px';
-    input.style.border = '1px solid #ccc';
-    input.style.borderRadius = '4px 0 0 4px';
-    input.style.outline = 'none';
-    input.style.width = '200px';
-    input.style.backgroundColor = 'rgba(255,255,255,0.9)';
+
+    const clearButton = document.createElement('button');
+    clearButton.type = 'button';
+    clearButton.className = 'atlas-search-clear';
+    clearButton.setAttribute('aria-label', 'Clear search');
+    clearButton.innerHTML = '&times;';
+
+    searchContainer.appendChild(input);
+    searchContainer.appendChild(clearButton);
+
     const submitButton = document.createElement('button');
     submitButton.type = 'submit';
     submitButton.className = 'atlas-search-submit';
     submitButton.setAttribute('aria-label', 'Search');
-    submitButton.innerHTML = '🔍';
-    submitButton.style.padding = '6px 8px';
-    submitButton.style.border = '1px solid #ccc';
-    submitButton.style.borderLeft = 'none';
-    submitButton.style.borderRadius = '0 4px 4px 0';
-    submitButton.style.background = 'rgba(255,255,255,0.9)';
-    submitButton.style.cursor = 'pointer';
-    submitButton.style.fontSize = '14px';
-    submitButton.onmouseenter = () => { submitButton.style.background = 'rgba(240,240,240,0.95)'; };
-    submitButton.onmouseleave = () => { submitButton.style.background = 'rgba(255,255,255,0.9)'; };
-    form.appendChild(input);
+    submitButton.innerHTML = '<span class="atlas-search-icon">🔍</span>';
+
+    form.appendChild(searchContainer);
     form.appendChild(submitButton);
+
     const resultsContainer = document.createElement('div');
     resultsContainer.className = 'atlas-search-results';
     resultsContainer.style.position = 'absolute';
@@ -181,18 +180,45 @@ export class SearchControl extends Control {
     container.appendChild(liveRegion);
     this._container = container;
     this._input = input;
+    this._submitButton = submitButton;
+    this._clearButton = clearButton;
     this._resultsContainer = resultsContainer;
     this._messageContainer = messageContainer;
     this._liveRegion = liveRegion;
+
     const onSubmit = (e) => { e.preventDefault(); this._performSearch(this._input.value.trim()); };
+    const onClear = () => {
+        this._input.value = '';
+        this._input.focus();
+        this._hideResults();
+        this._hideMessage();
+        clearButton.classList.remove('visible');
+    };
+    const onInput = () => {
+        if (this._input.value.length > 0) {
+            clearButton.classList.add('visible');
+        } else {
+            clearButton.classList.remove('visible');
+        }
+    };
+
     form.addEventListener('submit', onSubmit);
     this._addDomListener(form, 'submit', onSubmit);
+
     this._input.addEventListener('input', this._onInputChangeBound);
     this._addDomListener(this._input, 'input', this._onInputChangeBound);
+    this._input.addEventListener('input', onInput);
+    this._addDomListener(this._input, 'input', onInput);
+
     this._input.addEventListener('keydown', this._onInputKeyDownBound);
     this._addDomListener(this._input, 'keydown', this._onInputKeyDownBound);
+
+    clearButton.addEventListener('click', onClear);
+    this._addDomListener(clearButton, 'click', onClear);
+
     document.addEventListener('click', this._onDocumentClickBound);
     this._domListeners.push({ el: document, type: 'click', handler: this._onDocumentClickBound, options: false });
+
     return container;
   }
   onRemove() {
@@ -233,24 +259,36 @@ export class SearchControl extends Control {
   }
   _updateResultHighlight() {
     const resultItems = this._resultsContainer.querySelectorAll('.atlas-search-result-item');
-    resultItems.forEach(item => item.classList.remove('active'));
-    if (this._activeResultIndex >= 0 && resultItems[this._activeResultIndex]) resultItems[this._activeResultIndex].classList.add('active');
+    resultItems.forEach((item, index) => {
+        if (index === this._activeResultIndex) {
+            item.classList.add('active');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
   }
   _performSearch(query) {
     if (!query) return;
     if (this._abortController) this._abortController.abort();
     this._abortController = new AbortController();
+    this._submitButton.classList.add('loading');
     this._showMessage('Searching...');
+
     this.options.provider.search(query)
       .then(data => {
         if (this._abortController.signal.aborted) return;
-        this._hideMessage();
         this._displayResults(data);
       })
       .catch(error => {
         if (error.name === 'AbortError') return;
         this._showMessage('Search error');
-        setTimeout(() => this._hideMessage(), 1500);
+      })
+      .finally(() => {
+        this._submitButton.classList.remove('loading');
+        if (!this._currentResults || this._currentResults.length === 0) {
+            this._hideMessage();
+        }
       });
   }
   _displayResults(results) {
