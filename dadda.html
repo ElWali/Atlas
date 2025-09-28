@@ -50,6 +50,7 @@
                 ...options,
             };
             this.tileCache = new Map();
+            this._map = null;
         }
 
         getTileUrl(x, y, z) {
@@ -62,30 +63,32 @@
                 .replace('{y}', y);
         }
 
-        async getTile(x, y, z) {
+        getTile(x, y, z) {
             const key = `${z}/${x}/${y}`;
             if (this.tileCache.has(key)) {
-                return this.tileCache.get(key);
+                const tile = this.tileCache.get(key);
+                if (tile.loaded) {
+                    return tile;
+                }
+                return null;
             }
 
-            const url = this.getTileUrl(x, y, z);
             const img = new Image();
             img.crossOrigin = "Anonymous";
+            const tilePlaceholder = { img, loaded: false };
+            this.tileCache.set(key, tilePlaceholder);
 
-            const promise = new Promise((resolve, reject) => {
-                img.onload = () => {
-                    const tile = { img, loaded: true };
-                    this.tileCache.set(key, tile);
-                    resolve(tile);
-                };
-                img.onerror = () => {
-                    this.tileCache.set(key, { loaded: false });
-                    reject();
-                };
-            });
-
-            img.src = url;
-            return promise;
+            img.onload = () => {
+                tilePlaceholder.loaded = true;
+                if (this._map) {
+                    this._map.scheduleRender();
+                }
+            };
+            img.onerror = () => {
+                this.tileCache.delete(key);
+            };
+            img.src = this.getTileUrl(x, y, z);
+            return null;
         }
     }
 
@@ -109,6 +112,7 @@
 
         addLayer(layer) {
             this.tileLayer = layer;
+            layer._map = this;
             this.scheduleRender();
         }
 
@@ -240,13 +244,12 @@
 
                     if (tileY < 0 || tileY >= numTiles) continue;
 
-                    this.tileLayer.getTile(tileX, tileY, z).then(tile => {
-                        if (tile && tile.loaded) {
-                            const screenX = x * tileScaledSize - topLeftPx.x;
-                            const screenY = y * tileScaledSize - topLeftPx.y;
-                            this.ctx.drawImage(tile.img, Math.round(screenX), Math.round(screenY), Math.ceil(tileScaledSize), Math.ceil(tileScaledSize));
-                        }
-                    }).catch(() => {});
+                    const tile = this.tileLayer.getTile(tileX, tileY, z);
+                    if (tile && tile.loaded) {
+                        const screenX = x * tileScaledSize - topLeftPx.x;
+                        const screenY = y * tileScaledSize - topLeftPx.y;
+                        this.ctx.drawImage(tile.img, Math.round(screenX), Math.round(screenY), Math.ceil(tileScaledSize), Math.ceil(tileScaledSize));
+                    }
                 }
             }
         }
