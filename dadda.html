@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Dadda Map</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+    }
+    #map-container {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #eee;
+      cursor: grab;
+    }
+    #map-container.dragging {
+      cursor: grabbing;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="map-container">
+    <canvas id="map"></canvas>
+  </div>
+  <script>
+    // --- Dadda Map ---
+    // A simple, modern, library-free interactive map renderer.
+
+    const TILE_SIZE = 256;
+    const EARTH_RADIUS = 6378137;
+    const MAX_LATITUDE = 85.05112878;
+
+    class TileLayer {
+        constructor(urlTemplate, options = {}) {
+            this.urlTemplate = urlTemplate;
+            this.options = {
+                minZoom: 0,
+                maxZoom: 18,
+                ...options,
+            };
+            this.tileCache = new Map();
+        }
+
+        getTileUrl(x, y, z) {
+            const subdomains = this.options.subdomains || ['a', 'b', 'c'];
+            const subdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
+            return this.urlTemplate
+                .replace('{s}', subdomain)
+                .replace('{z}', z)
+                .replace('{x}', x)
+                .replace('{y}', y);
+        }
+
+        async getTile(x, y, z) {
+            const key = `${z}/${x}/${y}`;
+            if (this.tileCache.has(key)) {
+                return this.tileCache.get(key);
+            }
+
+            const url = this.getTileUrl(x, y, z);
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+
+            const promise = new Promise((resolve, reject) => {
+                img.onload = () => {
+                    const tile = { img, loaded: true };
+                    this.tileCache.set(key, tile);
+                    resolve(tile);
+                };
+                img.onerror = () => {
+                    this.tileCache.set(key, { loaded: false });
+                    reject();
+                };
+            });
+
+            img.src = url;
+            return promise;
+        }
+    }
+
+    class DaddaMap {
+        constructor(id, options = {}) {
+            this.canvas = document.getElementById(id);
+            this.ctx = this.canvas.getContext('2d');
+            this.container = this.canvas.parentElement;
+
+            this.zoom = options.zoom || 2;
+            this.center = options.center || { lat: 0, lon: 0 };
+
+            this.tileLayer = null;
+            this.isDragging = false;
+            this.dragStart = { x: 0, y: 0 };
+
+            this._resize();
+            this._addEventListeners();
+            this.scheduleRender();
+        }
+
+        addLayer(layer) {
+            this.tileLayer = layer;
+            this.scheduleRender();
+        }
+
+        project(lat, lon) {
+            const clampedLat = Math.max(-MAX_LATITUDE, Math.min(MAX_LATITUDE, lat));
+            const sin = Math.sin(clampedLat * Math.PI / 180);
+            const x = lon * Math.PI / 180 * EARTH_RADIUS;
+            const y = Math.log((1 + sin) / (1 - sin)) / 2 * EARTH_RADIUS;
+            return { x, y };
+        }
+
+        unproject(x, y) {
+            const lon = x / EARTH_RADIUS * 180 / Math.PI;
+            const lat = (2 * Math.atan(Math.exp(y / EARTH_RADIUS)) - Math.PI / 2) * 180 / Math.PI;
+            return { lat, lon };
+        }
+
+        _resize() {
+            this.dpr = window.devicePixelRatio || 1;
+            this.width = this.container.clientWidth;
+            this.height = this.container.clientHeight;
+
+            this.canvas.width = this.width * this.dpr;
+            this.canvas.height = this.height * this.dpr;
+            this.canvas.style.width = `${this.width}px`;
+            this.canvas.style.height = `${this.height}px`;
+
+            this.ctx.scale(this.dpr, this.dpr);
+            this.scheduleRender();
+        }
+
+        _addEventListeners() {
+            window.addEventListener('resize', this._resize.bind(this));
+            this.canvas.addEventListener('mousedown', this._onMouseDown.bind(this));
+            this.canvas.addEventListener('mousemove', this._onMouseMove.bind(this));
+            this.canvas.addEventListener('mouseup', this._onMouseUp.bind(this));
+            this.canvas.addEventListener('mouseleave', this._onMouseUp.bind(this));
+            this.canvas.addEventListener('wheel', this._onWheel.bind(this), { passive: false });
+            this.canvas.addEventListener('dblclick', this._onDblClick.bind(this));
+        }
+
+        _onMouseDown(e) {
+            this.isDragging = true;
+            this.dragStart = { x: e.clientX, y: e.clientY };
+            this.container.classList.add('dragging');
+        }
+
+        _onMouseMove(e) {
+            if (!this.isDragging) return;
+
+            const dx = e.clientX - this.dragStart.x;
+            const dy = e.clientY - this.dragStart.y;
+            this.dragStart = { x: e.clientX, y: e.clientY };
+
+            const scale = Math.pow(2, this.zoom) * TILE_SIZE;
+            const centerProjected = this.project(this.center.lat, this.center.lon);
+
+            centerProjected.x -= dx * (2 * Math.PI * EARTH_RADIUS) / scale;
+            centerProjected.y += dy * (2 * Math.PI * EARTH_RADIUS) / scale;
+
+            this.center = this.unproject(centerProjected.x, centerProjected.y);
+            this.scheduleRender();
+        }
+
+        _onMouseUp() {
+            this.isDragging = false;
+            this.container.classList.remove('dragging');
+        }
+
+        _onWheel(e) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? -0.25 : 0.25;
+            this.setZoom(this.zoom + delta);
+        }
+
+        _onDblClick(e) {
+            e.preventDefault();
+            this.setZoom(this.zoom + 1);
+        }
+
+        setZoom(zoom) {
+            const minZoom = this.tileLayer ? this.tileLayer.options.minZoom : 0;
+            const maxZoom = this.tileLayer ? this.tileLayer.options.maxZoom : 18;
+            this.zoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+            this.scheduleRender();
+        }
+
+        scheduleRender() {
+            if (this.renderScheduled) return;
+            this.renderScheduled = true;
+            requestAnimationFrame(() => {
+                this._render();
+                this.renderScheduled = false;
+            });
+        }
+
+        _render() {
+            this.ctx.clearRect(0, 0, this.width, this.height);
+            if (!this.tileLayer) return;
+
+            const z = Math.floor(this.zoom);
+            const zoomFactor = Math.pow(2, this.zoom - z);
+            const scale = Math.pow(2, this.zoom) * TILE_SIZE;
+
+            const centerProjected = this.project(this.center.lat, this.center.lon);
+            const centerPx = {
+                x: centerProjected.x * scale / (2 * Math.PI * EARTH_RADIUS),
+                y: -centerProjected.y * scale / (2 * Math.PI * EARTH_RADIUS)
+            };
+
+            const viewHalf = { x: this.width / 2, y: this.height / 2 };
+            const topLeftPx = { x: centerPx.x - viewHalf.x, y: centerPx.y - viewHalf.y };
+            const tileScaledSize = TILE_SIZE * zoomFactor;
+
+            const tileMin = {
+                x: Math.floor(topLeftPx.x / tileScaledSize),
+                y: Math.floor(topLeftPx.y / tileScaledSize)
+            };
+            const tileMax = {
+                x: Math.floor((topLeftPx.x + this.width) / tileScaledSize),
+                y: Math.floor((topLeftPx.y + this.height) / tileScaledSize)
+            };
+
+            for (let y = tileMin.y; y <= tileMax.y; y++) {
+                for (let x = tileMin.x; x <= tileMax.x; x++) {
+                    const numTiles = Math.pow(2, z);
+                    const tileX = (x % numTiles + numTiles) % numTiles;
+                    const tileY = y;
+
+                    if (tileY < 0 || tileY >= numTiles) continue;
+
+                    this.tileLayer.getTile(tileX, tileY, z).then(tile => {
+                        if (tile && tile.loaded) {
+                            const screenX = x * tileScaledSize - topLeftPx.x;
+                            const screenY = y * tileScaledSize - topLeftPx.y;
+                            this.ctx.drawImage(tile.img, Math.round(screenX), Math.round(screenY), Math.ceil(tileScaledSize), Math.ceil(tileScaledSize));
+                        }
+                    }).catch(() => {});
+                }
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const map = new DaddaMap('map', {
+            zoom: 3,
+            center: { lat: 51.505, lon: -0.09 }
+        });
+
+        const osmLayer = new TileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            subdomains: ['a', 'b', 'c']
+        });
+
+        map.addLayer(osmLayer);
+    });
+  </script>
+</body>
+</html>
