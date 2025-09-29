@@ -559,7 +559,7 @@
             };
         `;
         const blob = new Blob([workerCode], { type: 'application/javascript' });
-        this._worker = new Worker(URL.createObjectURL(blob));
+        this._worker = new Worker(URA.createObjectURL(blob));
         this._worker.onmessage = (e) => {
           const { key, imageBitmap, error, isReload } = e.data;
 

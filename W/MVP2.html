@@ -571,7 +571,7 @@ class Atlas { // <-- CHANGED: Class name from AtlasMap to Atlas
 
     const zInt = Math.floor(newZoom);
     const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
-    const Ptile = this.lonLatToTile(currAnchorLL.lon, currAnchorLL.lat, zInt);
+    const Ptile = this.lonLatToTile(currAnchorLA.lon, currAnchorLA.lat, zInt);
     const v = rot(anchorVec.x/ts, anchorVec.y/ts, -newBearing);
     const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
     const newCenter = GISUtils.tileToLonLat(ctNew.x, ctNew.y, zInt);

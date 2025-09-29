@@ -51,34 +51,34 @@ export class LayerControl extends Control {
 	}
 
 	expand() {
-		this._container.classList.add('leaflet-control-layers-expanded');
+		this._container.classList.add('atlas-control-layers-expanded');
 		this._section.style.height = null;
 		const acceptableHeight = this._map.getSize().y - (this._container.y + 50);
 		if (acceptableHeight < this._section.clientHeight) {
-			this._section.classList.add('leaflet-control-layers-scrollbar');
+			this._section.classList.add('atlas-control-layers-scrollbar');
 			this._section.style.height = `${acceptableHeight}px`;
 		} else {
-			this._section.classList.remove('leaflet-control-layers-scrollbar');
+			this._section.classList.remove('atlas-control-layers-scrollbar');
 		}
 		return this;
 	}
 
 	collapse() {
-		this._container.classList.remove('leaflet-control-layers-expanded');
+		this._container.classList.remove('atlas-control-layers-expanded');
 		return this;
 	}
 
 	_initLayout() {
-		const className = 'leaflet-control-layers',
+		const className = 'atlas-control-layers',
 		      container = this._container = document.createElement('div');
 		container.className = className;
 		container.setAttribute('aria-haspopup', true);
 
 		this._section = document.createElement('section');
-		this._section.className = 'leaflet-control-layers-list';
+		this._section.className = 'atlas-control-layers-list';
 
 		this._layersLink = document.createElement('a');
-		this._layersLink.className = 'leaflet-control-layers-toggle';
+		this._layersLink.className = 'atlas-control-layers-toggle';
 		this._layersLink.href = '#';
 		this._layersLink.title = 'Layers';
 		this._layersLink.role = 'button';
@@ -89,14 +89,14 @@ export class LayerControl extends Control {
 		this._map.on('click', this.collapse, this);
 
 		const form = this._form = document.createElement('form');
-		form.className = 'leaflet-control-layers-form';
+		form.className = 'atlas-control-layers-form';
 
 		this._baseLayersList = document.createElement('div');
-		this._baseLayersList.className = 'leaflet-control-layers-base';
+		this._baseLayersList.className = 'atlas-control-layers-base';
 		this._separator = document.createElement('div');
-		this._separator.className = 'leaflet-control-layers-separator';
+		this._separator.className = 'atlas-control-layers-separator';
 		this._overlaysList = document.createElement('div');
-		this._overlaysList.className = 'leaflet-control-layers-overlays';
+		this._overlaysList.className = 'atlas-control-layers-overlays';
 
 		container.appendChild(this._layersLink);
 		form.appendChild(this._baseLayersList);
@@ -160,10 +160,10 @@ export class LayerControl extends Control {
 		if (obj.overlay) {
 			input = document.createElement('input');
 			input.type = 'checkbox';
-			input.className = 'leaflet-control-layers-selector';
+			input.className = 'atlas-control-layers-selector';
 			input.defaultChecked = checked;
 		} else {
-			input = this._createRadioElement('leaflet-base-layers', checked);
+			input = this._createRadioElement('atlas-base-layers', checked);
 		}
 		input.layerId = obj.layer.getLayerId();
 		input.addEventListener('click', this._onInputClick, this);
@@ -210,7 +210,7 @@ export class LayerControl extends Control {
 	}
 
 	_createRadioElement(name, checked) {
-		const radioHtml = `<input type="radio" class="leaflet-control-layers-selector" name="${name}"${checked ? ' checked' : ''}/>`;
+		const radioHtml = `<input type="radio" class="atlas-control-layers-selector" name="${name}"${checked ? ' checked' : ''}/>`;
 		const temp = document.createElement('div');
 		temp.innerHTML = radioHtml;
 		return temp.firstChild;

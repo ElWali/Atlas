@@ -1,7 +1,7 @@
 
 /**
  * Atlas.js - A Lightweight JavaScript Mapping Library
- * Inspired by early Leaflet but built from scratch for modern browsers
+ * Inspired by early Atlas but built from scratch for modern browsers
  * Version 1.0.0
  */
 

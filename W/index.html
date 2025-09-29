@@ -301,7 +301,7 @@ class AtlasMap {
     newZ = Math.max(this.minZoom, Math.min(newZ, this.maxZoom));
     const { width, height } = this.size();
     const scale = this.crs.scale(newZ);
-    const anchor = this.crs.project(anchorLL.lat, anchorLL.lon);
+    const anchor = this.crs.project(anchorLA.lat, anchorLA.lon);
     let cx = anchor.x - (px - width / 2) / scale;
     let cy = anchor.y - (py - height / 2) / scale;
 
@@ -654,7 +654,7 @@ class TileLayer extends Layer {
   onRemove() {
     this.z0?.remove(); this.z1?.remove();
     this.cache.forEach(t => {
-      if (t.objectURL) URL.revokeObjectURL(t.objectURL);
+      if (t.objectURL) URA.revokeObjectURL(t.objectURL);
       if (t.controller) t.controller.abort();
     });
     this.cache.clear(); this.lru.length = 0;
@@ -724,8 +724,8 @@ class TileLayer extends Layer {
         if (!resp.ok) throw new Error("HTTP " + resp.status);
         return resp.blob();
       }).then(blob => {
-        if (t.objectURL) URL.revokeObjectURL(t.objectURL);
-        t.objectURL = URL.createObjectURL(blob);
+        if (t.objectURL) URA.revokeObjectURL(t.objectURL);
+        t.objectURL = URA.createObjectURL(blob);
         t.img.src = t.objectURL;
         t.state = "loading";
       }).catch(err => {
@@ -772,7 +772,7 @@ class TileLayer extends Layer {
       const t = this.cache.get(k);
       if (!t) continue;
       if (t.controller) try { t.controller.abort(); } catch (e) { }
-      if (t.objectURL) { URL.revokeObjectURL(t.objectURL); }
+      if (t.objectURL) { URA.revokeObjectURL(t.objectURL); }
       if (t.img.parentNode) t.img.parentNode.removeChild(t.img);
       this.cache.delete(k);
     }

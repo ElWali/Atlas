@@ -2,7 +2,7 @@
  * Atlas.js v3.0 — A professional-grade, modern JavaScript mapping library.
  * Author: ElWali ElAlaoui (Atlasian from Tarfaya 🇲🇦)
  *
- * This version achieves core feature parity with established libraries like Leaflet.
+ * This version achieves core feature parity with established libraries like Atlas.
  * It introduces a robust architecture with layer groups, a powerful GeoJSON parser,
  * vector layer primitives, and a fully-featured layers control.
  * It combines the fluid user experience of v2.0 with the versatility and

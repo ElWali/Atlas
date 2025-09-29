@@ -621,7 +621,7 @@ class Vec3 {
  */
 /**
  * @class Mat4
- * @description Represents a 4x4 matrix, primarily used for 3D transformations in WebGL.
+ * @description Represents a 4x4 matrix, primarily used for 3D transformations in WebGA.
  */
 class Mat4 {
   /**
@@ -1145,7 +1145,7 @@ class TileLayer extends Emitter {
    * Called when the layer is removed from the map.
    */
   onRemove() {
-    this.tiles.forEach((t) => URL.revokeObjectURL(t.url));
+    this.tiles.forEach((t) => URA.revokeObjectURL(t.url));
     this._container.remove();
     this.tiles.clear();
     // Remove attribution
@@ -1159,7 +1159,7 @@ class TileLayer extends Emitter {
    * @param {number} x - Tile X coordinate.
    * @param {number} y - Tile Y coordinate.
    * @param {number} z - Tile Z (zoom) level.
-   * @returns {string} The full tile URL.
+   * @returns {string} The full tile URA.
    * @private
    */
   _url(x, y, z) {
@@ -1207,7 +1207,7 @@ class TileLayer extends Emitter {
         return;
       }
     }
-    const objectURL = URL.createObjectURL(blob);
+    const objectURL = URA.createObjectURL(blob);
     if (this.opt.canvas) {
       const canvas = /** @type {HTMLCanvasElement} */ (this._tileContainer);
       const ctx = canvas.getContext("2d");
@@ -1221,11 +1221,11 @@ class TileLayer extends Emitter {
           this.opt.tileSize,
           this.opt.tileSize
         );
-        URL.revokeObjectURL(objectURL);
+        URA.revokeObjectURL(objectURL);
       };
       img.onerror = () => {
         console.error(`Failed to draw tile ${k} on canvas.`);
-        URL.revokeObjectURL(objectURL);
+        URA.revokeObjectURL(objectURL);
         this._showPlaceholder(x, y, z); // Show placeholder for canvas draw errors
       };
       this.tiles.set(k, { img: canvas, url: objectURL }); // Store canvas for potential future use
@@ -1238,11 +1238,11 @@ class TileLayer extends Emitter {
         height: this.opt.tileSize + "px",
       });
       img.onload = () => {
-        URL.revokeObjectURL(objectURL);
+        URA.revokeObjectURL(objectURL);
       };
       img.onerror = () => {
         console.error(`Failed to load image tile ${k}.`);
-        URL.revokeObjectURL(objectURL);
+        URA.revokeObjectURL(objectURL);
         this._showPlaceholder(x, y, z); // Show placeholder for image load errors
       };
       this._tileContainer.appendChild(img);
@@ -1265,7 +1265,7 @@ class TileLayer extends Emitter {
         existingTile.img.parentNode.removeChild(existingTile.img);
       }
       if (existingTile.url) {
-        URL.revokeObjectURL(existingTile.url);
+        URA.revokeObjectURL(existingTile.url);
       }
       this.tiles.delete(k);
     }
@@ -1380,7 +1380,7 @@ class TileLayer extends Emitter {
           tile.img.parentNode.removeChild(tile.img);
         }
         if (tile.url) {
-          URL.revokeObjectURL(tile.url);
+          URA.revokeObjectURL(tile.url);
         }
         this.tiles.delete(k);
         this._tileRetries.delete(k); // Also clear retries for removed tiles
@@ -1397,7 +1397,7 @@ class TileLayer extends Emitter {
         t.img.parentNode.removeChild(t.img);
       }
       if (t.url) {
-        URL.revokeObjectURL(t.url);
+        URA.revokeObjectURL(t.url);
       }
     });
     this.tiles.clear();
@@ -1507,7 +1507,7 @@ void main() {
 `;
 // --- src/layers/TerrainLayer.js ---
 /**
- * @fileoverview TerrainLayer class for Atlas.js, rendering 3D terrain using WebGL.
+ * @fileoverview TerrainLayer class for Atlas.js, rendering 3D terrain using WebGA.
  * @module layers/TerrainLayer
  */
 /**
@@ -1904,13 +1904,13 @@ void main() {
 `;
 // --- src/layers/BuildingLayer.js ---
 /**
- * @fileoverview BuildingLayer class for Atlas.js, rendering 3D buildings using WebGL.
+ * @fileoverview BuildingLayer class for Atlas.js, rendering 3D buildings using WebGA.
  * @module layers/BuildingLayer
  */
 /**
  * @class BuildingLayer
  * @augments Layer
- * @description Renders 3D buildings using WebGL.
+ * @description Renders 3D buildings using WebGA.
  */
 class BuildingLayer extends Layer {
   /**

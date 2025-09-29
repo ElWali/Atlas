@@ -1,18 +1,18 @@
 // === Initialize Map ===
-const map = L.map('map', { 
+const map = A.map('map', {
   zoomControl: true,
   zoomSnap: 0.5,
   zoomDelta: 0.5
 }).setView([20, 0], 2);
 
 // === ESRI Imagery Base Layer ===
-const esriLayer = L.tileLayer(
+const esriLayer = A.tileLayer(
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   { maxZoom: 20, attribution: 'Tiles © Esri &mdash; Earthstar Geographics' }
 ).addTo(map);
 
 // === Overlays ===
-const biomesLayer = L.tileLayer.wms(
+const biomesLayer = A.tileLayer.wms(
   "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi?",
   { 
     layers: "MODIS_Terra_Land_Surface_Classification_Daily", 
@@ -24,7 +24,7 @@ const biomesLayer = L.tileLayer.wms(
   }
 );
 
-const oceanCurrents = L.tileLayer.wms(
+const oceanCurrents = A.tileLayer.wms(
   "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi?",
   { 
     layers: "OSCAR_Sea_Surface_Currents", 
@@ -36,7 +36,7 @@ const oceanCurrents = L.tileLayer.wms(
   }
 );
 
-const starsLayer = L.tileLayer(
+const starsLayer = A.tileLayer(
   "https://stamen-tiles.a.ssl.fastly.net/toner-background/{z}/{x}/{y}.png",
   { 
     opacity: 0.6, 
@@ -45,9 +45,9 @@ const starsLayer = L.tileLayer(
 );
 
 // === Custom Overlays Control (Checkbox UI) ===
-const overlaysControl = L.control({ position: 'topright' });
+const overlaysControl = A.control({ position: 'topright' });
 overlaysControl.onAdd = function () {
-  const div = L.DomUtil.create('div', 'leaflet-bar');
+  const div = A.DomUtil.create('div', 'atlas-bar');
   div.style.background = 'white';
   div.style.padding = '8px';
   div.style.borderRadius = '6px';
@@ -75,12 +75,12 @@ overlaysControl.onAdd = function () {
 overlaysControl.addTo(map);
 
 // === Scale Bar ===
-L.control.scale().addTo(map);
+A.control.scale().addTo(map);
 
 // === Coordinates Display ===
-const info = L.control({ position: "bottomright" });
+const info = A.control({ position: "bottomright" });
 info.onAdd = function () { 
-  this._div = L.DomUtil.create('div', 'info'); 
+  this._div = A.DomUtil.create('div', 'info');
   this.update(); 
   return this._div; 
 };
@@ -95,10 +95,10 @@ map.on('mouseout', () => info.update(null));
 
 // === Search / Geocoder ===
 let searchMarker = null;
-L.Control.geocoder({ defaultMarkGeocode: false, position: 'topleft' })
+A.Control.geocoder({ defaultMarkGeocode: false, position: 'topleft' })
 .on('markgeocode', e => {
   if (searchMarker) map.removeLayer(searchMarker);
-  searchMarker = L.marker(e.geocode.center)
+  searchMarker = A.marker(e.geocode.center)
     .addTo(map)
     .bindPopup(`<strong>${e.geocode.name}</strong>`)
     .openPopup();
@@ -109,15 +109,15 @@ L.Control.geocoder({ defaultMarkGeocode: false, position: 'topleft' })
 }).addTo(map);
 
 // === Fullscreen, MiniMap, Day/Night Terminator ===
-map.addControl(new L.Control.Fullscreen({ position: 'topright' }));
-new L.Control.MiniMap(esriLayer, { toggleDisplay: true, position: 'bottomright' }).addTo(map);
+map.addControl(new A.Control.Fullscreen({ position: 'topright' }));
+new A.Control.MiniMap(esriLayer, { toggleDisplay: true, position: 'bottomright' }).addTo(map);
 
-let terminator = L.terminator();
+let terminator = A.terminator();
 terminator.addTo(map);
 setInterval(() => terminator.setTime(new Date()), 30000);
 
 // === Measure Tool ===
-L.control.measure({
+A.control.measure({
   position: 'topleft',
   primaryLengthUnit: 'kilometers',
   secondaryLengthUnit: 'miles',
@@ -126,16 +126,16 @@ L.control.measure({
 
 // === Locate Me Button ===
 let userMarker = null;
-const locateControl = L.control({ position: 'topleft' });
+const locateControl = A.control({ position: 'topleft' });
 locateControl.onAdd = function () {
-  const btn = L.DomUtil.create('button', 'leaflet-bar');
+  const btn = A.DomUtil.create('button', 'atlas-bar');
   btn.textContent = '📍'; 
   btn.title = "Go to my location";
   Object.assign(btn.style, {
     fontSize: "22px", width: "44px", height: "44px",
     border: "none", cursor: "pointer"
   });
-  L.DomEvent.on(btn, 'click', () => {
+  A.DomEvent.on(btn, 'click', () => {
     map.locate({ setView: true, maxZoom: 14, enableHighAccuracy: true });
   });
   return btn;
@@ -144,7 +144,7 @@ locateControl.addTo(map);
 
 map.on('locationfound', e => {
   if (userMarker) map.removeLayer(userMarker);
-  userMarker = L.marker(e.latlng).addTo(map).bindPopup("📍 You are here").openPopup();
+  userMarker = A.marker(e.latlng).addTo(map).bindPopup("📍 You are here").openPopup();
 });
 map.on('locationerror', () => alert("Unable to retrieve your location"));
 
@@ -158,16 +158,16 @@ function setMapRotation(angle) {
   if (compassArrow) compassArrow.style.transform = `rotate(${-angle}deg)`;
 }
 
-const compassControl = L.control({ position: 'topleft' });
+const compassControl = A.control({ position: 'topleft' });
 compassControl.onAdd = () => {
-  const btn = L.DomUtil.create('button', 'leaflet-bar');
+  const btn = A.DomUtil.create('button', 'atlas-bar');
   btn.textContent = '🧭';
   btn.title = "Toggle compass";
   Object.assign(btn.style, {
     fontSize: "22px", width: "44px", height: "44px",
     border: "none", cursor: "pointer"
   });
-  L.DomEvent.on(btn, 'click', () => {
+  A.DomEvent.on(btn, 'click', () => {
     compassEnabled = !compassEnabled;
     if (!compassEnabled) setMapRotation(0);
   });
@@ -175,16 +175,16 @@ compassControl.onAdd = () => {
 };
 compassControl.addTo(map);
 
-const compassOverlay = L.control({ position: 'topright' });
+const compassOverlay = A.control({ position: 'topright' });
 compassOverlay.onAdd = function() {
-  const div = L.DomUtil.create('div'); 
+  const div = A.DomUtil.create('div');
   Object.assign(div.style, {
     width: "50px", height: "50px",
     border: "2px solid black", borderRadius: "50%",
     background: "rgba(255,255,255,0.7)",
     display: "flex", alignItems: "center", justifyContent: "center"
   });
-  compassArrow = L.DomUtil.create('div', '', div);
+  compassArrow = A.DomUtil.create('div', '', div);
   Object.assign(compassArrow.style, {
     fontSize: "18px", fontWeight: "bold", color: "red"
   });

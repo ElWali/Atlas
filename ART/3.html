@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <title>Zoomable Artworks – IIIF Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/atlas@1.9.4/dist/atlas.css" />
   <style>
     body {
       margin:0; 
@@ -42,29 +42,29 @@
       font-size: 14px;
       padding: 2px 6px;
     }
-    .leaflet-popup-content-wrapper {
+    .atlas-popup-content-wrapper {
       background: #faf8f3;
       border-radius: 6px;
       border: 1px solid #e0dfd8;
       box-shadow: 0 2px 6px rgba(0,0,0,0.25);
     }
-    .leaflet-popup-tip { background: #faf8f3; }
-    .leaflet-popup-content {
+    .atlas-popup-tip { background: #faf8f3; }
+    .atlas-popup-content {
       font-size: 14px;
       color:#333;
       font-family: "Georgia", serif;
     }
-    .leaflet-control-zoom a {
+    .atlas-control-zoom a {
       background: rgba(0,0,0,0.65);
       color: #fafafa;
       border:none;
       border-radius:4px;
     }
-    .leaflet-control-zoom a:hover {
+    .atlas-control-zoom a:hover {
       background:#d2b48c;
       color:#111;
     }
-    .leaflet-control-attribution {
+    .atlas-control-attribution {
       background: rgba(0,0,0,0.5);
       color:#ccc;
       font-size:11px;
@@ -89,8 +89,8 @@
 
   <div id="map"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+  <script src="https://unpkg.com/atlas@1.9.4/dist/atlas.js"></script>
+  <script src="https://unpkg.com/atlas-iiif@2.0.0/atlas-iiif.js"></script>
 
   <script>
     // Artwork IIIF sources
@@ -117,9 +117,9 @@
     };
 
     // Initialize map
-    const map = L.map('map', {
+    const map = A.map('map', {
       center: [0, 0],
-      crs: L.CRS.Simple,
+      crs: A.CRS.Simple,
       zoom: 0,
       minZoom: -3,
       maxZoom: 8,
@@ -138,12 +138,12 @@
       if (annotationLayer) annotationLayer.clearLayers();
 
       // Load new IIIF layer
-      iiifLayer = L.tileLayer.iiif(art.iiif, {
+      iiifLayer = A.tileLayer.iiif(art.iiif, {
         fitBounds: true,
         setMaxBounds: true
       }).addTo(map);
 
-      annotationLayer = L.layerGroup().addTo(map);
+      annotationLayer = A.layerGroup().addTo(map);
 
       iiifLayer.on("load", () => {
         map.fitBounds(iiifLayer.getBounds());
@@ -152,9 +152,9 @@
         // Add annotations
         art.annotations.forEach(a => {
           if (a.coords) {
-            L.marker(a.coords).bindPopup(a.text).addTo(annotationLayer);
+            A.marker(a.coords).bindPopup(a.text).addTo(annotationLayer);
           } else if (a.polygon) {
-            L.polygon(a.polygon, {color:"gold",weight:2,fillOpacity:0.2})
+            A.polygon(a.polygon, {color:"gold",weight:2,fillOpacity:0.2})
               .bindPopup(a.text).addTo(annotationLayer);
           }
         });

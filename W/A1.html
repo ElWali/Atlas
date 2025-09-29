@@ -596,10 +596,10 @@ class Atlas {
     const h = this.canvas.height / this.dpr;
     const anchorVec = { x: ax - w/2, y: ay - h/2 };
     const currAnchorLL = anchorLL || this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
-    if (isNaN(currAnchorLL.lat) || isNaN(currAnchorLL.lon)) return;
+    if (isNaN(currAnchorLA.lat) || isNaN(currAnchorLA.lon)) return;
     const zInt = Math.floor(newZoom);
     const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
-    const Ptile = this.lonLatToTile(currAnchorLL.lon, currAnchorLL.lat, zInt);
+    const Ptile = this.lonLatToTile(currAnchorLA.lon, currAnchorLA.lat, zInt);
     const v = rot(anchorVec.x/ts, anchorVec.y/ts, -newBearing);
     const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
     const newCenter = GISUtils.tileToLonLat(ctNew.x, ctNew.y, zInt);

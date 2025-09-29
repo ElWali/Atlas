@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Atlas: A Borderless Atlas of Earth</title>
 
-  <!-- Leaflet Core CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-  <link rel="stylesheet" href="https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/leaflet.fullscreen.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-minimap/dist/Control.MiniMap.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-measure@3.3.0/dist/leaflet-measure.css" />
+  <!-- Atlas Core CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/atlas@1.9.4/dist/atlas.css" />
+  <link rel="stylesheet" href="https://unpkg.com/atlas-control-geocoder/dist/Control.Geocoder.css" />
+  <link rel="stylesheet" href="https://api.mapbox.com/mapbox.js/plugins/atlas-fullscreen/v1.0.1/atlas.fullscreen.css" />
+  <link rel="stylesheet" href="https://unpkg.com/atlas-minimap/dist/Control.MiniMap.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/atlas-measure@3.3.0/dist/atlas-measure.css" />
 
   <style>
     body { margin: 0; padding: 0; }
@@ -30,10 +30,10 @@
       box-shadow: 0 1px 4px rgba(0,0,0,0.2);
     }
 
-    /* Touch-friendly Leaflet buttons */
-    .leaflet-control { margin: 6px !important; }
-    .leaflet-control a,
-    .leaflet-control button {
+    /* Touch-friendly Atlas buttons */
+    .atlas-control { margin: 6px !important; }
+    .atlas-control a,
+    .atlas-control button {
       cursor: pointer;
       display: inline-flex;
       justify-content: center;
@@ -45,22 +45,22 @@
     }
 
     /* Geocoder (search) styling */
-    .leaflet-control-geocoder {
+    .atlas-control-geocoder {
       font-size: 16px !important; 
       max-width: 220px !important;
     }
-    .leaflet-control-geocoder input {
+    .atlas-control-geocoder input {
       height: 36px !important; 
       font-size: 16px !important;
       padding: 4px 8px;
     }
 
     /* Popups styling */
-    .leaflet-popup-content { 
+    .atlas-popup-content {
       font-size: 16px; 
       padding: 8px 10px; 
     }
-    .leaflet-popup-content-wrapper { 
+    .atlas-popup-content-wrapper {
       border-radius: 8px; 
     }
   </style>
@@ -68,15 +68,15 @@
 <body>
   <div id="map"></div>
 
-  <!-- Core Leaflet -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Core Atlas -->
+  <script src="https://unpkg.com/atlas@1.9.4/dist/atlas.js"></script>
 
   <!-- Plugins -->
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-  <script src="https://api.mapbox.com/mapbox.js/plugins/leaflet-fullscreen/v1.0.1/Leaflet.fullscreen.min.js"></script>
-  <script src="https://unpkg.com/leaflet-minimap/dist/Control.MiniMap.js"></script>
-  <script src="https://unpkg.com/leaflet.terminator/L.Terminator.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet-measure@3.3.0/dist/leaflet-measure.min.js"></script>
+  <script src="https://unpkg.com/atlas-control-geocoder/dist/Control.Geocoder.js"></script>
+  <script src="https://api.mapbox.com/mapbox.js/plugins/atlas-fullscreen/v1.0.1/Atlas.fullscreen.min.js"></script>
+  <script src="https://unpkg.com/atlas-minimap/dist/Control.MiniMap.js"></script>
+  <script src="https://unpkg.com/atlas.terminator/A.Terminator.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/atlas-measure@3.3.0/dist/atlas-measure.min.js"></script>
   <script src="https://hammerjs.github.io/dist/hammer.min.js"></script>
 
   <!-- Custom Atlas Logic -->

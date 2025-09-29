@@ -145,7 +145,7 @@
       100% { transform: scale(1.2); opacity: 0; }
     }
 
-    /* --- Marker & Popup Styles (Leaflet-like) --- */
+    /* --- Marker & Popup Styles (Atlas-like) --- */
     .popup {
       position: absolute;
       text-align: center;
@@ -904,7 +904,7 @@
                this.screenToLatLon(ax,ay,this.zoom,this.bearing,this.center);
         const zInt = Math.floor(newZoom),
               ts   = TILE_SIZE * Math.pow(2,newZoom - zInt);
-        const Ptile = this.lonLatToTile(currAnchorLL.lon, currAnchorLL.lat, zInt);
+        const Ptile = this.lonLatToTile(currAnchorLA.lon, currAnchorLA.lat, zInt);
         const v = rot(anchorVec.x/ts, anchorVec.y/ts, -newBearing);
         const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
         const newC  = GISUtils.tileToLonLat(ctNew.x, ctNew.y, zInt);

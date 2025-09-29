@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Local Leaflet Map</title>
+  <title>Local Atlas Map</title>
 
-  <!-- Local Leaflet CSS -->
+  <!-- Local Atlas CSS -->
   <link 
     rel="stylesheet" 
-    href="leaflet.css"
+    href="atlas.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
     crossorigin=""
   />
@@ -226,8 +226,8 @@
 <body>
   <div class="container">
     <header>
-      <h1>Local Leaflet Map</h1>
-      <p class="subtitle">Using your local leaflet.css and leaflet-src.js files with custom markers, popups, and a beautiful UI design.</p>
+      <h1>Local Atlas Map</h1>
+      <p class="subtitle">Using your local atlas.css and atlas-src.js files with custom markers, popups, and a beautiful UI design.</p>
     </header>
     
     <div class="map-container">
@@ -273,57 +273,57 @@
     </div>
     
     <footer>
-      <p>Created with Local Leaflet Files | OpenStreetMap Data | &copy; 2023 Interactive Maps</p>
+      <p>Created with Local Atlas Files | OpenStreetMap Data | &copy; 2023 Interactive Maps</p>
     </footer>
   </div>
 
-  <!-- Local Leaflet JS -->
+  <!-- Local Atlas JS -->
   <script 
-    src="leaflet-src.js"
+    src="atlas-src.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
     crossorigin=""
   ></script>
 
   <script>
     // Create map centered on a location
-    const map = L.map('map').setView([51.505, -0.09], 13);
+    const map = A.map('map').setView([51.505, -0.09], 13);
 
     // Add OpenStreetMap tile layer
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    A.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
     // Add a marker
-    L.marker([51.5, -0.09])
+    A.marker([51.5, -0.09])
       .addTo(map)
       .bindPopup('<b>London Eye</b><br>A giant Ferris wheel on the South Bank of the River Thames.')
       .openPopup();
 
     // Add more markers with different icons
-    const customIcon = L.icon({
-      iconUrl: 'https://cdn.jsdelivr.net/npm/@geoapify/leaflet-control-geocoder@1.1.0-beta.1/icons/geocoder-icon.svg',
+    const customIcon = A.icon({
+      iconUrl: 'https://cdn.jsdelivr.net/npm/@geoapify/atlas-control-geocoder@1.1.0-beta.1/icons/geocoder-icon.svg',
       iconSize: [32, 32],
       iconAnchor: [16, 32],
       popupAnchor: [0, -32]
     });
 
-    L.marker([51.51, -0.1], {icon: customIcon})
+    A.marker([51.51, -0.1], {icon: customIcon})
       .addTo(map)
       .bindPopup('<b>Big Ben</b><br>The iconic clock tower of the Palace of Westminster.')
       .openPopup();
 
-    L.marker([51.501, -0.12])
+    A.marker([51.501, -0.12])
       .addTo(map)
       .bindPopup('<b>Tower Bridge</b><br>A combined bascule and suspension bridge over the River Thames.')
       .openPopup();
 
-    L.marker([51.52, -0.08])
+    A.marker([51.52, -0.08])
       .addTo(map)
       .bindPopup('<b>British Museum</b><br>Dedicated to human history, art and culture.')
       .openPopup();
 
     // Add a circle
-    L.circle([51.51, -0.06], {
+    A.circle([51.51, -0.06], {
       color: '#ff7e5f',
       fillColor: '#ff7e5f',
       fillOpacity: 0.2,
@@ -331,7 +331,7 @@
     }).addTo(map).bindPopup('Hyde Park Area');
 
     // Add a polygon
-    const polygon = L.polygon([
+    const polygon = A.polygon([
       [51.515, -0.07],
       [51.52, -0.06],
       [51.518, -0.05],
@@ -341,10 +341,10 @@
     }).addTo(map).bindPopup('Regent\'s Park');
 
     // Add legend
-    const legend = L.control({position: 'bottomright'});
+    const legend = A.control({position: 'bottomright'});
 
     legend.onAdd = function(map) {
-      const div = L.DomUtil.create('div', 'legend');
+      const div = A.DomUtil.create('div', 'legend');
       div.innerHTML += '<h4>Map Legend</h4>';
       div.innerHTML += '<i style="background: #ff7e5f"></i><span>Circle Area</span><br>';
       div.innerHTML += '<i style="background: #feb47b"></i><span>Polygon Area</span><br>';

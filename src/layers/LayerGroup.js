@@ -83,7 +83,7 @@ export class LayerGroup extends Layer {
 	}
 
 	getLayerId(layer) {
-		return layer._leaflet_id || (layer._leaflet_id = ++LayerGroup.lastId);
+		return layer._atlas_id || (layer._atlas_id = ++LayerGroup.lastId);
 	}
 }
 

@@ -3204,7 +3204,7 @@
           renderTime: this._stats.lastRenderTime,
           renderCount: this._stats.renders
         });
-        // Fire moveend event (for compatibility with Leaflet)
+        // Fire moveend event (for compatibility with Atlas)
         this.fire('moveend');
       }
       updateAttribution() {
@@ -4033,14 +4033,14 @@
           };
           const projectJSON = JSON.stringify(project, null, 2);
           const blob = new Blob([projectJSON], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
+          const url = URA.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = `${this.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_atlas_project.json`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          URA.revokeObjectURL(url);
           this.lastSaveTime = new Date();
           this.showToast("Project saved successfully!", 3000);
           // Dispatch custom event
@@ -4121,14 +4121,14 @@
         try {
           const code = document.getElementById('code-area').value;
           const blob = new Blob([code], { type: 'text/javascript' });
-          const url = URL.createObjectURL(blob);
+          const url = URA.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = `${this.projectName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_atlas_map.js`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
-          URL.revokeObjectURL(url);
+          URA.revokeObjectURL(url);
           this.showToast("Code downloaded successfully!", 3000);
           // Dispatch custom event
           document.dispatchEvent(new CustomEvent('codeDownloaded', {

@@ -366,13 +366,13 @@
        * Creates a new marker.
        * @param {Object} options - Marker configuration.
        * @param {Object} options.latLng - { lat, lon } coordinates.
-       * @param {string} [options.iconUrl='https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png'] - URL for the marker icon.
+       * @param {string} [options.iconUrl='https://unpkg.com/atlas@1.9.4/dist/images/marker-icon.png'] - URL for the marker icon.
        * @param {string} [options.title=''] - Title/tooltip text.
        * @param {boolean} [options.draggable=false] - Whether the marker is draggable.
        */
       constructor(options = {}) {
         this.latLng = { ...options.latLng };
-        this.iconUrl = options.iconUrl || 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
+        this.iconUrl = options.iconUrl || 'https://unpkg.com/atlas@1.9.4/dist/images/marker-icon.png';
         this.title = options.title || '';
         this.draggable = options.draggable || false;
         this._element = null;
@@ -1299,7 +1299,7 @@
         const currAnchorLL = anchorLL || this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
         const zInt = Math.floor(newZoom);
         const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
-        const Ptile = this.lonLatToTile(currAnchorLL.lon, currAnchorLL.lat, zInt);
+        const Ptile = this.lonLatToTile(currAnchorLA.lon, currAnchorLA.lat, zInt);
         const v = rot(anchorVec.x / ts, anchorVec.y / ts, -newBearing);
         const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
         const newCenter = GISUtils.tileToLonLat(ctNew.x, ctNew.y, zInt);

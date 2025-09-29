@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Morocco Blood Donors Directory</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/atlas/dist/atlas.css"/>
   <style>
     :root{
       --primary:#d90429;
@@ -187,13 +187,13 @@
   <!-- Toast -->
   <div id="toast" role="status" aria-atomic="true" aria-live="polite"></div>
 
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/atlas/dist/atlas.js"></script>
   <script>
     // -------------------------
     // Map setup
     // -------------------------
-    const map = L.map('map', { zoomControl: true }).setView([31.7917, -7.0926], 6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const map = A.map('map', { zoomControl: true }).setView([31.7917, -7.0926], 6);
+    A.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
@@ -231,7 +231,7 @@
       showToast('⚠️ Storage unavailable. Data will not persist.', 'error');
     }
 
-    let markers = []; // L.marker instances
+    let markers = []; // A.marker instances
 
     // -------------------------
     // Toast utility (material style)
@@ -280,7 +280,7 @@
     // -------------------------
     // Icons per blood type (simple)
     // -------------------------
-    const bloodIcon = type => L.divIcon({
+    const bloodIcon = type => A.divIcon({
       html: `<div style="background:var(--primary);color:white;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">${type}</div>`,
       className: ''
     });
@@ -294,8 +294,8 @@
       markers = [];
     }
     function fitMapToDonors(list) {
-      const group = new L.featureGroup(list
-        .map(d => (cityCoordinates[d.city] ? L.marker(cityCoordinates[d.city]) : null))
+      const group = new A.featureGroup(list
+        .map(d => (cityCoordinates[d.city] ? A.marker(cityCoordinates[d.city]) : null))
         .filter(Boolean)
       );
       if (group.getLayers().length > 0) {
@@ -332,7 +332,7 @@
 
         // marker
         if (cityCoordinates[d.city]) {
-          const m = L.marker(cityCoordinates[d.city], { icon: bloodIcon(d.bloodType || 'O') })
+          const m = A.marker(cityCoordinates[d.city], { icon: bloodIcon(d.bloodType || 'O') })
             .addTo(map)
             .bindPopup(`<strong>${escapeHtml(d.name)}</strong><br>Blood: ${escapeHtml(d.bloodType)}<br>City: ${escapeHtml(d.city)}<br>Phone: <span class="masked-phone-popup" data-phone="${escapeHtml(d.phone)}">${maskPhone(d.phone)}</span>`);
           markers.push(m);
@@ -354,7 +354,7 @@
       });
     }
 
-    // popup phone reveal handling (leaflet popups are separate DOM nodes)
+    // popup phone reveal handling (atlas popups are separate DOM nodes)
     map.on('popupopen', function (e) {
       const popupNode = e.popup.getElement();
       if (!popupNode) return;

@@ -608,7 +608,7 @@ class Atlas {
     const zInt = Math.floor(newZoom);
     const scale = Math.pow(2, newZoom - zInt);
     
-    const tileAnchor = this.lonLatToTile(anchorLL.lon, anchorLL.lat, zInt);
+    const tileAnchor = this.lonLatToTile(anchorLA.lon, anchorLA.lat, zInt);
     const anchorVec = { x: ax - this.width / 2, y: ay - this.height / 2 };
     const {x: rotatedX, y: rotatedY} = rot(anchorVec.x / (scale * TILE_SIZE), anchorVec.y / (scale * TILE_SIZE), -newBearing);
     

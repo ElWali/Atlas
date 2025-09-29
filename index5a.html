@@ -740,7 +740,7 @@ class Map extends Emitter {
       // apply zoom about anchor (recompute center)
       const zInt = Math.floor(z);
       const ts = TILE_SIZE * Math.pow(2, z - zInt);
-      const Ptile = this.lonLatToTile(anchorLL.lon, anchorLL.lat, zInt);
+      const Ptile = this.lonLatToTile(anchorLA.lon, anchorLA.lat, zInt);
       const v = rot(px - this._cw/2, py - this._ch/2, -this._bearing);
       const ctNew = { x: Ptile.x - v.x/ts, y: Ptile.y - v.y/ts };
       const newCenter = this.tileToLonLat(ctNew.x, ctNew.y, zInt);
@@ -841,7 +841,7 @@ class Map extends Emitter {
         // apply transform about anchor
         const zInt = Math.floor(newZoom);
         const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
-        const Ptile = this.lonLatToTile(this._pinch.anchorLL.lon, this._pinch.anchorLL.lat, zInt);
+        const Ptile = this.lonLatToTile(this._pinch.anchorLA.lon, this._pinch.anchorLA.lat, zInt);
         const v = rot(center.x - this._cw/2, center.y - this._ch/2, -newBearing);
         const ctNew = { x: Ptile.x - v.x/ts, y: Ptile.y - v.y/ts };
         const newCenter = this.tileToLonLat(ctNew.x, ctNew.y, zInt);
