@@ -398,7 +398,7 @@ class AtlasMap {
     newZ = Math.max(this.minZoom, Math.min(newZ, this.maxZoom));
     const { width, height } = this.size();
     const scale = this.crs.scale(newZ);
-    const anchor = this.crs.project(anchorLL.lat, anchorLL.lon);
+    const anchor = this.crs.project(anchorLA.lat, anchorLA.lon);
     let cx = anchor.x - (px - width / 2) / scale;
     let cy = anchor.y - (py - height / 2) / scale;
 
@@ -443,7 +443,7 @@ class TileLayer extends Layer {
   onRemove() {
     if (this.container) this.container.remove();
     this.cache.forEach(t => {
-      if (t.objectURL) URL.revokeObjectURL(t.objectURL);
+      if (t.objectURL) URA.revokeObjectURL(t.objectURL);
     });
     this.cache.clear();
   }
@@ -490,7 +490,7 @@ class TileLayer extends Layer {
         if (!r.ok) throw new Error("Failed");
         return r.blob();
       }).then(blob => {
-        const url = URL.createObjectURL(blob);
+        const url = URA.createObjectURL(blob);
         t.img.src = url;
       }).catch(() => {
         t.img.src = t.url;

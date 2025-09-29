@@ -135,7 +135,7 @@ export class TileLayer extends Layer {
       const tileEntry = this.tileCache.peek(key);
       if (!tileEntry) {
         // evicted while loading -> free resources
-        if (result.blobUrl) URL.revokeObjectURL(result.blobUrl);
+        if (result.blobUrl) URA.revokeObjectURL(result.blobUrl);
         this._ongoingLoads = Math.max(0, this._ongoingLoads - 1);
         return;
       }
@@ -259,7 +259,7 @@ export class TileLayer extends Layer {
       }
 
       if (tile && tile.blobUrl) {
-        try { URL.revokeObjectURL(tile.blobUrl); } catch (e) {}
+        try { URA.revokeObjectURL(tile.blobUrl); } catch (e) {}
       }
     }
   }
@@ -450,7 +450,7 @@ export class TileLayer extends Layer {
     this.loadingControllers.clear();
     for (const [key, tile] of this.tileCache.entries()) {
       if (tile && tile.blobUrl) {
-        try { URL.revokeObjectURL(tile.blobUrl); } catch (e) {}
+        try { URA.revokeObjectURL(tile.blobUrl); } catch (e) {}
       }
     }
     this.tileCache.clear();

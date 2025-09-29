@@ -1,12 +1,12 @@
 /* @preserve
- * Leaflet 1.9.4, a JS library for interactive maps. https://leafletjs.com
+ * Atlas 1.9.4, a JS library for interactive maps. https://atlasjs.com
  * (c) 2010-2023 Vladimir Agafonkin, (c) 2010-2011 CloudMade
  */
 
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
   typeof define === 'function' && define.amd ? define(['exports'], factory) :
-  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.leaflet = {}));
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.atlas = {}));
 })(this, (function (exports) { 'use strict';
 
   var version = "1.9.4";
@@ -14,11 +14,11 @@
   /*
    * @namespace Util
    *
-   * Various utility functions, used by Leaflet internally.
+   * Various utility functions, used by Atlas internally.
    */
 
   // @function extend(dest: Object, src?: Object): Object
-  // Merges the properties of the `src` object (or multiple objects) into `dest` object and returns the latter. Has an `L.extend` shortcut.
+  // Merges the properties of the `src` object (or multiple objects) into `dest` object and returns the latter. Has an `A.extend` shortcut.
   function extend(dest) {
   	var i, j, len, src;
 
@@ -43,7 +43,7 @@
 
   // @function bind(fn: Function, …): Function
   // Returns a new function bound to the arguments passed, like [Function.prototype.bind](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Function/bind).
-  // Has a `L.bind()` shortcut.
+  // Has a `A.bind()` shortcut.
   function bind(fn, obj) {
   	var slice = Array.prototype.slice;
 
@@ -65,10 +65,10 @@
   // @function stamp(obj: Object): Number
   // Returns the unique ID of an object, assigning it one if it doesn't have it.
   function stamp(obj) {
-  	if (!('_leaflet_id' in obj)) {
-  		obj['_leaflet_id'] = ++lastId;
+	if (!('_atlas_id' in obj)) {
+		obj['_atlas_id'] = ++lastId;
   	}
-  	return obj._leaflet_id;
+	return obj._atlas_id;
   }
 
   // @function throttle(fn: Function, time: Number, context: Object): Function
@@ -77,7 +77,7 @@
   // `fn` will be called no more than one time per given amount of `time`. The arguments
   // received by the bound function will be any arguments passed when binding the
   // function, followed by any arguments passed when invoking the bound function.
-  // Has an `L.throttle` shortcut.
+  // Has an `A.throttle` shortcut.
   function throttle(fn, time, context) {
   	var lock, args, wrapperFn, later;
 
@@ -144,7 +144,7 @@
   }
 
   // @function setOptions(obj: Object, options: Object): Object
-  // Merges the given properties to the `options` of the `obj` object, returning the resulting options. See `Class options`. Has an `L.setOptions` shortcut.
+  // Merges the given properties to the `options` of the `obj` object, returning the resulting options. See `Class options`. Has an `A.setOptions` shortcut.
   function setOptions(obj, options) {
   	if (!Object.prototype.hasOwnProperty.call(obj, 'options')) {
   		obj.options = obj.options ? create$2(obj.options) : {};
@@ -279,7 +279,7 @@
   };
 
   // @class Class
-  // @aka L.Class
+  // @aka A.Class
 
   // @section
   // @uninheritable
@@ -399,22 +399,22 @@
 
   function checkDeprecatedMixinEvents(includes) {
   	/* global L: true */
-  	if (typeof L === 'undefined' || !L || !L.Mixin) { return; }
+	if (typeof L === 'undefined' || !L || !A.Mixin) { return; }
 
   	includes = isArray(includes) ? includes : [includes];
 
   	for (var i = 0; i < includes.length; i++) {
-  		if (includes[i] === L.Mixin.Events) {
-  			console.warn('Deprecated include of L.Mixin.Events: ' +
+		if (includes[i] === A.Mixin.Events) {
+			console.warn('Deprecated include of A.Mixin.Events: ' +
   				'this property will be removed in future releases, ' +
-  				'please inherit from L.Evented instead.', new Error().stack);
+				'please inherit from A.Evented instead.', new Error().stack);
   		}
   	}
   }
 
   /*
    * @class Evented
-   * @aka L.Evented
+   * @aka A.Evented
    * @inherits Class
    *
    * A set of methods shared between event-powered classes (like `Map` and `Marker`). Generally, events allow you to execute some function when something happens with an object (e.g. the user clicks on the map, causing the map to fire `'click'` event).
@@ -427,7 +427,7 @@
    * } );
    * ```
    *
-   * Leaflet deals with event listeners by reference, so if you want to add a listener and then remove it, define it as a function:
+   * Atlas deals with event listeners by reference, so if you want to add a listener and then remove it, define it as a function:
    *
    * ```js
    * function onClick(e) { ... }
@@ -756,24 +756,24 @@
 
   /*
    * @class Point
-   * @aka L.Point
+   * @aka A.Point
    *
    * Represents a point with `x` and `y` coordinates in pixels.
    *
    * @example
    *
    * ```js
-   * var point = L.point(200, 300);
+   * var point = A.point(200, 300);
    * ```
    *
-   * All Leaflet methods and options that accept `Point` objects also accept them in a simple Array form (unless noted otherwise), so these lines are equivalent:
+   * All Atlas methods and options that accept `Point` objects also accept them in a simple Array form (unless noted otherwise), so these lines are equivalent:
    *
    * ```js
    * map.panBy([200, 300]);
-   * map.panBy(L.point(200, 300));
+   * map.panBy(A.point(200, 300));
    * ```
    *
-   * Note that `Point` does not inherit from Leaflet's `Class` object,
+   * Note that `Point` does not inherit from Atlas's `Class` object,
    * which means new classes can't inherit from it, and new methods
    * can't be added to it with the `include` function.
    */
@@ -949,15 +949,15 @@
   	}
   };
 
-  // @factory L.point(x: Number, y: Number, round?: Boolean)
+  // @factory A.point(x: Number, y: Number, round?: Boolean)
   // Creates a Point object with the given `x` and `y` coordinates. If optional `round` is set to true, rounds the `x` and `y` values.
 
   // @alternative
-  // @factory L.point(coords: Number[])
+  // @factory A.point(coords: Number[])
   // Expects an array of the form `[x, y]` instead.
 
   // @alternative
-  // @factory L.point(coords: Object)
+  // @factory A.point(coords: Object)
   // Expects a plain object of the form `{x: Number, y: Number}` instead.
   function toPoint(x, y, round) {
   	if (x instanceof Point) {
@@ -977,25 +977,25 @@
 
   /*
    * @class Bounds
-   * @aka L.Bounds
+   * @aka A.Bounds
    *
    * Represents a rectangular area in pixel coordinates.
    *
    * @example
    *
    * ```js
-   * var p1 = L.point(10, 10),
-   * p2 = L.point(40, 60),
-   * bounds = L.bounds(p1, p2);
+   * var p1 = A.point(10, 10),
+   * p2 = A.point(40, 60),
+   * bounds = A.bounds(p1, p2);
    * ```
    *
-   * All Leaflet methods that accept `Bounds` objects also accept them in a simple Array form (unless noted otherwise), so the bounds example above can be passed like this:
+   * All Atlas methods that accept `Bounds` objects also accept them in a simple Array form (unless noted otherwise), so the bounds example above can be passed like this:
    *
    * ```js
    * otherBounds.intersects([[10, 10], [40, 60]]);
    * ```
    *
-   * Note that `Bounds` does not inherit from Leaflet's `Class` object,
+   * Note that `Bounds` does not inherit from Atlas's `Class` object,
    * which means new classes can't inherit from it, and new methods
    * can't be added to it with the `include` function.
    */
@@ -1181,10 +1181,10 @@
   };
 
 
-  // @factory L.bounds(corner1: Point, corner2: Point)
+  // @factory A.bounds(corner1: Point, corner2: Point)
   // Creates a Bounds object from two corners coordinate pairs.
   // @alternative
-  // @factory L.bounds(points: Point[])
+  // @factory A.bounds(points: Point[])
   // Creates a Bounds object from the given array of points.
   function toBounds(a, b) {
   	if (!a || a instanceof Bounds) {
@@ -1195,19 +1195,19 @@
 
   /*
    * @class LatLngBounds
-   * @aka L.LatLngBounds
+   * @aka A.LatLngBounds
    *
    * Represents a rectangular geographical area on a map.
    *
    * @example
    *
    * ```js
-   * var corner1 = L.latLng(40.712, -74.227),
-   * corner2 = L.latLng(40.774, -74.125),
-   * bounds = L.latLngBounds(corner1, corner2);
+   * var corner1 = A.latLng(40.712, -74.227),
+   * corner2 = A.latLng(40.774, -74.125),
+   * bounds = A.latLngBounds(corner1, corner2);
    * ```
    *
-   * All Leaflet methods that accept LatLngBounds objects also accept them in a simple Array form (unless noted otherwise), so the bounds example above can be passed like this:
+   * All Atlas methods that accept LatLngBounds objects also accept them in a simple Array form (unless noted otherwise), so the bounds example above can be passed like this:
    *
    * ```js
    * map.fitBounds([
@@ -1218,7 +1218,7 @@
    *
    * Caution: if the area crosses the antimeridian (often confused with the International Date Line), you must specify corners _outside_ the [-180, 180] degrees longitude range.
    *
-   * Note that `LatLngBounds` does not inherit from Leaflet's `Class` object,
+   * Note that `LatLngBounds` does not inherit from Atlas's `Class` object,
    * which means new classes can't inherit from it, and new methods
    * can't be added to it with the `include` function.
    */
@@ -1430,11 +1430,11 @@
 
   // TODO International date line?
 
-  // @factory L.latLngBounds(corner1: LatLng, corner2: LatLng)
+  // @factory A.latLngBounds(corner1: LatLng, corner2: LatLng)
   // Creates a `LatLngBounds` object by defining two diagonally opposite corners of the rectangle.
 
   // @alternative
-  // @factory L.latLngBounds(latlngs: LatLng[])
+  // @factory A.latLngBounds(latlngs: LatLng[])
   // Creates a `LatLngBounds` object defined by the geographical points it contains. Very useful for zooming the map to fit a particular set of locations with [`fitBounds`](#map-fitbounds).
   function toLatLngBounds(a, b) {
   	if (a instanceof LatLngBounds) {
@@ -1444,26 +1444,26 @@
   }
 
   /* @class LatLng
-   * @aka L.LatLng
+   * @aka A.LatLng
    *
    * Represents a geographical point with a certain latitude and longitude.
    *
    * @example
    *
    * ```
-   * var latlng = L.latLng(50.5, 30.5);
+   * var latlng = A.latLng(50.5, 30.5);
    * ```
    *
-   * All Leaflet methods that accept LatLng objects also accept them in a simple Array form and simple object form (unless noted otherwise), so these lines are equivalent:
+   * All Atlas methods that accept LatLng objects also accept them in a simple Array form and simple object form (unless noted otherwise), so these lines are equivalent:
    *
    * ```
    * map.panTo([50, 30]);
    * map.panTo({lon: 30, lat: 50});
    * map.panTo({lat: 50, lng: 30});
-   * map.panTo(L.latLng(50, 30));
+   * map.panTo(A.latLng(50, 30));
    * ```
    *
-   * Note that `LatLng` does not inherit from Leaflet's `Class` object,
+   * Note that `LatLng` does not inherit from Atlas's `Class` object,
    * which means new classes can't inherit from it, and new methods
    * can't be added to it with the `include` function.
    */
@@ -1541,15 +1541,15 @@
 
 
 
-  // @factory L.latLng(latitude: Number, longitude: Number, altitude?: Number): LatLng
+  // @factory A.latLng(latitude: Number, longitude: Number, altitude?: Number): LatLng
   // Creates an object representing a geographical point with the given latitude and longitude (and optionally altitude).
 
   // @alternative
-  // @factory L.latLng(coords: Array): LatLng
+  // @factory A.latLng(coords: Array): LatLng
   // Expects an array of the form `[Number, Number]` or `[Number, Number, Number]` instead.
 
   // @alternative
-  // @factory L.latLng(coords: Object): LatLng
+  // @factory A.latLng(coords: Object): LatLng
   // Expects an plain object of the form `{lat: Number, lng: Number}` or `{lat: Number, lng: Number, alt: Number}` instead.
 
   function toLatLng(a, b, c) {
@@ -1579,17 +1579,17 @@
 
   /*
    * @namespace CRS
-   * @crs L.CRS.Base
+   * @crs A.CRS.Base
    * Object that defines coordinate reference systems for projecting
    * geographical points into pixel (screen) coordinates and back (and to
    * coordinates in other units for [WMS](https://en.wikipedia.org/wiki/Web_Map_Service) services). See
    * [spatial reference system](https://en.wikipedia.org/wiki/Spatial_reference_system).
    *
-   * Leaflet defines the most usual CRSs by default. If you want to use a
+   * Atlas defines the most usual CRSs by default. If you want to use a
    * CRS not defined by default, take a look at the
-   * [Proj4Leaflet](https://github.com/kartena/Proj4Leaflet) plugin.
+   * [Proj4Atlas](https://github.com/kartena/Proj4Atlas) plugin.
    *
-   * Note that the CRS instances do not inherit from Leaflet's `Class` object,
+   * Note that the CRS instances do not inherit from Atlas's `Class` object,
    * and can't be instantiated. Also, new classes can't inherit from them,
    * and methods can't be added to them with the `include` function.
    */
@@ -1691,7 +1691,7 @@
   	// @method wrapLatLngBounds(bounds: LatLngBounds): LatLngBounds
   	// Returns a `LatLngBounds` with the same size as the given one, ensuring
   	// that its center is within the CRS's bounds.
-  	// Only accepts actual `L.LatLngBounds` instances, not arrays.
+	// Only accepts actual `A.LatLngBounds` instances, not arrays.
   	wrapLatLngBounds: function (bounds) {
   		var center = bounds.getCenter(),
   		    newCenter = this.wrapLatLng(center),
@@ -1713,7 +1713,7 @@
 
   /*
    * @namespace CRS
-   * @crs L.CRS.Earth
+   * @crs A.CRS.Earth
    *
    * Serves as the base for CRS that are global such that they cover the earth.
    * Can only be used as the base for other CRS and cannot be used directly,
@@ -1744,7 +1744,7 @@
 
   /*
    * @namespace Projection
-   * @projection L.Projection.SphericalMercator
+   * @projection A.Projection.SphericalMercator
    *
    * Spherical Mercator projection — the most common projection for online maps,
    * used by almost all free and commercial tile providers. Assumes that Earth is
@@ -1785,24 +1785,24 @@
 
   /*
    * @class Transformation
-   * @aka L.Transformation
+   * @aka A.Transformation
    *
    * Represents an affine transformation: a set of coefficients `a`, `b`, `c`, `d`
    * for transforming a point of a form `(x, y)` into `(a*x + b, c*y + d)` and doing
-   * the reverse. Used by Leaflet in its projections code.
+   * the reverse. Used by Atlas in its projections code.
    *
    * @example
    *
    * ```js
-   * var transformation = L.transformation(2, 5, -1, 10),
-   * 	p = L.point(1, 2),
-   * 	p2 = transformation.transform(p), //  L.point(7, 8)
-   * 	p3 = transformation.untransform(p2); //  L.point(1, 2)
+   * var transformation = A.transformation(2, 5, -1, 10),
+   * 	p = A.point(1, 2),
+   * 	p2 = transformation.transform(p), //  A.point(7, 8)
+   * 	p3 = transformation.untransform(p2); //  A.point(1, 2)
    * ```
    */
 
 
-  // factory new L.Transformation(a: Number, b: Number, c: Number, d: Number)
+  // factory new A.Transformation(a: Number, b: Number, c: Number, d: Number)
   // Creates a `Transformation` object with the given coefficients.
   function Transformation(a, b, c, d) {
   	if (isArray(a)) {
@@ -1822,7 +1822,7 @@
   Transformation.prototype = {
   	// @method transform(point: Point, scale?: Number): Point
   	// Returns a transformed point, optionally multiplied by the given scale.
-  	// Only accepts actual `L.Point` instances, not arrays.
+	// Only accepts actual `A.Point` instances, not arrays.
   	transform: function (point, scale) { // (Point, Number) -> Point
   		return this._transform(point.clone(), scale);
   	},
@@ -1837,7 +1837,7 @@
 
   	// @method untransform(point: Point, scale?: Number): Point
   	// Returns the reverse transformation of the given point, optionally divided
-  	// by the given scale. Only accepts actual `L.Point` instances, not arrays.
+	// by the given scale. Only accepts actual `A.Point` instances, not arrays.
   	untransform: function (point, scale) {
   		scale = scale || 1;
   		return new Point(
@@ -1846,13 +1846,13 @@
   	}
   };
 
-  // factory L.transformation(a: Number, b: Number, c: Number, d: Number)
+  // factory A.transformation(a: Number, b: Number, c: Number, d: Number)
 
-  // @factory L.transformation(a: Number, b: Number, c: Number, d: Number)
+  // @factory A.transformation(a: Number, b: Number, c: Number, d: Number)
   // Instantiates a Transformation object with the given coefficients.
 
   // @alternative
-  // @factory L.transformation(coefficients: Array): Transformation
+  // @factory A.transformation(coefficients: Array): Transformation
   // Expects an coefficients array of the form
   // `[a: Number, b: Number, c: Number, d: Number]`.
 
@@ -1862,7 +1862,7 @@
 
   /*
    * @namespace CRS
-   * @crs L.CRS.EPSG3857
+   * @crs A.CRS.EPSG3857
    *
    * The most common CRS for online maps, used by almost all free and commercial
    * tile providers. Uses Spherical Mercator projection. Set in by default in
@@ -1884,7 +1884,7 @@
   });
 
   // @namespace SVG; @section
-  // There are several static functions which can be called without instantiating L.SVG:
+  // There are several static functions which can be called without instantiating A.SVG:
 
   // @function create(name: String): SVGElement
   // Returns a instance of [SVGElement](https://developer.mozilla.org/docs/Web/API/SVGElement),
@@ -1896,7 +1896,7 @@
 
   // @function pointsToPath(rings: Point[], closed: Boolean): String
   // Generates a SVG path string for multiple rings, with each ring turning
-  // into "M..L..L.." instructions
+  // into "M..A..A.." instructions
   function pointsToPath(rings, closed) {
   	var str = '',
   	i, j, len, len2, points, p;
@@ -1919,14 +1919,14 @@
 
   /*
    * @namespace Browser
-   * @aka L.Browser
+   * @aka A.Browser
    *
-   * A namespace with static properties for browser/feature detection used by Leaflet internally.
+   * A namespace with static properties for browser/feature detection used by Atlas internally.
    *
    * @example
    *
    * ```js
-   * if (L.Browser.ielt9) {
+   * if (A.Browser.ielt9) {
    *   alert('Upgrade your browser, dude!');
    * }
    * ```
@@ -2136,7 +2136,7 @@
   };
 
   /*
-   * Extends L.DomEvent to provide touch support for Internet Explorer and Windows-based devices.
+   * Extends A.DomEvent to provide touch support for Internet Explorer and Windows-based devices.
    */
 
   var POINTER_DOWN =   Browser.msPointer ? 'MSPointerDown'   : 'pointerdown';
@@ -2233,7 +2233,7 @@
    * Extends the event handling code with double tap support for mobile browsers.
    *
    * Note: currently most browsers fire native dblclick, with only a few exceptions
-   * (see https://github.com/Leaflet/Leaflet/issues/7012#issuecomment-595087386)
+   * (see https://github.com/Atlas/Atlas/issues/7012#issuecomment-595087386)
    */
 
   function makeDblclick(event) {
@@ -2323,7 +2323,7 @@
    * @namespace DomUtil
    *
    * Utility functions to work with the [DOM](https://developer.mozilla.org/docs/Web/API/Document_Object_Model)
-   * tree, used by Leaflet internally.
+   * tree, used by Atlas internally.
    *
    * Most functions expecting or returning a `HTMLElement` also work for
    * SVG elements. The only difference is that classes refer to CSS classes
@@ -2539,11 +2539,11 @@
   // @function setPosition(el: HTMLElement, position: Point)
   // Sets the position of `el` to coordinates specified by `position`,
   // using CSS translate or top/left positioning depending on the browser
-  // (used by Leaflet internally to position its layers).
+  // (used by Atlas internally to position its layers).
   function setPosition(el, point) {
 
   	/*eslint-disable */
-  	el._leaflet_pos = point;
+	el._atlas_pos = point;
   	/* eslint-enable */
 
   	if (Browser.any3d) {
@@ -2560,17 +2560,17 @@
   	// this method is only used for elements previously positioned using setPosition,
   	// so it's safe to cache the position for performance
 
-  	return el._leaflet_pos || new Point(0, 0);
+	return el._atlas_pos || new Point(0, 0);
   }
 
   // @function disableTextSelection()
   // Prevents the user from generating `selectstart` DOM events, usually generated
   // when the user drags the mouse through a page with text. Used internally
-  // by Leaflet to override the behaviour of any click-and-drag interaction on
+  // by Atlas to override the behaviour of any click-and-drag interaction on
   // the map. Affects drag interactions on the whole document.
 
   // @function enableTextSelection()
-  // Cancels the effects of a previous [`L.DomUtil.disableTextSelection`](#domutil-disabletextselection).
+  // Cancels the effects of a previous [`A.DomUtil.disableTextSelection`](#domutil-disabletextselection).
   var disableTextSelection;
   var enableTextSelection;
   var _userSelect;
@@ -2601,14 +2601,14 @@
   }
 
   // @function disableImageDrag()
-  // As [`L.DomUtil.disableTextSelection`](#domutil-disabletextselection), but
+  // As [`A.DomUtil.disableTextSelection`](#domutil-disabletextselection), but
   // for `dragstart` DOM events, usually generated when the user drags an image.
   function disableImageDrag() {
   	on(window, 'dragstart', preventDefault);
   }
 
   // @function enableImageDrag()
-  // Cancels the effects of a previous [`L.DomUtil.disableImageDrag`](#domutil-disabletextselection).
+  // Cancels the effects of a previous [`A.DomUtil.disableImageDrag`](#domutil-disabletextselection).
   function enableImageDrag() {
   	off(window, 'dragstart', preventDefault);
   }
@@ -2616,7 +2616,7 @@
   var _outlineElement, _outlineStyle;
   // @function preventOutline(el: HTMLElement)
   // Makes the [outline](https://developer.mozilla.org/docs/Web/CSS/outline)
-  // of the element `el` invisible. Used internally by Leaflet to prevent
+  // of the element `el` invisible. Used internally by Atlas to prevent
   // focusable elements from displaying an outline when the user performs a
   // drag interaction on them.
   function preventOutline(element) {
@@ -2632,7 +2632,7 @@
   }
 
   // @function restoreOutline()
-  // Cancels the effects of a previous [`L.DomUtil.preventOutline`]().
+  // Cancels the effects of a previous [`A.DomUtil.preventOutline`]().
   function restoreOutline() {
   	if (!_outlineElement) { return; }
   	_outlineElement.style.outlineStyle = _outlineStyle;
@@ -2698,7 +2698,7 @@
 
   /*
    * @namespace DomEvent
-   * Utility functions to work with the [DOM events](https://developer.mozilla.org/docs/Web/API/Event), used by Leaflet internally.
+   * Utility functions to work with the [DOM events](https://developer.mozilla.org/docs/Web/API/Event), used by Atlas internally.
    */
 
   // Inspired by John Resig, Dean Edwards and YUI addEvent implementations.
@@ -2729,7 +2729,7 @@
   	return this;
   }
 
-  var eventsKey = '_leaflet_events';
+  var eventsKey = '_atlas_events';
 
   // @function off(el: HTMLElement, types: String, fn: Function, context?: Object): this
   // Removes a previously added listener function.
@@ -2860,15 +2860,15 @@
   // @function stopPropagation(ev: DOMEvent): this
   // Stop the given event from propagation to parent elements. Used inside the listener functions:
   // ```js
-  // L.DomEvent.on(div, 'click', function (ev) {
-  // 	L.DomEvent.stopPropagation(ev);
+  // A.DomEvent.on(div, 'click', function (ev) {
+  // 	A.DomEvent.stopPropagation(ev);
   // });
   // ```
   function stopPropagation(e) {
 
   	if (e.stopPropagation) {
   		e.stopPropagation();
-  	} else if (e.originalEvent) {  // In case of Leaflet event.
+	} else if (e.originalEvent) {  // In case of Atlas event.
   		e.originalEvent._stopped = true;
   	} else {
   		e.cancelBubble = true;
@@ -2889,7 +2889,7 @@
   // `'mousedown'` and `'touchstart'` events (plus browser variants).
   function disableClickPropagation(el) {
   	on(el, 'mousedown touchstart dblclick contextmenu', stopPropagation);
-  	el['_leaflet_disable_click'] = true;
+	el['_atlas_disable_click'] = true;
   	return this;
   }
 
@@ -3016,18 +3016,18 @@
 
   /*
    * @class PosAnimation
-   * @aka L.PosAnimation
+   * @aka A.PosAnimation
    * @inherits Evented
    * Used internally for panning animations, utilizing CSS3 Transitions for modern browsers and a timer fallback for IE6-9.
    *
    * @example
    * ```js
-   * var myPositionMarker = L.marker([48.864716, 2.294694]).addTo(map);
+   * var myPositionMarker = A.marker([48.864716, 2.294694]).addTo(map);
    *
    * myPositionMarker.on("click", function() {
    * 	var pos = map.latLngToLayerPoint(myPositionMarker.getLatLng());
    * 	pos.y -= 25;
-   * 	var fx = new L.PosAnimation();
+   * 	var fx = new A.PosAnimation();
    *
    * 	fx.once('end',function() {
    * 		pos.y += 25;
@@ -3039,7 +3039,7 @@
    *
    * ```
    *
-   * @constructor L.PosAnimation()
+   * @constructor A.PosAnimation()
    * Creates a `PosAnimation` object.
    *
    */
@@ -3125,7 +3125,7 @@
 
   /*
    * @class Map
-   * @aka L.Map
+   * @aka A.Map
    * @inherits Evented
    *
    * The central class of the API — it is used to create a map on a page and manipulate it.
@@ -3134,7 +3134,7 @@
    *
    * ```js
    * // initialize the map on the "map" div with a given center and zoom
-   * var map = L.map('map', {
+   * var map = A.map('map', {
    * 	center: [51.505, -0.09],
    * 	zoom: 13
    * });
@@ -3146,7 +3146,7 @@
 
   	options: {
   		// @section Map State Options
-  		// @option crs: CRS = L.CRS.EPSG3857
+		// @option crs: CRS = A.CRS.EPSG3857
   		// The [Coordinate Reference System](#crs) to use. Don't change this if you're not
   		// sure what it means.
   		crs: EPSG3857,
@@ -3183,8 +3183,8 @@
   		maxBounds: undefined,
 
   		// @option renderer: Renderer = *
-  		// The default method for drawing vector layers on the map. `L.SVG`
-  		// or `L.Canvas` by default depending on browser support.
+		// The default method for drawing vector layers on the map. `A.SVG`
+		// or `A.Canvas` by default depending on browser support.
   		renderer: undefined,
 
 
@@ -3249,7 +3249,7 @@
   		this._initContainer(id);
   		this._initLayout();
 
-  		// hack for https://github.com/Leaflet/Leaflet/issues/1980
+		// hack for https://github.com/Atlas/Atlas/issues/1980
   		this._onResize = bind(this._onResize, this);
 
   		this._initEvents();
@@ -3370,7 +3370,7 @@
   		var paddingTL = toPoint(options.paddingTopLeft || options.padding || [0, 0]),
   		    paddingBR = toPoint(options.paddingBottomRight || options.padding || [0, 0]),
 
-  		    zoom = this.getBoundsZoom(bounds, false, paddingTL.add(paddingBR));
+		    zoom = this.getBoundsZoom(bounds, false, paddingTA.add(paddingBR));
 
   		zoom = (typeof options.maxZoom === 'number') ? Math.min(options.maxZoom, zoom) : zoom;
 
@@ -3453,7 +3453,7 @@
 
   		// animate pan unless animate: false specified
   		if (options.animate !== false) {
-  			addClass(this._mapPane, 'leaflet-pan-anim');
+			addClass(this._mapPane, 'atlas-pan-anim');
 
   			var newPos = this._getMapPanePos().subtract(offset).round();
   			this._panAnim.run(this._mapPane, newPos, options.duration || 0.25, options.easeLinearity);
@@ -3779,7 +3779,7 @@
   	},
 
   	_handleGeolocationError: function (error) {
-  		if (!this._container._leaflet_id) { return; }
+		if (!this._container._atlas_id) { return; }
 
   		var c = error.code,
   		    message = error.message ||
@@ -3800,7 +3800,7 @@
   	},
 
   	_handleGeolocationResponse: function (pos) {
-  		if (!this._container._leaflet_id) { return; }
+		if (!this._container._atlas_id) { return; }
 
   		var lat = pos.coords.latitude,
   		    lng = pos.coords.longitude,
@@ -3856,17 +3856,17 @@
   		this._initEvents(true);
   		if (this.options.maxBounds) { this.off('moveend', this._panInsideMaxBounds); }
 
-  		if (this._containerId !== this._container._leaflet_id) {
+		if (this._containerId !== this._container._atlas_id) {
   			throw new Error('Map container is being reused by another instance');
   		}
 
   		try {
   			// throws error in IE6-8
-  			delete this._container._leaflet_id;
+			delete this._container._atlas_id;
   			delete this._containerId;
   		} catch (e) {
   			/*eslint-disable */
-  			this._container._leaflet_id = undefined;
+			this._container._atlas_id = undefined;
   			/* eslint-enable */
   			this._containerId = undefined;
   		}
@@ -3918,7 +3918,7 @@
   	// then returns it. The pane is created as a child of `container`, or
   	// as a child of the main map pane if not set.
   	createPane: function (name, container) {
-  		var className = 'leaflet-pane' + (name ? ' leaflet-' + name.replace('Pane', '') + '-pane' : ''),
+		var className = 'atlas-pane' + (name ? ' atlas-' + name.replace('Pane', '') + '-pane' : ''),
   		    pane = create$1('div', className, container || this._mapPane);
 
   		if (name) {
@@ -4203,7 +4203,7 @@
 
   		if (!container) {
   			throw new Error('Map container not found.');
-  		} else if (container._leaflet_id) {
+		} else if (container._atlas_id) {
   			throw new Error('Map container is already initialized.');
   		}
 
@@ -4216,12 +4216,12 @@
 
   		this._fadeAnimated = this.options.fadeAnimation && Browser.any3d;
 
-  		addClass(container, 'leaflet-container' +
-  			(Browser.touch ? ' leaflet-touch' : '') +
-  			(Browser.retina ? ' leaflet-retina' : '') +
-  			(Browser.ielt9 ? ' leaflet-oldie' : '') +
-  			(Browser.safari ? ' leaflet-safari' : '') +
-  			(this._fadeAnimated ? ' leaflet-fade-anim' : ''));
+		addClass(container, 'atlas-container' +
+			(Browser.touch ? ' atlas-touch' : '') +
+			(Browser.retina ? ' atlas-retina' : '') +
+			(Browser.ielt9 ? ' atlas-oldie' : '') +
+			(Browser.safari ? ' atlas-safari' : '') +
+			(this._fadeAnimated ? ' atlas-fade-anim' : ''));
 
   		var position = getStyle(container, 'position');
 
@@ -4275,8 +4275,8 @@
   		this.createPane('popupPane');
 
   		if (!this.options.markerZoomAnimation) {
-  			addClass(panes.markerPane, 'leaflet-zoom-hide');
-  			addClass(panes.shadowPane, 'leaflet-zoom-hide');
+			addClass(panes.markerPane, 'atlas-zoom-hide');
+			addClass(panes.shadowPane, 'atlas-zoom-hide');
   		}
   	},
 
@@ -4493,14 +4493,14 @@
 
   	_isClickDisabled: function (el) {
   		while (el && el !== this._container) {
-  			if (el['_leaflet_disable_click']) { return true; }
+			if (el['_atlas_disable_click']) { return true; }
   			el = el.parentNode;
   		}
   	},
 
   	_handleDOMEvent: function (e) {
   		var el = (e.target || e.srcElement);
-  		if (!this._loaded || el['_leaflet_disable_events'] || e.type === 'click' && this._isClickDisabled(el)) {
+		if (!this._loaded || el['_atlas_disable_events'] || e.type === 'click' && this._isClickDisabled(el)) {
   			return;
   		}
 
@@ -4709,7 +4709,7 @@
   	},
 
   	_onPanTransitionEnd: function () {
-  		removeClass(this._mapPane, 'leaflet-pan-anim');
+		removeClass(this._mapPane, 'atlas-pan-anim');
   		this.fire('moveend');
   	},
 
@@ -4727,7 +4727,7 @@
 
   	_createAnimProxy: function () {
 
-  		var proxy = this._proxy = create$1('div', 'leaflet-proxy leaflet-zoom-animated');
+		var proxy = this._proxy = create$1('div', 'atlas-proxy atlas-zoom-animated');
   		this._panes.mapPane.appendChild(proxy);
 
   		this.on('zoomanim', function (e) {
@@ -4766,7 +4766,7 @@
   	},
 
   	_nothingToAnimate: function () {
-  		return !this._container.getElementsByClassName('leaflet-zoom-animated').length;
+		return !this._container.getElementsByClassName('atlas-zoom-animated').length;
   	},
 
   	_tryAnimatedZoom: function (center, zoom, options) {
@@ -4805,7 +4805,7 @@
   			this._animateToCenter = center;
   			this._animateToZoom = zoom;
 
-  			addClass(this._mapPane, 'leaflet-zoom-anim');
+			addClass(this._mapPane, 'atlas-zoom-anim');
   		}
 
   		// @section Other Events
@@ -4823,7 +4823,7 @@
 
   		this._move(this._animateToCenter, this._animateToZoom, undefined, true);
 
-  		// Work around webkit not firing 'transitionend', see https://github.com/Leaflet/Leaflet/issues/3689, 2693
+		// Work around webkit not firing 'transitionend', see https://github.com/Atlas/Atlas/issues/3689, 2693
   		setTimeout(bind(this._onZoomTransitionEnd, this), 250);
   	},
 
@@ -4831,7 +4831,7 @@
   		if (!this._animatingZoom) { return; }
 
   		if (this._mapPane) {
-  			removeClass(this._mapPane, 'leaflet-zoom-anim');
+			removeClass(this._mapPane, 'atlas-zoom-anim');
   		}
 
   		this._animatingZoom = false;
@@ -4851,12 +4851,12 @@
 
   // @section
 
-  // @factory L.map(id: String, options?: Map options)
+  // @factory A.map(id: String, options?: Map options)
   // Instantiates a map object given the DOM ID of a `<div>` element
   // and optionally an object literal with `Map options`.
   //
   // @alternative
-  // @factory L.map(el: HTMLElement, options?: Map options)
+  // @factory A.map(el: HTMLElement, options?: Map options)
   // Instantiates a map object given an instance of a `<div>` HTML element
   // and optionally an object literal with `Map options`.
   function createMap(id, options) {
@@ -4865,10 +4865,10 @@
 
   /*
    * @class Control
-   * @aka L.Control
+   * @aka A.Control
    * @inherits Class
    *
-   * L.Control is a base class for implementing map controls. Handles positioning.
+   * A.Control is a base class for implementing map controls. Handles positioning.
    * All other controls extend from this class.
    */
 
@@ -4887,7 +4887,7 @@
   	},
 
   	/* @section
-  	 * Classes extending L.Control will inherit the following methods:
+	 * Classes extending A.Control will inherit the following methods:
   	 *
   	 * @method getPosition: string
   	 * Returns the position of the control.
@@ -4930,7 +4930,7 @@
   		    pos = this.getPosition(),
   		    corner = map._controlCorners[pos];
 
-  		addClass(container, 'leaflet-control');
+		addClass(container, 'atlas-control');
 
   		if (pos.indexOf('bottom') !== -1) {
   			corner.insertBefore(container, corner.firstChild);
@@ -4977,7 +4977,7 @@
   /* @section Extension methods
    * @uninheritable
    *
-   * Every control should extend from `L.Control` and (re-)implement the following methods.
+   * Every control should extend from `A.Control` and (re-)implement the following methods.
    *
    * @method onAdd(map: Map): HTMLElement
    * Should return the container DOM element for the control and add listeners on relevant map events. Called on [`control.addTo(map)`](#control-addTo).
@@ -5006,7 +5006,7 @@
 
   	_initControlPos: function () {
   		var corners = this._controlCorners = {},
-  		    l = 'leaflet-',
+		    l = 'atlas-',
   		    container = this._controlContainer =
   		            create$1('div', l + 'control-container', this._container);
 
@@ -5034,10 +5034,10 @@
 
   /*
    * @class Control.Layers
-   * @aka L.Control.Layers
+   * @aka A.Control.Layers
    * @inherits Control
    *
-   * The layers control gives users the ability to switch between different base layers and switch overlays on/off (check out the [detailed example](https://leafletjs.com/examples/layers-control/)). Extends `Control`.
+   * The layers control gives users the ability to switch between different base layers and switch overlays on/off (check out the [detailed example](https://atlasjs.com/examples/layers-control/)). Extends `Control`.
    *
    * @example
    *
@@ -5052,7 +5052,7 @@
    * 	"Roads": roadsLayer
    * };
    *
-   * L.control.layers(baseLayers, overlays).addTo(map);
+   * A.control.layers(baseLayers, overlays).addTo(map);
    * ```
    *
    * The `baseLayers` and `overlays` parameters are object literals with layer names as keys and `Layer` objects as values:
@@ -5096,7 +5096,7 @@
   		// @option sortFunction: Function = *
   		// A [compare function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array/sort)
   		// that will be used for sorting the layers, when `sortLayers` is `true`.
-  		// The function receives both the `L.Layer` instances and their names, as in
+		// The function receives both the `A.Layer` instances and their names, as in
   		// `sortFunction(layerA, layerB, nameA, nameB)`.
   		// By default, it sorts layers alphabetically by their name.
   		sortFunction: function (layerA, layerB, nameA, nameB) {
@@ -5179,14 +5179,14 @@
   	// @method expand(): this
   	// Expand the control container if collapsed.
   	expand: function () {
-  		addClass(this._container, 'leaflet-control-layers-expanded');
+		addClass(this._container, 'atlas-control-layers-expanded');
   		this._section.style.height = null;
   		var acceptableHeight = this._map.getSize().y - (this._container.offsetTop + 50);
   		if (acceptableHeight < this._section.clientHeight) {
-  			addClass(this._section, 'leaflet-control-layers-scrollbar');
+			addClass(this._section, 'atlas-control-layers-scrollbar');
   			this._section.style.height = acceptableHeight + 'px';
   		} else {
-  			removeClass(this._section, 'leaflet-control-layers-scrollbar');
+			removeClass(this._section, 'atlas-control-layers-scrollbar');
   		}
   		this._checkDisabledLayers();
   		return this;
@@ -5195,12 +5195,12 @@
   	// @method collapse(): this
   	// Collapse the control container if expanded.
   	collapse: function () {
-  		removeClass(this._container, 'leaflet-control-layers-expanded');
+		removeClass(this._container, 'atlas-control-layers-expanded');
   		return this;
   	},
 
   	_initLayout: function () {
-  		var className = 'leaflet-control-layers',
+		var className = 'atlas-control-layers',
   		    container = this._container = create$1('div', className),
   		    collapsed = this.options.collapsed;
 
@@ -5340,7 +5340,7 @@
   	// IE7 bugs out if you create a radio dynamically, so you have to do it this hacky way (see https://stackoverflow.com/a/119079)
   	_createRadioElement: function (name, checked) {
 
-  		var radioHtml = '<input type="radio" class="leaflet-control-layers-selector" name="' +
+		var radioHtml = '<input type="radio" class="atlas-control-layers-selector" name="' +
   				name + '"' + (checked ? ' checked="checked"' : '') + '/>';
 
   		var radioFragment = document.createElement('div');
@@ -5357,10 +5357,10 @@
   		if (obj.overlay) {
   			input = document.createElement('input');
   			input.type = 'checkbox';
-  			input.className = 'leaflet-control-layers-selector';
+			input.className = 'atlas-control-layers-selector';
   			input.defaultChecked = checked;
   		} else {
-  			input = this._createRadioElement('leaflet-base-layers_' + stamp(this), checked);
+			input = this._createRadioElement('atlas-base-layers_' + stamp(this), checked);
   		}
 
   		this._layerControlInputs.push(input);
@@ -5372,7 +5372,7 @@
   		name.innerHTML = ' ' + obj.name;
 
   		// Helps from preventing layer control flicker when checkboxes are disabled
-  		// https://github.com/Leaflet/Leaflet/issues/2771
+		// https://github.com/Atlas/Atlas/issues/2771
   		var holder = document.createElement('span');
 
   		label.appendChild(holder);
@@ -5464,7 +5464,7 @@
   });
 
 
-  // @factory L.control.layers(baselayers?: Object, overlays?: Object, options?: Control.Layers options)
+  // @factory A.control.layers(baselayers?: Object, overlays?: Object, options?: Control.Layers options)
   // Creates a layers control with the given layers. Base layers will be switched with radio buttons, while overlays will be switched with checkboxes. Note that all base layers should be passed in the base layers object, but only one should be added to the map during map instantiation.
   var layers = function (baseLayers, overlays, options) {
   	return new Layers(baseLayers, overlays, options);
@@ -5472,7 +5472,7 @@
 
   /*
    * @class Control.Zoom
-   * @aka L.Control.Zoom
+   * @aka A.Control.Zoom
    * @inherits Control
    *
    * A basic zoom control with two buttons (zoom in and zoom out). It is put on the map by default unless you set its [`zoomControl` option](#map-zoomcontrol) to `false`. Extends `Control`.
@@ -5502,8 +5502,8 @@
   	},
 
   	onAdd: function (map) {
-  		var zoomName = 'leaflet-control-zoom',
-  		    container = create$1('div', zoomName + ' leaflet-bar'),
+		var zoomName = 'atlas-control-zoom',
+		    container = create$1('div', zoomName + ' atlas-bar'),
   		    options = this.options;
 
   		this._zoomInButton  = this._createButton(options.zoomInText, options.zoomInTitle,
@@ -5567,7 +5567,7 @@
 
   	_updateDisabled: function () {
   		var map = this._map,
-  		    className = 'leaflet-disabled';
+		    className = 'atlas-disabled';
 
   		removeClass(this._zoomInButton, className);
   		removeClass(this._zoomOutButton, className);
@@ -5605,7 +5605,7 @@
   });
 
   // @namespace Control.Zoom
-  // @factory L.control.zoom(options: Control.Zoom options)
+  // @factory A.control.zoom(options: Control.Zoom options)
   // Creates a zoom control
   var zoom = function (options) {
   	return new Zoom(options);
@@ -5613,7 +5613,7 @@
 
   /*
    * @class Control.Scale
-   * @aka L.Control.Scale
+   * @aka A.Control.Scale
    * @inherits Control
    *
    * A simple scale control that shows the scale of the current center of screen in metric (m/km) and imperial (mi/ft) systems. Extends `Control`.
@@ -5621,7 +5621,7 @@
    * @example
    *
    * ```js
-   * L.control.scale().addTo(map);
+   * A.control.scale().addTo(map);
    * ```
    */
 
@@ -5648,7 +5648,7 @@
   	},
 
   	onAdd: function (map) {
-  		var className = 'leaflet-control-scale',
+		var className = 'atlas-control-scale',
   		    container = create$1('div', className),
   		    options = this.options;
 
@@ -5734,18 +5734,18 @@
   });
 
 
-  // @factory L.control.scale(options?: Control.Scale options)
+  // @factory A.control.scale(options?: Control.Scale options)
   // Creates an scale control with the given options.
   var scale = function (options) {
   	return new Scale(options);
   };
 
-  var ukrainianFlag = '<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8" class="leaflet-attribution-flag"><path fill="#4C7BE1" d="M0 0h12v4H0z"/><path fill="#FFD500" d="M0 4h12v3H0z"/><path fill="#E0BC00" d="M0 7h12v1H0z"/></svg>';
+  var ukrainianFlag = '<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8" class="atlas-attribution-flag"><path fill="#4C7BE1" d="M0 0h12v4H0z"/><path fill="#FFD500" d="M0 4h12v3H0z"/><path fill="#E0BC00" d="M0 7h12v1H0z"/></svg>';
 
 
   /*
    * @class Control.Attribution
-   * @aka L.Control.Attribution
+   * @aka A.Control.Attribution
    * @inherits Control
    *
    * The attribution control allows you to display attribution data in a small text box on a map. It is put on the map by default unless you set its [`attributionControl` option](#map-attributioncontrol) to `false`, and it fetches attribution texts from layers with the [`getAttribution` method](#layer-getattribution) automatically. Extends Control.
@@ -5757,9 +5757,9 @@
   	options: {
   		position: 'bottomright',
 
-  		// @option prefix: String|false = 'Leaflet'
+		// @option prefix: String|false = 'Atlas'
   		// The HTML text shown before the attributions. Pass `false` to disable.
-  		prefix: '<a href="https://leafletjs.com" title="A JavaScript library for interactive maps">' + (Browser.inlineSvg ? ukrainianFlag + ' ' : '') + 'Leaflet</a>'
+		prefix: '<a href="https://atlasjs.com" title="A JavaScript library for interactive maps">' + (Browser.inlineSvg ? ukrainianFlag + ' ' : '') + 'Atlas</a>'
   	},
 
   	initialize: function (options) {
@@ -5770,7 +5770,7 @@
 
   	onAdd: function (map) {
   		map.attributionControl = this;
-  		this._container = create$1('div', 'leaflet-control-attribution');
+		this._container = create$1('div', 'atlas-control-attribution');
   		disableClickPropagation(this._container);
 
   		// TODO ugly, refactor
@@ -5875,7 +5875,7 @@
   });
 
   // @namespace Control.Attribution
-  // @factory L.control.attribution(options: Control.Attribution options)
+  // @factory A.control.attribution(options: Control.Attribution options)
   // Creates an attribution control.
   var attribution = function (options) {
   	return new Attribution(options);
@@ -5892,12 +5892,12 @@
   control.attribution = attribution;
 
   /*
-  	L.Handler is a base class for handler classes that are used internally to inject
+	A.Handler is a base class for handler classes that are used internally to inject
   	interaction features like dragging to classes like Map and Marker.
   */
 
   // @class Handler
-  // @aka L.Handler
+  // @aka A.Handler
   // Abstract class for map interaction handlers
 
   var Handler = Class.extend({
@@ -5939,7 +5939,7 @@
   	// Called when the handler is disabled, should remove the event hooks added previously.
   });
 
-  // @section There is static function which can be called without instantiating L.Handler:
+  // @section There is static function which can be called without instantiating A.Handler:
   // @function addTo(map: Map, name: String): this
   // Adds a new Handler to the given map with the given name.
   Handler.addTo = function (map, name) {
@@ -5951,16 +5951,16 @@
 
   /*
    * @class Draggable
-   * @aka L.Draggable
+   * @aka A.Draggable
    * @inherits Evented
    *
    * A class for making DOM elements draggable (including touch support).
    * Used internally for map and marker dragging. Only works for elements
-   * that were positioned with [`L.DomUtil.setPosition`](#domutil-setposition).
+   * that were positioned with [`A.DomUtil.setPosition`](#domutil-setposition).
    *
    * @example
    * ```js
-   * var draggable = new L.Draggable(elementToDrag);
+   * var draggable = new A.Draggable(elementToDrag);
    * draggable.enable();
    * ```
    */
@@ -5978,7 +5978,7 @@
   		clickTolerance: 3
   	},
 
-  	// @constructor L.Draggable(el: HTMLElement, dragHandle?: HTMLElement, preventOutline?: Boolean, options?: Draggable options)
+	// @constructor A.Draggable(el: HTMLElement, dragHandle?: HTMLElement, preventOutline?: Boolean, options?: Draggable options)
   	// Creates a `Draggable` object for moving `el` when you start dragging the `dragHandle` element (equals `el` itself by default).
   	initialize: function (element, dragStartTarget, preventOutline, options) {
   		setOptions(this, options);
@@ -6022,7 +6022,7 @@
 
   		this._moved = false;
 
-  		if (hasClass(this._element, 'leaflet-zoom-anim')) { return; }
+		if (hasClass(this._element, 'atlas-zoom-anim')) { return; }
 
   		if (e.touches && e.touches.length !== 1) {
   			// Finish dragging to avoid conflict with touchZoom
@@ -6093,7 +6093,7 @@
 
   			this._moved = true;
 
-  			addClass(document.body, 'leaflet-dragging');
+			addClass(document.body, 'atlas-dragging');
 
   			this._lastTarget = e.target || e.srcElement;
   			// IE and Edge do not give the <use> element, so fetch it
@@ -6101,7 +6101,7 @@
   			if (window.SVGElementInstance && this._lastTarget instanceof window.SVGElementInstance) {
   				this._lastTarget = this._lastTarget.correspondingUseElement;
   			}
-  			addClass(this._lastTarget, 'leaflet-drag-target');
+			addClass(this._lastTarget, 'atlas-drag-target');
   		}
 
   		this._newPos = this._startPos.add(offset);
@@ -6133,10 +6133,10 @@
   	},
 
   	finishDrag: function (noInertia) {
-  		removeClass(document.body, 'leaflet-dragging');
+		removeClass(document.body, 'atlas-dragging');
 
   		if (this._lastTarget) {
-  			removeClass(this._lastTarget, 'leaflet-drag-target');
+			removeClass(this._lastTarget, 'atlas-drag-target');
   			this._lastTarget = null;
   		}
 
@@ -6170,7 +6170,7 @@
 
   /* @function clipPolygon(points: Point[], bounds: Bounds, round?: Boolean): Point[]
    * Clips the polygon geometry defined by the given `points` by the given bounds (using the [Sutherland-Hodgman algorithm](https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)).
-   * Used by Leaflet to only show polygon points that are on the screen or near, increasing
+   * Used by Atlas to only show polygon points that are on the screen or near, increasing
    * performance. Note that polygon points needs different algorithm for clipping
    * than polyline, so there's a separate method for it.
    */
@@ -6299,7 +6299,7 @@
   /*
    * @namespace LineUtil
    *
-   * Various utility functions for polyline points processing, used by Leaflet internally to make polylines lightning-fast.
+   * Various utility functions for polyline points processing, used by Atlas internally to make polylines lightning-fast.
    */
 
   // Simplify polyline with vertex reduction and Douglas-Peucker simplification.
@@ -6309,7 +6309,7 @@
   // Dramatically reduces the number of points in a polyline while retaining
   // its shape and returns a new array of simplified points, using the
   // [Ramer-Douglas-Peucker algorithm](https://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm).
-  // Used for a huge performance boost when processing/displaying Leaflet polylines for
+  // Used for a huge performance boost when processing/displaying Atlas polylines for
   // each zoom level and also reducing visual noise. tolerance affects the amount of
   // simplification (lesser value means higher quality but slower and with more points).
   // Also released as a separated micro-library [Simplify.js](https://mourner.github.io/simplify-js/).
@@ -6407,7 +6407,7 @@
   // @function clipSegment(a: Point, b: Point, bounds: Bounds, useLastCode?: Boolean, round?: Boolean): Point[]|Boolean
   // Clips the segment a to b by rectangular bounds with the
   // [Cohen-Sutherland algorithm](https://en.wikipedia.org/wiki/Cohen%E2%80%93Sutherland_algorithm)
-  // (modifying the segment points directly!). Used by Leaflet to only show polyline
+  // (modifying the segment points directly!). Used by Atlas to only show polyline
   // points that are on the screen or near, increasing performance.
   function clipSegment(a, b, bounds, useLastCode, round) {
   	var codeA = useLastCode ? _lastCode : _getBitCode(a, bounds),
@@ -6531,7 +6531,7 @@
   }
 
   function _flat(latlngs) {
-  	console.warn('Deprecated use of _flat, please use L.LineUtil.isFlat instead.');
+	console.warn('Deprecated use of _flat, please use A.LineUtil.isFlat instead.');
   	return isFlat(latlngs);
   }
 
@@ -6613,9 +6613,9 @@
   /*
    * @namespace Projection
    * @section
-   * Leaflet comes with a set of already defined Projections out of the box:
+   * Atlas comes with a set of already defined Projections out of the box:
    *
-   * @projection L.Projection.LonLat
+   * @projection A.Projection.LonLat
    *
    * Equirectangular, or Plate Carree projection — the most simple projection,
    * mostly used by GIS enthusiasts. Directly maps `x` as longitude, and `y` as
@@ -6637,7 +6637,7 @@
 
   /*
    * @namespace Projection
-   * @projection L.Projection.Mercator
+   * @projection A.Projection.Mercator
    *
    * Elliptical Mercator projection — more complex than Spherical Mercator. Assumes that Earth is an ellipsoid. Used by the EPSG:3395 CRS.
    */
@@ -6692,13 +6692,13 @@
 
    * @method project(latlng: LatLng): Point
    * Projects geographical coordinates into a 2D point.
-   * Only accepts actual `L.LatLng` instances, not arrays.
+   * Only accepts actual `A.LatLng` instances, not arrays.
 
    * @method unproject(point: Point): LatLng
    * The inverse of `project`. Projects a 2D point into a geographical location.
-   * Only accepts actual `L.Point` instances, not arrays.
+   * Only accepts actual `A.Point` instances, not arrays.
 
-   * Note that the projection instances do not inherit from Leaflet's `Class` object,
+   * Note that the projection instances do not inherit from Atlas's `Class` object,
    * and can't be instantiated. Also, new classes can't inherit from them,
    * and methods can't be added to them with the `include` function.
 
@@ -6713,7 +6713,7 @@
 
   /*
    * @namespace CRS
-   * @crs L.CRS.EPSG3395
+   * @crs A.CRS.EPSG3395
    *
    * Rarely used by some commercial tile providers. Uses Elliptical Mercator projection.
    */
@@ -6729,11 +6729,11 @@
 
   /*
    * @namespace CRS
-   * @crs L.CRS.EPSG4326
+   * @crs A.CRS.EPSG4326
    *
    * A common CRS among GIS enthusiasts. Uses simple Equirectangular projection.
    *
-   * Leaflet 1.0.x complies with the [TMS coordinate scheme for EPSG:4326](https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic),
+   * Atlas 1.0.x complies with the [TMS coordinate scheme for EPSG:4326](https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic),
    * which is a breaking change from 0.7.x behaviour.  If you are using a `TileLayer`
    * with this CRS, ensure that there are two 256x256 pixel tiles covering the
    * whole earth at zoom level zero, and that the tile coordinate origin is (-180,+90),
@@ -6748,7 +6748,7 @@
 
   /*
    * @namespace CRS
-   * @crs L.CRS.Simple
+   * @crs A.CRS.Simple
    *
    * A simple CRS that maps longitude and latitude into `x` and `y` directly.
    * May be used for maps of flat surfaces (e.g. game maps). Note that the `y`
@@ -6788,16 +6788,16 @@
   /*
    * @class Layer
    * @inherits Evented
-   * @aka L.Layer
+   * @aka A.Layer
    * @aka ILayer
    *
-   * A set of methods from the Layer base class that all Leaflet layers use.
-   * Inherits all methods, options and events from `L.Evented`.
+   * A set of methods from the Layer base class that all Atlas layers use.
+   * Inherits all methods, options and events from `A.Evented`.
    *
    * @example
    *
    * ```js
-   * var layer = L.marker(latlng).addTo(map);
+   * var layer = A.marker(latlng).addTo(map);
    * layer.addTo(map);
    * layer.remove();
    * ```
@@ -6812,7 +6812,7 @@
 
   var Layer = Evented.extend({
 
-  	// Classes extending `L.Layer` will inherit the following options:
+	// Classes extending `A.Layer` will inherit the following options:
   	options: {
   		// @option pane: String = 'overlayPane'
   		// By default the layer will be added to the map's [overlay pane](#map-overlaypane). Overriding this option will cause the layer to be placed on another pane by default.
@@ -6826,7 +6826,7 @@
   	},
 
   	/* @section
-  	 * Classes extending `L.Layer` will inherit the following methods:
+	 * Classes extending `A.Layer` will inherit the following methods:
   	 *
   	 * @method addTo(map: Map|LayerGroup): this
   	 * Adds the layer to the given map or layer group.
@@ -6904,7 +6904,7 @@
   /* @section Extension methods
    * @uninheritable
    *
-   * Every layer should extend from `L.Layer` and (re-)implement the following methods.
+   * Every layer should extend from `A.Layer` and (re-)implement the following methods.
    *
    * @method onAdd(map: Map): this
    * Should contain code that creates DOM elements for the layer, adds them to `map panes` where they should belong and puts listeners on relevant map events. Called on [`map.addLayer(layer)`](#map-addlayer).
@@ -7059,7 +7059,7 @@
 
   /*
    * @class LayerGroup
-   * @aka L.LayerGroup
+   * @aka A.LayerGroup
    * @inherits Interactive layer
    *
    * Used to group several layers and handle them as one. If you add it to the map,
@@ -7069,7 +7069,7 @@
    * @example
    *
    * ```js
-   * L.layerGroup([marker1, marker2])
+   * A.layerGroup([marker1, marker2])
    * 	.addLayer(polyline)
    * 	.addTo(map);
    * ```
@@ -7207,7 +7207,7 @@
   });
 
 
-  // @factory L.layerGroup(layers?: Layer[], options?: Object)
+  // @factory A.layerGroup(layers?: Layer[], options?: Object)
   // Create a layer group, optionally given an initial set of layers and an `options` object.
   var layerGroup = function (layers, options) {
   	return new LayerGroup(layers, options);
@@ -7215,7 +7215,7 @@
 
   /*
    * @class FeatureGroup
-   * @aka L.FeatureGroup
+   * @aka A.FeatureGroup
    * @inherits LayerGroup
    *
    * Extended `LayerGroup` that makes it easier to do the same thing to all its member layers:
@@ -7228,7 +7228,7 @@
    * @example
    *
    * ```js
-   * L.featureGroup([marker1, marker2, polyline])
+   * A.featureGroup([marker1, marker2, polyline])
    * 	.bindPopup('Hello world!')
    * 	.on('click', function() { alert('Clicked on a member of the group!'); })
    * 	.addTo(map);
@@ -7299,7 +7299,7 @@
   	}
   });
 
-  // @factory L.featureGroup(layers?: Layer[], options?: Object)
+  // @factory A.featureGroup(layers?: Layer[], options?: Object)
   // Create a feature group, optionally given an initial set of layers and an `options` object.
   var featureGroup = function (layers, options) {
   	return new FeatureGroup(layers, options);
@@ -7307,14 +7307,14 @@
 
   /*
    * @class Icon
-   * @aka L.Icon
+   * @aka A.Icon
    *
    * Represents an icon to provide when creating a marker.
    *
    * @example
    *
    * ```js
-   * var myIcon = L.icon({
+   * var myIcon = A.icon({
    *     iconUrl: 'my-icon.png',
    *     iconRetinaUrl: 'my-icon@2x.png',
    *     iconSize: [38, 95],
@@ -7326,10 +7326,10 @@
    *     shadowAnchor: [22, 94]
    * });
    *
-   * L.marker([50.505, 30.57], {icon: myIcon}).addTo(map);
+   * A.marker([50.505, 30.57], {icon: myIcon}).addTo(map);
    * ```
    *
-   * `L.Icon.Default` extends `L.Icon` and is the blue icon Leaflet uses for markers by default.
+   * `A.Icon.Default` extends `A.Icon` and is the blue icon Atlas uses for markers by default.
    *
    */
 
@@ -7435,7 +7435,7 @@
   		    anchor = toPoint(name === 'shadow' && options.shadowAnchor || options.iconAnchor ||
   		            size && size.divideBy(2, true));
 
-  		img.className = 'leaflet-marker-' + name + ' ' + (options.className || '');
+		img.className = 'atlas-marker-' + name + ' ' + (options.className || '');
 
   		if (anchor) {
   			img.style.marginLeft = (-anchor.x) + 'px';
@@ -7460,7 +7460,7 @@
   });
 
 
-  // @factory L.icon(options: Icon options)
+  // @factory A.icon(options: Icon options)
   // Creates an icon instance with the given options.
   function icon(options) {
   	return new Icon(options);
@@ -7468,18 +7468,18 @@
 
   /*
    * @miniclass Icon.Default (Icon)
-   * @aka L.Icon.Default
+   * @aka A.Icon.Default
    * @section
    *
    * A trivial subclass of `Icon`, represents the icon to use in `Marker`s when
-   * no icon is specified. Points to the blue marker image distributed with Leaflet
+   * no icon is specified. Points to the blue marker image distributed with Atlas
    * releases.
    *
-   * In order to customize the default icon, just change the properties of `L.Icon.Default.prototype.options`
+   * In order to customize the default icon, just change the properties of `A.Icon.Default.prototype.options`
    * (which is a set of `Icon options`).
    *
    * If you want to _completely_ replace the default icon, override the
-   * `L.Marker.prototype.options.icon` with your own icon instead.
+   * `A.Marker.prototype.options.icon` with your own icon instead.
    */
 
   var IconDefault = Icon.extend({
@@ -7517,21 +7517,21 @@
   	},
 
   	_detectIconPath: function () {
-  		var el = create$1('div',  'leaflet-default-icon-path', document.body);
+		var el = create$1('div',  'atlas-default-icon-path', document.body);
   		var path = getStyle(el, 'background-image') ||
   		           getStyle(el, 'backgroundImage');	// IE8
 
   		document.body.removeChild(el);
   		path = this._stripUrl(path);
   		if (path) { return path; }
-  		var link = document.querySelector('link[href$="leaflet.css"]');
+		var link = document.querySelector('link[href$="atlas.css"]');
   		if (!link) { return ''; }
-  		return link.href.substring(0, link.href.length - 'leaflet.css'.length - 1);
+		return link.href.substring(0, link.href.length - 'atlas.css'.length - 1);
   	}
   });
 
   /*
-   * L.Handler.MarkerDrag is used internally by L.Marker to make the markers draggable.
+   * A.Handler.MarkerDrag is used internally by A.Marker to make the markers draggable.
    */
 
 
@@ -7567,7 +7567,7 @@
   			dragend: this._onDragEnd
   		}, this).enable();
 
-  		addClass(icon, 'leaflet-marker-draggable');
+		addClass(icon, 'atlas-marker-draggable');
   	},
 
   	removeHooks: function () {
@@ -7579,7 +7579,7 @@
   		}, this).disable();
 
   		if (this._marker._icon) {
-  			removeClass(this._marker._icon, 'leaflet-marker-draggable');
+			removeClass(this._marker._icon, 'atlas-marker-draggable');
   		}
   	},
 
@@ -7688,13 +7688,13 @@
   /*
    * @class Marker
    * @inherits Interactive layer
-   * @aka L.Marker
-   * L.Marker is used to display clickable/draggable icons on the map. Extends `Layer`.
+   * @aka A.Marker
+   * A.Marker is used to display clickable/draggable icons on the map. Extends `Layer`.
    *
    * @example
    *
    * ```js
-   * L.marker([50.5, 30.5]).addTo(map);
+   * A.marker([50.5, 30.5]).addTo(map);
    * ```
    */
 
@@ -7705,8 +7705,8 @@
   	options: {
   		// @option icon: Icon = *
   		// Icon instance to use for rendering the marker.
-  		// See [Icon documentation](#L.Icon) for details on how to customize the marker icon.
-  		// If not specified, a common instance of `L.Icon.Default` is used.
+		// See [Icon documentation](#A.Icon) for details on how to customize the marker icon.
+		// If not specified, a common instance of `A.Icon.Default` is used.
   		icon: new IconDefault(),
 
   		// Option inherited from "Interactive layer" abstract class
@@ -7718,12 +7718,12 @@
 
   		// @option title: String = ''
   		// Text for the browser tooltip that appear on marker hover (no tooltip by default).
-  		// [Useful for accessibility](https://leafletjs.com/examples/accessibility/#markers-must-be-labelled).
+		// [Useful for accessibility](https://atlasjs.com/examples/accessibility/#markers-must-be-labelled).
   		title: '',
 
   		// @option alt: String = 'Marker'
   		// Text for the `alt` attribute of the icon image.
-  		// [Useful for accessibility](https://leafletjs.com/examples/accessibility/#markers-must-be-labelled).
+		// [Useful for accessibility](https://atlasjs.com/examples/accessibility/#markers-must-be-labelled).
   		alt: 'Marker',
 
   		// @option zIndexOffset: Number = 0
@@ -7752,7 +7752,7 @@
 
   		// @option bubblingMouseEvents: Boolean = false
   		// When `true`, a mouse event on this marker will trigger the same event on the map
-  		// (unless [`L.DomEvent.stopPropagation`](#domevent-stoppropagation) is used).
+		// (unless [`A.DomEvent.stopPropagation`](#domevent-stoppropagation) is used).
   		bubblingMouseEvents: false,
 
   		// @option autoPanOnFocus: Boolean = true
@@ -7888,7 +7888,7 @@
 
   	_initIcon: function () {
   		var options = this.options,
-  		    classToAdd = 'leaflet-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
+		    classToAdd = 'atlas-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
 
   		var icon = options.icon.createIcon(this._icon),
   		    addIcon = false;
@@ -8014,7 +8014,7 @@
 
   		if (!this.options.interactive) { return; }
 
-  		addClass(this._icon, 'leaflet-interactive');
+		addClass(this._icon, 'atlas-interactive');
 
   		this.addInteractiveTarget(this._icon);
 
@@ -8088,9 +8088,9 @@
   });
 
 
-  // factory L.marker(latlng: LatLng, options? : Marker options)
+  // factory A.marker(latlng: LatLng, options? : Marker options)
 
-  // @factory L.marker(latlng: LatLng, options? : Marker options)
+  // @factory A.marker(latlng: LatLng, options? : Marker options)
   // Instantiates a Marker object given a geographical point and optionally an options object.
   function marker(latlng, options) {
   	return new Marker(latlng, options);
@@ -8098,7 +8098,7 @@
 
   /*
    * @class Path
-   * @aka L.Path
+   * @aka A.Path
    * @inherits Interactive layer
    *
    * An abstract class that contains options and constants shared between vector
@@ -8165,7 +8165,7 @@
 
   		// @option bubblingMouseEvents: Boolean = true
   		// When `true`, a mouse event on this path will trigger the same event on the map
-  		// (unless [`L.DomEvent.stopPropagation`](#domevent-stoppropagation) is used).
+		// (unless [`A.DomEvent.stopPropagation`](#domevent-stoppropagation) is used).
   		bubblingMouseEvents: true
   	},
 
@@ -8244,7 +8244,7 @@
 
   /*
    * @class CircleMarker
-   * @aka L.CircleMarker
+   * @aka A.CircleMarker
    * @inherits Path
    *
    * A circle of a fixed size with radius specified in pixels. Extends `Path`.
@@ -8340,7 +8340,7 @@
   });
 
 
-  // @factory L.circleMarker(latlng: LatLng, options?: CircleMarker options)
+  // @factory A.circleMarker(latlng: LatLng, options?: CircleMarker options)
   // Instantiates a circle marker object given a geographical point, and an optional options object.
   function circleMarker(latlng, options) {
   	return new CircleMarker(latlng, options);
@@ -8348,7 +8348,7 @@
 
   /*
    * @class Circle
-   * @aka L.Circle
+   * @aka A.Circle
    * @inherits CircleMarker
    *
    * A class for drawing circle overlays on a map. Extends `CircleMarker`.
@@ -8358,7 +8358,7 @@
    * @example
    *
    * ```js
-   * L.circle([50.5, 30.5], {radius: 200}).addTo(map);
+   * A.circle([50.5, 30.5], {radius: 200}).addTo(map);
    * ```
    */
 
@@ -8441,11 +8441,11 @@
   	}
   });
 
-  // @factory L.circle(latlng: LatLng, options?: Circle options)
+  // @factory A.circle(latlng: LatLng, options?: Circle options)
   // Instantiates a circle object given a geographical point, and an options object
   // which contains the circle radius.
   // @alternative
-  // @factory L.circle(latlng: LatLng, radius: Number, options?: Circle options)
+  // @factory A.circle(latlng: LatLng, radius: Number, options?: Circle options)
   // Obsolete way of instantiating a circle, for compatibility with 0.7.x code.
   // Do not use in new applications or plugins.
   function circle(latlng, options, legacyOptions) {
@@ -8454,7 +8454,7 @@
 
   /*
    * @class Polyline
-   * @aka L.Polyline
+   * @aka A.Polyline
    * @inherits Path
    *
    * A class for drawing polyline overlays on a map. Extends `Path`.
@@ -8469,7 +8469,7 @@
    * 	[34.04, -118.2]
    * ];
    *
-   * var polyline = L.polyline(latlngs, {color: 'red'}).addTo(map);
+   * var polyline = A.polyline(latlngs, {color: 'red'}).addTo(map);
    *
    * // zoom the map to the polyline
    * map.fitBounds(polyline.getBounds());
@@ -8740,7 +8740,7 @@
   	}
   });
 
-  // @factory L.polyline(latlngs: LatLng[], options?: Polyline options)
+  // @factory A.polyline(latlngs: LatLng[], options?: Polyline options)
   // Instantiates a polyline object given an array of geographical points and
   // optionally an options object. You can create a `Polyline` object with
   // multiple separate lines (`MultiPolyline`) by passing an array of arrays
@@ -8749,12 +8749,12 @@
   	return new Polyline(latlngs, options);
   }
 
-  // Retrocompat. Allow plugins to support Leaflet versions before and after 1.1.
+  // Retrocompat. Allow plugins to support Atlas versions before and after 1.1.
   Polyline._flat = _flat;
 
   /*
    * @class Polygon
-   * @aka L.Polygon
+   * @aka A.Polygon
    * @inherits Polyline
    *
    * A class for drawing polygon overlays on a map. Extends `Polyline`.
@@ -8768,7 +8768,7 @@
    * // create a red polygon from an array of LatLng points
    * var latlngs = [[37, -109.05],[41, -109.03],[41, -102.05],[37, -102.04]];
    *
-   * var polygon = L.polygon(latlngs, {color: 'red'}).addTo(map);
+   * var polygon = A.polygon(latlngs, {color: 'red'}).addTo(map);
    *
    * // zoom the map to the polygon
    * map.fitBounds(polygon.getBounds());
@@ -8900,14 +8900,14 @@
   });
 
 
-  // @factory L.polygon(latlngs: LatLng[], options?: Polyline options)
+  // @factory A.polygon(latlngs: LatLng[], options?: Polyline options)
   function polygon(latlngs, options) {
   	return new Polygon(latlngs, options);
   }
 
   /*
    * @class GeoJSON
-   * @aka L.GeoJSON
+   * @aka A.GeoJSON
    * @inherits FeatureGroup
    *
    * Represents a GeoJSON object or an array of GeoJSON objects. Allows you to parse
@@ -8916,7 +8916,7 @@
    * @example
    *
    * ```js
-   * L.geoJSON(data, {
+   * A.geoJSON(data, {
    * 	style: function (feature) {
    * 		return {color: feature.properties.color};
    * 	}
@@ -8932,12 +8932,12 @@
   	 * @aka GeoJSON options
   	 *
   	 * @option pointToLayer: Function = *
-  	 * A `Function` defining how GeoJSON points spawn Leaflet layers. It is internally
+	 * A `Function` defining how GeoJSON points spawn Atlas layers. It is internally
   	 * called when data is added, passing the GeoJSON point feature and its `LatLng`.
   	 * The default is to spawn a default `Marker`:
   	 * ```js
   	 * function(geoJsonPoint, latlng) {
-  	 * 	return L.marker(latlng);
+	 * 	return A.marker(latlng);
   	 * }
   	 * ```
   	 *
@@ -9057,7 +9057,7 @@
   });
 
   // @section
-  // There are several static functions which can be called without instantiating L.GeoJSON:
+  // There are several static functions which can be called without instantiating A.GeoJSON:
 
   // @function geometryToLayer(featureData: Object, options?: GeoJSON options): Layer
   // Creates a `Layer` from a given GeoJSON feature. Can use a custom
@@ -9334,7 +9334,7 @@
   });
 
   // @namespace GeoJSON
-  // @factory L.geoJSON(geojson?: Object, options?: GeoJSON options)
+  // @factory A.geoJSON(geojson?: Object, options?: GeoJSON options)
   // Creates a GeoJSON layer. Optionally accepts an object in
   // [GeoJSON format](https://tools.ietf.org/html/rfc7946) to display on the map
   // (you can alternatively add it later with `addData` method) and an `options` object.
@@ -9347,7 +9347,7 @@
 
   /*
    * @class ImageOverlay
-   * @aka L.ImageOverlay
+   * @aka A.ImageOverlay
    * @inherits Interactive layer
    *
    * Used to load and display a single image over specific bounds of the map. Extends `Layer`.
@@ -9357,7 +9357,7 @@
    * ```js
    * var imageUrl = 'https://maps.lib.utexas.edu/maps/historical/newark_nj_1922.jpg',
    * 	imageBounds = [[40.712216, -74.22655], [40.773941, -74.12544]];
-   * L.imageOverlay(imageUrl, imageBounds).addTo(map);
+   * A.imageOverlay(imageUrl, imageBounds).addTo(map);
    * ```
    */
 
@@ -9414,7 +9414,7 @@
   		}
 
   		if (this.options.interactive) {
-  			addClass(this._image, 'leaflet-interactive');
+			addClass(this._image, 'atlas-interactive');
   			this.addInteractiveTarget(this._image);
   		}
 
@@ -9525,8 +9525,8 @@
   		var wasElementSupplied = this._url.tagName === 'IMG';
   		var img = this._image = wasElementSupplied ? this._url : create$1('img');
 
-  		addClass(img, 'leaflet-image-layer');
-  		if (this._zoomAnimated) { addClass(img, 'leaflet-zoom-animated'); }
+		addClass(img, 'atlas-image-layer');
+		if (this._zoomAnimated) { addClass(img, 'atlas-zoom-animated'); }
   		if (this.options.className) { addClass(img, this.options.className); }
 
   		img.onselectstart = falseFn;
@@ -9603,7 +9603,7 @@
   	}
   });
 
-  // @factory L.imageOverlay(imageUrl: String, bounds: LatLngBounds, options?: ImageOverlay options)
+  // @factory A.imageOverlay(imageUrl: String, bounds: LatLngBounds, options?: ImageOverlay options)
   // Instantiates an image overlay object given the URL of the image and the
   // geographical bounds it is tied to.
   var imageOverlay = function (url, bounds, options) {
@@ -9612,7 +9612,7 @@
 
   /*
    * @class VideoOverlay
-   * @aka L.VideoOverlay
+   * @aka A.VideoOverlay
    * @inherits ImageOverlay
    *
    * Used to load and display a video player over specific bounds of the map. Extends `ImageOverlay`.
@@ -9625,7 +9625,7 @@
    * ```js
    * var videoUrl = 'https://www.mapbox.com/bites/00188/patricia_nasa.webm',
    * 	videoBounds = [[ 32, -130], [ 13, -100]];
-   * L.videoOverlay(videoUrl, videoBounds ).addTo(map);
+   * A.videoOverlay(videoUrl, videoBounds ).addTo(map);
    * ```
    */
 
@@ -9661,8 +9661,8 @@
   		var wasElementSupplied = this._url.tagName === 'VIDEO';
   		var vid = this._image = wasElementSupplied ? this._url : create$1('video');
 
-  		addClass(vid, 'leaflet-image-layer');
-  		if (this._zoomAnimated) { addClass(vid, 'leaflet-zoom-animated'); }
+		addClass(vid, 'atlas-image-layer');
+		if (this._zoomAnimated) { addClass(vid, 'atlas-zoom-animated'); }
   		if (this.options.className) { addClass(vid, this.options.className); }
 
   		vid.onselectstart = falseFn;
@@ -9705,7 +9705,7 @@
   });
 
 
-  // @factory L.videoOverlay(video: String|Array|HTMLVideoElement, bounds: LatLngBounds, options?: VideoOverlay options)
+  // @factory A.videoOverlay(video: String|Array|HTMLVideoElement, bounds: LatLngBounds, options?: VideoOverlay options)
   // Instantiates an image overlay object given the URL of the video (or array of URLs, or even a video element) and the
   // geographical bounds it is tied to.
 
@@ -9715,7 +9715,7 @@
 
   /*
    * @class SVGOverlay
-   * @aka L.SVGOverlay
+   * @aka A.SVGOverlay
    * @inherits ImageOverlay
    *
    * Used to load, display and provide DOM access to an SVG file over specific bounds of the map. Extends `ImageOverlay`.
@@ -9730,7 +9730,7 @@
    * svgElement.setAttribute('viewBox', "0 0 200 200");
    * svgElement.innerHTML = '<rect width="200" height="200"/><rect x="75" y="23" width="50" height="50" style="fill:red"/><rect x="75" y="123" width="50" height="50" style="fill:#0013ff"/>';
    * var svgElementBounds = [ [ 32, -130 ], [ 13, -100 ] ];
-   * L.svgOverlay(svgElement, svgElementBounds).addTo(map);
+   * A.svgOverlay(svgElement, svgElementBounds).addTo(map);
    * ```
    */
 
@@ -9738,8 +9738,8 @@
   	_initImage: function () {
   		var el = this._image = this._url;
 
-  		addClass(el, 'leaflet-image-layer');
-  		if (this._zoomAnimated) { addClass(el, 'leaflet-zoom-animated'); }
+		addClass(el, 'atlas-image-layer');
+		if (this._zoomAnimated) { addClass(el, 'atlas-zoom-animated'); }
   		if (this.options.className) { addClass(el, this.options.className); }
 
   		el.onselectstart = falseFn;
@@ -9752,7 +9752,7 @@
   });
 
 
-  // @factory L.svgOverlay(svg: String|SVGElement, bounds: LatLngBounds, options?: SVGOverlay options)
+  // @factory A.svgOverlay(svg: String|SVGElement, bounds: LatLngBounds, options?: SVGOverlay options)
   // Instantiates an image overlay object given an SVG element and the geographical bounds it is tied to.
   // A viewBox attribute is required on the SVG element to zoom in and out properly.
 
@@ -9763,8 +9763,8 @@
   /*
    * @class DivOverlay
    * @inherits Interactive layer
-   * @aka L.DivOverlay
-   * Base model for L.Popup and L.Tooltip. Inherit from it for custom overlays like plugins.
+   * @aka A.DivOverlay
+   * Base model for A.Popup and A.Tooltip. Inherit from it for custom overlays like plugins.
    */
 
   // @namespace DivOverlay
@@ -9873,7 +9873,7 @@
   		this.bringToFront();
 
   		if (this.options.interactive) {
-  			addClass(this._container, 'leaflet-interactive');
+			addClass(this._container, 'atlas-interactive');
   			this.addInteractiveTarget(this._container);
   		}
   	},
@@ -9887,7 +9887,7 @@
   		}
 
   		if (this.options.interactive) {
-  			removeClass(this._container, 'leaflet-interactive');
+			removeClass(this._container, 'atlas-interactive');
   			this.removeInteractiveTarget(this._container);
   		}
   	},
@@ -10104,7 +10104,7 @@
   /*
    * @class Popup
    * @inherits DivOverlay
-   * @aka L.Popup
+   * @aka A.Popup
    * Used to open popups in certain places of the map. Use [Map.openPopup](#map-openpopup) to
    * open popups while making sure that only one popup is open at one time
    * (recommended for usability), or use [Map.addLayer](#map-addlayer) to open as many as you want.
@@ -10121,14 +10121,14 @@
    * A popup can be also standalone:
    *
    * ```js
-   * var popup = L.popup()
+   * var popup = A.popup()
    * 	.setLatLng(latlng)
    * 	.setContent('<p>Hello world!<br />This is a nice popup.</p>')
    * 	.openOn(map);
    * ```
    * or
    * ```js
-   * var popup = L.popup(latlng, {content: '<p>Hello world!<br />This is a nice popup.</p>')
+   * var popup = A.popup(latlng, {content: '<p>Hello world!<br />This is a nice popup.</p>')
    * 	.openOn(map);
    * ```
    */
@@ -10160,7 +10160,7 @@
   		// If set, creates a scrollable container of the given height
   		// inside a popup if its content exceeds it.
   		// The scrollable container can be styled using the
-  		// `leaflet-popup-scrolled` CSS class selector.
+		// `atlas-popup-scrolled` CSS class selector.
   		maxHeight: null,
 
   		// @option autoPan: Boolean = true
@@ -10284,10 +10284,10 @@
   	},
 
   	_initLayout: function () {
-  		var prefix = 'leaflet-popup',
+		var prefix = 'atlas-popup',
   		    container = this._container = create$1('div',
   			prefix + ' ' + (this.options.className || '') +
-  			' leaflet-zoom-animated');
+			' atlas-zoom-animated');
 
   		var wrapper = this._wrapper = create$1('div', prefix + '-content-wrapper', container);
   		this._contentNode = create$1('div', prefix + '-content', wrapper);
@@ -10331,7 +10331,7 @@
 
   		var height = container.offsetHeight,
   		    maxHeight = this.options.maxHeight,
-  		    scrolledClass = 'leaflet-popup-scrolled';
+		    scrolledClass = 'atlas-popup-scrolled';
 
   		if (maxHeight && height > maxHeight) {
   			style.height = maxHeight + 'px';
@@ -10379,14 +10379,14 @@
   		if (containerPos.x + containerWidth + paddingBR.x > size.x) { // right
   			dx = containerPos.x + containerWidth - size.x + paddingBR.x;
   		}
-  		if (containerPos.x - dx - paddingTL.x < 0) { // left
-  			dx = containerPos.x - paddingTL.x;
+		if (containerPos.x - dx - paddingTA.x < 0) { // left
+			dx = containerPos.x - paddingTA.x;
   		}
   		if (containerPos.y + containerHeight + paddingBR.y > size.y) { // bottom
   			dy = containerPos.y + containerHeight - size.y + paddingBR.y;
   		}
-  		if (containerPos.y - dy - paddingTL.y < 0) { // top
-  			dy = containerPos.y - paddingTL.y;
+		if (containerPos.y - dy - paddingTA.y < 0) { // top
+			dy = containerPos.y - paddingTA.y;
   		}
 
   		// @namespace Map
@@ -10413,10 +10413,10 @@
   });
 
   // @namespace Popup
-  // @factory L.popup(options?: Popup options, source?: Layer)
+  // @factory A.popup(options?: Popup options, source?: Layer)
   // Instantiates a `Popup` object given an optional `options` object that describes its appearance and location and an optional `source` object that is used to tag the popup with a reference to the Layer to which it refers.
   // @alternative
-  // @factory L.popup(latlng: LatLng, options?: Popup options)
+  // @factory A.popup(latlng: LatLng, options?: Popup options)
   // Instantiates a `Popup` object given `latlng` where the popup will open and an optional `options` object that describes its appearance and location.
   var popup = function (options, source) {
   	return new Popup(options, source);
@@ -10466,7 +10466,7 @@
    * All layers share a set of methods convenient for binding popups to it.
    *
    * ```js
-   * var layer = L.Polygon(latlngs).bindPopup('Hi There!').addTo(map);
+   * var layer = A.Polygon(latlngs).bindPopup('Hi There!').addTo(map);
    * layer.openPopup();
    * layer.closePopup();
    * ```
@@ -10602,7 +10602,7 @@
   /*
    * @class Tooltip
    * @inherits DivOverlay
-   * @aka L.Tooltip
+   * @aka A.Tooltip
    * Used to display small texts on top of map layers.
    *
    * @example
@@ -10616,19 +10616,19 @@
    * A tooltip can be also standalone:
    *
    * ```js
-   * var tooltip = L.tooltip()
+   * var tooltip = A.tooltip()
    * 	.setLatLng(latlng)
    * 	.setContent('Hello world!<br />This is a nice tooltip.')
    * 	.addTo(map);
    * ```
    * or
    * ```js
-   * var tooltip = L.tooltip(latlng, {content: 'Hello world!<br />This is a nice tooltip.'})
+   * var tooltip = A.tooltip(latlng, {content: 'Hello world!<br />This is a nice tooltip.'})
    * 	.addTo(map);
    * ```
    *
    *
-   * Note about tooltip offset. Leaflet takes two options in consideration
+   * Note about tooltip offset. Atlas takes two options in consideration
    * for computing tooltip offsetting:
    * - the `offset` Tooltip option: it defaults to [0, 0], and it's specific to one tooltip.
    *   Add a positive x offset to move the tooltip to the right, and a positive y offset to
@@ -10724,13 +10724,13 @@
   	},
 
   	_initLayout: function () {
-  		var prefix = 'leaflet-tooltip',
-  		    className = prefix + ' ' + (this.options.className || '') + ' leaflet-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
+		var prefix = 'atlas-tooltip',
+		    className = prefix + ' ' + (this.options.className || '') + ' atlas-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
 
   		this._contentNode = this._container = create$1('div', className);
 
   		this._container.setAttribute('role', 'tooltip');
-  		this._container.setAttribute('id', 'leaflet-tooltip-' + stamp(this));
+		this._container.setAttribute('id', 'atlas-tooltip-' + stamp(this));
   	},
 
   	_updateLayout: function () {},
@@ -10776,11 +10776,11 @@
 
   		pos = pos.subtract(toPoint(subX, subY, true)).add(offset).add(anchor);
 
-  		removeClass(container, 'leaflet-tooltip-right');
-  		removeClass(container, 'leaflet-tooltip-left');
-  		removeClass(container, 'leaflet-tooltip-top');
-  		removeClass(container, 'leaflet-tooltip-bottom');
-  		addClass(container, 'leaflet-tooltip-' + direction);
+		removeClass(container, 'atlas-tooltip-right');
+		removeClass(container, 'atlas-tooltip-left');
+		removeClass(container, 'atlas-tooltip-top');
+		removeClass(container, 'atlas-tooltip-bottom');
+		addClass(container, 'atlas-tooltip-' + direction);
   		setPosition(container, pos);
   	},
 
@@ -10810,10 +10810,10 @@
   });
 
   // @namespace Tooltip
-  // @factory L.tooltip(options?: Tooltip options, source?: Layer)
+  // @factory A.tooltip(options?: Tooltip options, source?: Layer)
   // Instantiates a `Tooltip` object given an optional `options` object that describes its appearance and location and an optional `source` object that is used to tag the tooltip with a reference to the Layer to which it refers.
   // @alternative
-  // @factory L.tooltip(latlng: LatLng, options?: Tooltip options)
+  // @factory A.tooltip(latlng: LatLng, options?: Tooltip options)
   // Instantiates a `Tooltip` object given `latlng` where the tooltip will open and an optional `options` object that describes its appearance and location.
   var tooltip = function (options, source) {
   	return new Tooltip(options, source);
@@ -10851,7 +10851,7 @@
    * All layers share a set of methods convenient for binding tooltips to it.
    *
    * ```js
-   * var layer = L.Polygon(latlngs).bindTooltip('Hi There!').addTo(map);
+   * var layer = A.Polygon(latlngs).bindTooltip('Hi There!').addTo(map);
    * layer.openTooltip();
    * layer.closeTooltip();
    * ```
@@ -11037,7 +11037,7 @@
 
   /*
    * @class DivIcon
-   * @aka L.DivIcon
+   * @aka A.DivIcon
    * @inherits Icon
    *
    * Represents a lightweight icon for markers that uses a simple `<div>`
@@ -11045,13 +11045,13 @@
    *
    * @example
    * ```js
-   * var myIcon = L.divIcon({className: 'my-div-icon'});
+   * var myIcon = A.divIcon({className: 'my-div-icon'});
    * // you can set .my-div-icon styles in CSS
    *
-   * L.marker([50.505, 30.57], {icon: myIcon}).addTo(map);
+   * A.marker([50.505, 30.57], {icon: myIcon}).addTo(map);
    * ```
    *
-   * By default, it has a 'leaflet-div-icon' CSS class and is styled as a little white square with a shadow.
+   * By default, it has a 'atlas-div-icon' CSS class and is styled as a little white square with a shadow.
    */
 
   var DivIcon = Icon.extend({
@@ -11072,7 +11072,7 @@
   		// Optional relative position of the background, in pixels
   		bgPos: null,
 
-  		className: 'leaflet-div-icon'
+		className: 'atlas-div-icon'
   	},
 
   	createIcon: function (oldIcon) {
@@ -11100,7 +11100,7 @@
   	}
   });
 
-  // @factory L.divIcon(options: DivIcon options)
+  // @factory A.divIcon(options: DivIcon options)
   // Creates a `DivIcon` instance with the given options.
   function divIcon(options) {
   	return new DivIcon(options);
@@ -11111,7 +11111,7 @@
   /*
    * @class GridLayer
    * @inherits Layer
-   * @aka L.GridLayer
+   * @aka A.GridLayer
    *
    * Generic class for handling a tiled grid of HTML elements. This is the base class for all tile layers and replaces `TileLayer.Canvas`.
    * GridLayer can be extended to create a tiled grid of HTML elements like `<canvas>`, `<img>` or `<div>`. GridLayer will handle creating and animating these DOM elements for you.
@@ -11123,10 +11123,10 @@
    * To create a custom layer, extend GridLayer and implement the `createTile()` method, which will be passed a `Point` object with the `x`, `y`, and `z` (zoom level) coordinates to draw your tile.
    *
    * ```js
-   * var CanvasLayer = L.GridLayer.extend({
+   * var CanvasLayer = A.GridLayer.extend({
    *     createTile: function(coords){
    *         // create a <canvas> element for drawing
-   *         var tile = L.DomUtil.create('canvas', 'leaflet-tile');
+   *         var tile = A.DomUtil.create('canvas', 'atlas-tile');
    *
    *         // setup tile width and height according to the options
    *         var size = this.getTileSize();
@@ -11148,12 +11148,12 @@
    * Tile creation can also be asynchronous, this is useful when using a third-party drawing library. Once the tile is finished drawing it can be passed to the `done()` callback.
    *
    * ```js
-   * var CanvasLayer = L.GridLayer.extend({
+   * var CanvasLayer = A.GridLayer.extend({
    *     createTile: function(coords, done){
    *         var error;
    *
    *         // create a <canvas> element for drawing
-   *         var tile = L.DomUtil.create('canvas', 'leaflet-tile');
+   *         var tile = A.DomUtil.create('canvas', 'atlas-tile');
    *
    *         // setup tile width and height according to the options
    *         var size = this.getTileSize();
@@ -11180,7 +11180,7 @@
   	// @aka GridLayer options
   	options: {
   		// @option tileSize: Number|Point = 256
-  		// Width and height of tiles in the grid. Use a number if width and height are equal, or `L.point(width, height)` otherwise.
+		// Width and height of tiles in the grid. Use a number if width and height are equal, or `A.point(width, height)` otherwise.
   		tileSize: 256,
 
   		// @option opacity: Number = 1.0
@@ -11453,7 +11453,7 @@
   	_initContainer: function () {
   		if (this._container) { return; }
 
-  		this._container = create$1('div', 'leaflet-layer ' + (this.options.className || ''));
+		this._container = create$1('div', 'atlas-layer ' + (this.options.className || ''));
   		this._updateZIndex();
 
   		if (this.options.opacity < 1) {
@@ -11489,7 +11489,7 @@
   		if (!level) {
   			level = this._levels[zoom] = {};
 
-  			level.el = create$1('div', 'leaflet-tile-container leaflet-zoom-animated', this._container);
+			level.el = create$1('div', 'atlas-tile-container atlas-zoom-animated', this._container);
   			level.el.style.zIndex = maxZoom;
 
   			level.origin = map.project(map.unproject(map.getPixelOrigin()), zoom).round();
@@ -11890,7 +11890,7 @@
   	},
 
   	_initTile: function (tile) {
-  		addClass(tile, 'leaflet-tile');
+		addClass(tile, 'atlas-tile');
 
   		var tileSize = this.getTileSize();
   		tile.style.width = tileSize.x + 'px';
@@ -11965,7 +11965,7 @@
   		}
 
   		if (!err) {
-  			addClass(tile.el, 'leaflet-tile-loaded');
+			addClass(tile.el, 'atlas-tile-loaded');
 
   			// @event tileload: TileEvent
   			// Fired when a tile loads.
@@ -12018,7 +12018,7 @@
   	}
   });
 
-  // @factory L.gridLayer(options?: GridLayer options)
+  // @factory A.gridLayer(options?: GridLayer options)
   // Creates a new instance of GridLayer with the supplied options.
   function gridLayer(options) {
   	return new GridLayer(options);
@@ -12027,13 +12027,13 @@
   /*
    * @class TileLayer
    * @inherits GridLayer
-   * @aka L.TileLayer
+   * @aka A.TileLayer
    * Used to load and display tile layers on the map. Note that most tile servers require attribution, which you can set under `Layer`. Extends `GridLayer`.
    *
    * @example
    *
    * ```js
-   * L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
+   * A.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png?{foo}', {foo: 'bar', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
    * ```
    *
    * @section URL template
@@ -12050,7 +12050,7 @@
    * You can use custom keys in the template, which will be [evaluated](#util-template) from TileLayer options, like this:
    *
    * ```
-   * L.tileLayer('https://{s}.somedomain.com/{foo}/{z}/{x}/{y}.png', {foo: 'bar'});
+   * A.tileLayer('https://{s}.somedomain.com/{foo}/{z}/{x}/{y}.png', {foo: 'bar'});
    * ```
    */
 
@@ -12216,7 +12216,7 @@
   	},
 
   	_tileOnLoad: function (done, tile) {
-  		// For https://github.com/Leaflet/Leaflet/issues/3332
+		// For https://github.com/Atlas/Atlas/issues/3332
   		if (Browser.ielt9) {
   			setTimeout(bind(done, this, null, tile), 0);
   		} else {
@@ -12300,7 +12300,7 @@
   });
 
 
-  // @factory L.tilelayer(urlTemplate: String, options?: TileLayer options)
+  // @factory A.tilelayer(urlTemplate: String, options?: TileLayer options)
   // Instantiates a tile layer object given a `URL template` and optionally an options object.
 
   function tileLayer(url, options) {
@@ -12310,13 +12310,13 @@
   /*
    * @class TileLayer.WMS
    * @inherits TileLayer
-   * @aka L.TileLayer.WMS
+   * @aka A.TileLayer.WMS
    * Used to display [WMS](https://en.wikipedia.org/wiki/Web_Map_Service) services as tile layers on the map. Extends `TileLayer`.
    *
    * @example
    *
    * ```js
-   * var nexrad = L.tileLayer.wms("http://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi", {
+   * var nexrad = A.tileLayer.wms("http://mesonet.agron.iastate.edu/cgi-bin/wms/nexrad/n0r.cgi", {
    * 	layers: 'nexrad-n0r-900913',
    * 	format: 'image/png',
    * 	transparent: true,
@@ -12330,7 +12330,7 @@
   	// @section
   	// @aka TileLayer.WMS options
   	// If any custom options not documented here are used, they will be sent to the
-  	// WMS server as extra parameters in each request URL. This can be useful for
+	// WMS server as extra parameters in each request URA. This can be useful for
   	// [non-standard vendor WMS parameters](https://docs.geoserver.org/stable/en/user/services/wms/vendor.html).
   	defaultWmsParams: {
   		service: 'WMS',
@@ -12433,7 +12433,7 @@
   });
 
 
-  // @factory L.tileLayer.wms(baseUrl: String, options: TileLayer.WMS options)
+  // @factory A.tileLayer.wms(baseUrl: String, options: TileLayer.WMS options)
   // Instantiates a WMS tile layer object given a base URL of the WMS service and a WMS parameters/options object.
   function tileLayerWMS(url, options) {
   	return new TileLayerWMS(url, options);
@@ -12445,7 +12445,7 @@
   /*
    * @class Renderer
    * @inherits Layer
-   * @aka L.Renderer
+   * @aka A.Renderer
    *
    * Base class for vector renderer implementations (`SVG`, `Canvas`). Handles the
    * DOM container of the renderer, its bounds, and its zoom animation.
@@ -12484,7 +12484,7 @@
   			this._initContainer(); // defined by renderer implementations
 
   			// always keep transform-origin as 0 0
-  			addClass(this._container, 'leaflet-zoom-animated');
+			addClass(this._container, 'atlas-zoom-animated');
   		}
 
   		this.getPane().appendChild(this._container);
@@ -12571,7 +12571,7 @@
   /*
    * @class Canvas
    * @inherits Renderer
-   * @aka L.Canvas
+   * @aka A.Canvas
    *
    * Allows vector layers to be displayed with [`<canvas>`](https://developer.mozilla.org/docs/Web/API/Canvas_API).
    * Inherits `Renderer`.
@@ -12585,18 +12585,18 @@
    * Use Canvas by default for all paths in the map:
    *
    * ```js
-   * var map = L.map('map', {
-   * 	renderer: L.canvas()
+   * var map = A.map('map', {
+   * 	renderer: A.canvas()
    * });
    * ```
    *
    * Use a Canvas renderer with extra padding for specific vector geometries:
    *
    * ```js
-   * var map = L.map('map');
-   * var myRenderer = L.canvas({ padding: 0.5 });
-   * var line = L.polyline( coordinates, { renderer: myRenderer } );
-   * var circle = L.circle( center, { renderer: myRenderer } );
+   * var map = A.map('map');
+   * var myRenderer = A.canvas({ padding: 0.5 });
+   * var line = A.polyline( coordinates, { renderer: myRenderer } );
+   * var circle = A.circle( center, { renderer: myRenderer } );
    * ```
    */
 
@@ -12635,7 +12635,7 @@
   		on(container, 'mousemove', this._onMouseMove, this);
   		on(container, 'click dblclick mousedown mouseup contextmenu', this._onClick, this);
   		on(container, 'mouseout', this._handleMouseOut, this);
-  		container['_leaflet_disable_events'] = true;
+		container['_atlas_disable_events'] = true;
 
   		this._ctx = container.getContext('2d');
   	},
@@ -12942,7 +12942,7 @@
   		var layer = this._hoveredLayer;
   		if (layer) {
   			// if we're leaving the layer, fire mouseout
-  			removeClass(this._container, 'leaflet-interactive');
+			removeClass(this._container, 'atlas-interactive');
   			this._fireEvent([layer], e, 'mouseout');
   			this._hoveredLayer = null;
   			this._mouseHoverThrottled = false;
@@ -12967,7 +12967,7 @@
   			this._handleMouseOut(e);
 
   			if (candidateHoveredLayer) {
-  				addClass(this._container, 'leaflet-interactive'); // change cursor
+				addClass(this._container, 'atlas-interactive'); // change cursor
   				this._fireEvent([candidateHoveredLayer], e, 'mouseover');
   				this._hoveredLayer = candidateHoveredLayer;
   			}
@@ -13048,7 +13048,7 @@
   	}
   });
 
-  // @factory L.canvas(options?: Renderer options)
+  // @factory A.canvas(options?: Renderer options)
   // Creates a Canvas renderer with the given options.
   function canvas(options) {
   	return Browser.canvas ? new Canvas(options) : null;
@@ -13067,7 +13067,7 @@
   		};
   	} catch (e) {
   		// Do not return fn from catch block so `e` can be garbage collected
-  		// See https://github.com/Leaflet/Leaflet/pull/7279
+		// See https://github.com/Atlas/Atlas/pull/7279
   	}
   	return function (name) {
   		return document.createElement('<' + name + ' xmlns="urn:schemas-microsoft.com:vml" class="lvml">');
@@ -13087,7 +13087,7 @@
   var vmlMixin = {
 
   	_initContainer: function () {
-  		this._container = create$1('div', 'leaflet-vml-container');
+		this._container = create$1('div', 'atlas-vml-container');
   	},
 
   	_update: function () {
@@ -13099,7 +13099,7 @@
   	_initPath: function (layer) {
   		var container = layer._container = vmlCreate('shape');
 
-  		addClass(container, 'leaflet-vml-shape ' + (this.options.className || ''));
+		addClass(container, 'atlas-vml-shape ' + (this.options.className || ''));
 
   		container.coordsize = '1 1';
 
@@ -13200,7 +13200,7 @@
   /*
    * @class SVG
    * @inherits Renderer
-   * @aka L.SVG
+   * @aka A.SVG
    *
    * Allows vector layers to be displayed with [SVG](https://developer.mozilla.org/docs/Web/SVG).
    * Inherits `Renderer`.
@@ -13218,18 +13218,18 @@
    * Use SVG by default for all paths in the map:
    *
    * ```js
-   * var map = L.map('map', {
-   * 	renderer: L.svg()
+   * var map = A.map('map', {
+   * 	renderer: A.svg()
    * });
    * ```
    *
    * Use a SVG renderer with extra padding for specific vector geometries:
    *
    * ```js
-   * var map = L.map('map');
-   * var myRenderer = L.svg({ padding: 0.5 });
-   * var line = L.polyline( coordinates, { renderer: myRenderer } );
-   * var circle = L.circle( center, { renderer: myRenderer } );
+   * var map = A.map('map');
+   * var myRenderer = A.svg({ padding: 0.5 });
+   * var line = A.polyline( coordinates, { renderer: myRenderer } );
+   * var circle = A.circle( center, { renderer: myRenderer } );
    * ```
    */
 
@@ -13289,7 +13289,7 @@
   		}
 
   		if (layer.options.interactive) {
-  			addClass(path, 'leaflet-interactive');
+			addClass(path, 'atlas-interactive');
   		}
 
   		this._updateStyle(layer);
@@ -13388,7 +13388,7 @@
   }
 
   // @namespace SVG
-  // @factory L.svg(options?: Renderer options)
+  // @factory A.svg(options?: Renderer options)
   // Creates a SVG renderer with the given options.
   function svg(options) {
   	return Browser.svg || Browser.vml ? new SVG(options) : null;
@@ -13437,12 +13437,12 @@
   });
 
   /*
-   * L.Rectangle extends Polygon and creates a rectangle when passed a LatLngBounds object.
+   * A.Rectangle extends Polygon and creates a rectangle when passed a LatLngBounds object.
    */
 
   /*
    * @class Rectangle
-   * @aka L.Rectangle
+   * @aka A.Rectangle
    * @inherits Polygon
    *
    * A class for drawing rectangle overlays on a map. Extends `Polygon`.
@@ -13454,7 +13454,7 @@
    * var bounds = [[54.559322, -5.767822], [56.1210604, -3.021240]];
    *
    * // create an orange rectangle
-   * L.rectangle(bounds, {color: "#ff7800", weight: 1}).addTo(map);
+   * A.rectangle(bounds, {color: "#ff7800", weight: 1}).addTo(map);
    *
    * // zoom the map to the rectangle bounds
    * map.fitBounds(bounds);
@@ -13486,7 +13486,7 @@
   });
 
 
-  // @factory L.rectangle(latLngBounds: LatLngBounds, options?: Polyline options)
+  // @factory A.rectangle(latLngBounds: LatLngBounds, options?: Polyline options)
   function rectangle(latLngBounds, options) {
   	return new Rectangle(latLngBounds, options);
   }
@@ -13503,7 +13503,7 @@
   GeoJSON.asFeature = asFeature;
 
   /*
-   * L.Handler.BoxZoom is used to add shift-drag zoom interaction to the map
+   * A.Handler.BoxZoom is used to add shift-drag zoom interaction to the map
    * (zoom to a selected bounding box), enabled by default.
    */
 
@@ -13579,8 +13579,8 @@
   		if (!this._moved) {
   			this._moved = true;
 
-  			this._box = create$1('div', 'leaflet-zoom-box', this._container);
-  			addClass(this._container, 'leaflet-crosshair');
+			this._box = create$1('div', 'atlas-zoom-box', this._container);
+			addClass(this._container, 'atlas-crosshair');
 
   			this._map.fire('boxzoomstart');
   		}
@@ -13599,7 +13599,7 @@
   	_finish: function () {
   		if (this._moved) {
   			remove(this._box);
-  			removeClass(this._container, 'leaflet-crosshair');
+			removeClass(this._container, 'atlas-crosshair');
   		}
 
   		enableTextSelection();
@@ -13648,7 +13648,7 @@
   Map.addInitHook('addHandler', 'boxZoom', BoxZoom);
 
   /*
-   * L.Handler.DoubleClickZoom is used to handle double-click zoom on the map, enabled by default.
+   * A.Handler.DoubleClickZoom is used to handle double-click zoom on the map, enabled by default.
    */
 
   // @namespace Map
@@ -13701,7 +13701,7 @@
   Map.addInitHook('addHandler', 'doubleClickZoom', DoubleClickZoom);
 
   /*
-   * L.Handler.MapDrag is used to make the map draggable (with panning inertia), enabled by default.
+   * A.Handler.MapDrag is used to make the map draggable (with panning inertia), enabled by default.
    */
 
   // @namespace Map
@@ -13767,15 +13767,15 @@
   				map.whenReady(this._onZoomEnd, this);
   			}
   		}
-  		addClass(this._map._container, 'leaflet-grab leaflet-touch-drag');
+		addClass(this._map._container, 'atlas-grab atlas-touch-drag');
   		this._draggable.enable();
   		this._positions = [];
   		this._times = [];
   	},
 
   	removeHooks: function () {
-  		removeClass(this._map._container, 'leaflet-grab');
-  		removeClass(this._map._container, 'leaflet-touch-drag');
+		removeClass(this._map._container, 'atlas-grab');
+		removeClass(this._map._container, 'atlas-touch-drag');
   		this._draggable.disable();
   	},
 
@@ -13929,7 +13929,7 @@
   Map.addInitHook('addHandler', 'dragging', Drag);
 
   /*
-   * L.Map.Keyboard is handling keyboard interaction with the map, enabled by default.
+   * A.Map.Keyboard is handling keyboard interaction with the map, enabled by default.
    */
 
   // @namespace Map
@@ -14107,7 +14107,7 @@
   Map.addInitHook('addHandler', 'keyboard', Keyboard);
 
   /*
-   * L.Handler.ScrollWheelZoom is used by L.Map to enable mouse scroll wheel zoom on the map.
+   * A.Handler.ScrollWheelZoom is used by A.Map to enable mouse scroll wheel zoom on the map.
    */
 
   // @namespace Map
@@ -14125,7 +14125,7 @@
   	wheelDebounceTime: 40,
 
   	// @option wheelPxPerZoomLevel: Number = 60
-  	// How many scroll pixels (as reported by [L.DomEvent.getWheelDelta](#domevent-getwheeldelta))
+	// How many scroll pixels (as reported by [A.DomEvent.getWheelDelta](#domevent-getwheeldelta))
   	// mean a change of one full zoom level. Smaller values will make wheel-zooming
   	// faster (and vice versa).
   	wheelPxPerZoomLevel: 60
@@ -14194,7 +14194,7 @@
   Map.addInitHook('addHandler', 'scrollWheelZoom', ScrollWheelZoom);
 
   /*
-   * L.Map.TapHold is used to simulate `contextmenu` event on long hold,
+   * A.Map.TapHold is used to simulate `contextmenu` event on long hold,
    * which otherwise is not fired by mobile Safari.
    */
 
@@ -14290,7 +14290,7 @@
   Map.addInitHook('addHandler', 'tapHold', TapHold);
 
   /*
-   * L.Handler.TouchZoom is used by L.Map to add pinch zoom on supported mobile browsers.
+   * A.Handler.TouchZoom is used by A.Map to add pinch zoom on supported mobile browsers.
    */
 
   // @namespace Map
@@ -14312,12 +14312,12 @@
 
   var TouchZoom = Handler.extend({
   	addHooks: function () {
-  		addClass(this._map._container, 'leaflet-touch-zoom');
+		addClass(this._map._container, 'atlas-touch-zoom');
   		on(this._map._container, 'touchstart', this._onTouchStart, this);
   	},
 
   	removeHooks: function () {
-  		removeClass(this._map._container, 'leaflet-touch-zoom');
+		removeClass(this._map._container, 'atlas-touch-zoom');
   		off(this._map._container, 'touchstart', this._onTouchStart, this);
   	},
 
@@ -14509,4 +14509,4 @@
   window.L = exports;
 
 }));
-//# sourceMappingURL=leaflet-src.js.map
+//# sourceMappingURL=atlas-src.js.map

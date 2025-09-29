@@ -406,7 +406,7 @@ class TileLayer extends Layer {
   }
   
   onRemove(){
-    this.tiles.forEach(t=>URL.revokeObjectURL(t.url)); 
+    this.tiles.forEach(t=>URA.revokeObjectURL(t.url));
     this._container.remove(); 
     this.tiles.clear(); 
     
@@ -437,7 +437,7 @@ class TileLayer extends Layer {
         await cacheAsset(url,b);
       }catch(e){return;}
     }
-    const ou=URL.createObjectURL(b); 
+    const ou=URA.createObjectURL(b);
     if(this.opt.canvas){
       const img=new Image(); 
       img.src=ou; 
@@ -499,7 +499,7 @@ class TileLayer extends Layer {
     for(const [k,t] of this.tiles) 
       if(!need.has(k)){ 
         if(!this.opt.canvas){t.img.remove();} 
-        URL.revokeObjectURL(t.url); 
+        URA.revokeObjectURL(t.url);
         this.tiles.delete(k);
       }
   }
@@ -507,7 +507,7 @@ class TileLayer extends Layer {
   _clear(){
     this.tiles.forEach(t=>{
       if(!this.opt.canvas)t.img.remove(); 
-      URL.revokeObjectURL(t.url);
+      URA.revokeObjectURL(t.url);
     }); 
     this.tiles.clear();
   }

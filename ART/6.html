@@ -2,8 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Leaflet Artwork Viewer</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <title>Atlas Artwork Viewer</title>
+  <link rel="stylesheet" href="https://unpkg.com/atlas/dist/atlas.css"/>
   <style>
     html, body, #map {
       height: 100%;
@@ -11,14 +11,14 @@
       padding: 0;
       background: black;
     }
-    .leaflet-container {
+    .atlas-container {
       background: black;
     }
   </style>
 </head>
 <body>
 <div id="map"></div>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/atlas/dist/atlas.js"></script>
 <script>
   // Example: using an image of "The Night Watch" hosted on Wikimedia Commons (public domain)
   const imageUrl = "https://upload.wikimedia.org/wikipedia/commons/2/28/The_Nightwatch_by_Rembrandt.jpg";
@@ -26,8 +26,8 @@
   const imageHeight = 14850;  // pixels
 
   // Create the map with Simple CRS (pixel-based, not lat/long)
-  const map = L.map('map', {
-    crs: L.CRS.Simple,
+  const map = A.map('map', {
+    crs: A.CRS.Simple,
     minZoom: -2,  // allow zooming way out
     maxZoom: 5
   });
@@ -36,13 +36,13 @@
   const bounds = [[0,0], [imageHeight, imageWidth]];
 
   // Add the giant image as a single image overlay
-  const image = L.imageOverlay(imageUrl, bounds).addTo(map);
+  const image = A.imageOverlay(imageUrl, bounds).addTo(map);
 
   // Fit map view around the image
   map.fitBounds(bounds);
 
   // Example annotation: put a marker somewhere on the painting
-  const marker = L.marker([6000, 4000]).addTo(map);
+  const marker = A.marker([6000, 4000]).addTo(map);
   marker.bindPopup("<b>Rembrandt detail</b><br/>Click around to explore!");
 </script>
 </body>

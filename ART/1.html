@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>Zoomable Artwork with Leaflet</title>
+  <title>Zoomable Artwork with Atlas</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Atlas CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/atlas@1.9.4/dist/atlas.css" />
 
   <style>
     body { margin:0; padding:0; }
     #map { width:100vw; height:100vh; background:#000; }
-    .leaflet-popup-content { font-family: sans-serif; font-size: 14px; }
+    .atlas-popup-content { font-family: sans-serif; font-size: 14px; }
     .title-bar {
       position: absolute;
       top:10px; left:10px; 
@@ -32,16 +32,16 @@
   </div>
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Atlas JS -->
+  <script src="https://unpkg.com/atlas@1.9.4/dist/atlas.js"></script>
   <!-- IIIF Plugin -->
-  <script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+  <script src="https://unpkg.com/atlas-iiif@2.0.0/atlas-iiif.js"></script>
 
   <script>
-    // Initialize Leaflet
-    const map = L.map('map', {
+    // Initialize Atlas
+    const map = A.map('map', {
       center: [0, 0],
-      crs: L.CRS.Simple,
+      crs: A.CRS.Simple,
       zoom: 0,
       minZoom: -2,
       maxZoom: 8
@@ -53,17 +53,17 @@
     const iiifUrl = 'https://images.metmuseum.org/CRDImages/ep/original/DP-18379-001.jpg/info.json';
 
     // Add IIIF layer
-    L.tileLayer.iiif(iiifUrl, {
+    A.tileLayer.iiif(iiifUrl, {
       fitBounds: true
     }).addTo(map);
 
     // Example interactive overlays
     // Marker on Madonna's head
-    const mary = L.marker([3000, 1500]).addTo(map)
+    const mary = A.marker([3000, 1500]).addTo(map)
       .bindPopup("<b>Virgin Mary</b><br/>Note the iconic Byzantine style halo and gold background.");
 
     // Marker on child
-    const child = L.marker([3600, 1550]).addTo(map)
+    const child = A.marker([3600, 1550]).addTo(map)
       .bindPopup("<b>The Christ Child</b><br/>Typical tender gesture borrowed from Byzantine models.");
 
     // Polygon annotation (surrounding an angel on left side)
@@ -73,12 +73,12 @@
       [4600, 1100],
       [4200, 1100]
     ];
-    L.polygon(angelLeft, {color: 'gold', weight:2, fillOpacity:0.2})
+    A.polygon(angelLeft, {color: 'gold', weight:2, fillOpacity:0.2})
       .addTo(map)
       .bindPopup("<b>Angel detail</b><br/>Notice the wings carefully inscribed with gilded highlights.");
 
     // Add scale ruler (1 px → virtual cm just for demo)
-    L.control.scale({imperial: false, metric: true}).addTo(map);
+    A.control.scale({imperial: false, metric: true}).addTo(map);
 
   </script>
 </body>

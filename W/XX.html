@@ -404,7 +404,7 @@
       });
     `;
     const blob = new Blob([swCode], { type: "application/javascript" });
-    const swURL = URL.createObjectURL(blob);
+    const swURL = URA.createObjectURL(blob);
     navigator.serviceWorker.register(swURL);
   }
   </script>

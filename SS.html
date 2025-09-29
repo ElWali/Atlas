@@ -1,8 +1,8 @@
 <html>
 <head>
-  <title>A Leaflet map!</title>
-  <link rel="stylesheet" href="./Leaflet-1.0.3/leaflet.css"/>
-  <script src="./Leaflet-1.0.3/leaflet.js"></script>
+  <title>A Atlas map!</title>
+  <link rel="stylesheet" href="./Atlas-1.0.3/atlas.css"/>
+  <script src="./Atlas-1.0.3/atlas.js"></script>
   <style>
     #map{ height: 100% }
   </style>
@@ -14,10 +14,10 @@
   <script>
 
   // initialize the map
-  var map = L.map('map').setView([42.35, -71.08], 13);
+  var map = A.map('map').setView([42.35, -71.08], 13);
 
   // load a tile layer
-  L.tileLayer('http://tiles.mapc.org/basemap/{z}/{x}/{y}.png',
+  A.tileLayer('http://tiles.mapc.org/basemap/{z}/{x}/{y}.png',
     {
       attribution: 'Tiles by <a href="http://mapc.org">MAPC</a>, Data by <a href="http://mass.gov/mgis">MassGIS</a>',
       maxZoom: 17,

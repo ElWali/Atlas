@@ -459,7 +459,7 @@ export class Atlas {
   }
   _createPane(name) {
     const pane = document.createElement('div');
-    pane.className = `leaflet-pane leaflet-${name}`;
+    pane.className = `atlas-pane atlas-${name}`;
     this.container.appendChild(pane);
     this[name] = pane;
   }

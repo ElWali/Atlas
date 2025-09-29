@@ -649,14 +649,14 @@
       }
       _blobToImage(blob) {
         return new Promise((resolve, reject) => {
-          const url = URL.createObjectURL(blob);
+          const url = URA.createObjectURL(blob);
           const img = new Image();
           img.onload = () => {
-            URL.revokeObjectURL(url);
+            URA.revokeObjectURL(url);
             resolve(img);
           };
           img.onerror = (e) => {
-            URL.revokeObjectURL(url);
+            URA.revokeObjectURL(url);
             reject(e);
           };
           img.crossOrigin = "anonymous";
@@ -1064,7 +1064,7 @@
         const currAnchorLL = anchorLL || this.screenToLatLon(ax, ay, this.zoom, this.bearing, this.center);
         const zInt = Math.floor(newZoom);
         const ts = TILE_SIZE * Math.pow(2, newZoom - zInt);
-        const Ptile = this.lonLatToTile(currAnchorLL.lon, currAnchorLL.lat, zInt);
+        const Ptile = this.lonLatToTile(currAnchorLA.lon, currAnchorLA.lat, zInt);
         const v = rot(anchorVec.x / ts, anchorVec.y / ts, -newBearing);
         const ctNew = { x: Ptile.x - v.x, y: Ptile.y - v.y };
         const newCenter = GISUtils.tileToLonLat(ctNew.x, ctNew.y, zInt);
@@ -1548,20 +1548,20 @@
         this.stopAnimations();
         this.stopInertia();
         const EL = this._eventListeners;
-        if (EL.resize) window.removeEventListener("resize", EL.resize);
-        if (EL.mousedown) this.canvas.removeEventListener("mousedown", EL.mousedown);
-        if (EL.mousemove) window.removeEventListener("mousemove", EL.mousemove);
-        if (EL.mouseup) window.removeEventListener("mouseup", EL.mouseup);
-        if (EL.wheel) this.canvas.removeEventListener("wheel", EL.wheel);
-        if (EL.dblclick) this.canvas.removeEventListener("dblclick", EL.dblclick);
-        if (EL.keydown) window.removeEventListener("keydown", EL.keydown);
-        if (EL.touchstart) this.canvas.removeEventListener("touchstart", EL.touchstart);
-        if (EL.touchmove) this.canvas.removeEventListener("touchmove", EL.touchmove);
-        if (EL.touchend) this.canvas.removeEventListener("touchend", EL.touchend);
-        if (EL.touchcancel) this.canvas.removeEventListener("touchcancel", EL.touchcancel);
-        if (EL.fullscreenClick) document.getElementById("fullscreen").removeEventListener("click", EL.fullscreenClick);
-        if (EL.layerToggleClick) document.getElementById("layer-toggle").removeEventListener("click", EL.layerToggleClick);
-        if (EL.hashchange) window.removeEventListener("hashchange", EL.hashchange);
+        if (EA.resize) window.removeEventListener("resize", EA.resize);
+        if (EA.mousedown) this.canvas.removeEventListener("mousedown", EA.mousedown);
+        if (EA.mousemove) window.removeEventListener("mousemove", EA.mousemove);
+        if (EA.mouseup) window.removeEventListener("mouseup", EA.mouseup);
+        if (EA.wheel) this.canvas.removeEventListener("wheel", EA.wheel);
+        if (EA.dblclick) this.canvas.removeEventListener("dblclick", EA.dblclick);
+        if (EA.keydown) window.removeEventListener("keydown", EA.keydown);
+        if (EA.touchstart) this.canvas.removeEventListener("touchstart", EA.touchstart);
+        if (EA.touchmove) this.canvas.removeEventListener("touchmove", EA.touchmove);
+        if (EA.touchend) this.canvas.removeEventListener("touchend", EA.touchend);
+        if (EA.touchcancel) this.canvas.removeEventListener("touchcancel", EA.touchcancel);
+        if (EA.fullscreenClick) document.getElementById("fullscreen").removeEventListener("click", EA.fullscreenClick);
+        if (EA.layerToggleClick) document.getElementById("layer-toggle").removeEventListener("click", EA.layerToggleClick);
+        if (EA.hashchange) window.removeEventListener("hashchange", EA.hashchange);
         this._abortAllLoads();
         this.tileCache.clear();
         this.loadingTiles.clear();

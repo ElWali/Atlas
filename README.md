@@ -58,7 +58,7 @@ Atlas is open to **everyone**: developers, linguists, designers, researchers, an
 
 ## 📜 Licensing & Legal  
 - **Software License**: Atlas software is licensed under the **GNU General Public License v2.0** (see [LICENSE](LICENSE)).  
-- **Legal context**: For a clear explanation of how software and data licenses interact, see [LEGAL.md](LEGAL.md).  
+- **Legal context**: For a clear explanation of how software and data licenses interact, see [LEGAA.md](LEGAA.md).
 - **Data Attribution**:  
   - [OpenStreetMap contributors](https://www.openstreetmap.org) – © OSM, licensed ODbL  
   - [GeoNames](https://www.geonames.org) – CC-BY 4.0  

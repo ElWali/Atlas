@@ -5,8 +5,8 @@
   <title>Immersive Artwork Explorer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Atlas CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/atlas@1.9.4/dist/atlas.css" />
 
   <style>
     html, body { height:100%; margin:0; background:#000; }
@@ -65,12 +65,12 @@
   </div>
 </div>
 
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-iiif@2.0.0/leaflet-iiif.js"></script>
+<!-- Atlas JS -->
+<script src="https://unpkg.com/atlas@1.9.4/dist/atlas.js"></script>
+<script src="https://unpkg.com/atlas-iiif@2.0.0/atlas-iiif.js"></script>
 <script>
-const map = L.map('map',{
-  center:[0,0], crs:L.CRS.Simple,
+const map = A.map('map',{
+  center:[0,0], crs:A.CRS.Simple,
   zoom:0, minZoom:-2, maxZoom:8,
   zoomControl:true
 });
@@ -78,16 +78,16 @@ const map = L.map('map',{
 // ✅ Correct IIIF info.json URL
 const iiifUrl='https://iiif-images.metmuseum.org/CRDImages/ep/original/DP-18379-001/info.json';
 
-const iiifLayer=L.tileLayer.iiif(iiifUrl,{fitBounds:false}).addTo(map);
+const iiifLayer=A.tileLayer.iiif(iiifUrl,{fitBounds:false}).addTo(map);
 iiifLayer.on('load',()=>map.fitBounds(iiifLayer.getBounds()));
 
 // === Annotations ===
 const overlays = {
-  "Mary": L.marker([1500,3000]).addTo(map)
+  "Mary": A.marker([1500,3000]).addTo(map)
     .bindPopup("<b>Virgin Mary</b><br/>Iconic halo and gilded background."),
-  "Child": L.marker([1550,3600]).addTo(map)
+  "Child": A.marker([1550,3600]).addTo(map)
     .bindPopup("<b>Christ Child</b><br/>Tender gesture, natural folds."),
-  "Angel Detail": L.polygon(
+  "Angel Detail": A.polygon(
       [[600,4200],[600,4600],[1100,4600],[1100,4200]],
       {color:'gold',weight:2,fillOpacity:0.25}
     ).addTo(map)

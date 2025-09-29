@@ -145,13 +145,13 @@ export class Evented {
 
 	addEventParent(obj) {
 		this._eventParents = this._eventParents || {};
-		this._eventParents[obj._leaflet_id] = obj;
+		this._eventParents[obj._atlas_id] = obj;
 		return this;
 	}
 
 	removeEventParent(obj) {
 		if (this._eventParents) {
-			delete this._eventParents[obj._leaflet_id];
+			delete this._eventParents[obj._atlas_id];
 		}
 		return this;
 	}
