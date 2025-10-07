@@ -1,384 +1,6447 @@
-/*!
- * Atlas.js v3.0 — A professional-grade, modern JavaScript mapping library.
- * Author: ElWali ElAlaoui (Atlasian from Tarfaya 🇲🇦)
- *
- * This version achieves core feature parity with established libraries like Atlas.
- * It introduces a robust architecture with layer groups, a powerful GeoJSON parser,
- * vector layer primitives, and a fully-featured layers control.
- * It combines the fluid user experience of v2.0 with the versatility and
- * developer ergonomics required for complex applications.
- *
- * License: MIT
- */
+/* Atlas.js is a lightweight JavaScript library for mobile-friendly interactive maps 🇲🇦 */
+/*  © ElWali */
 (function(global, factory) {
-    typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
-    typeof define === 'function' && define.amd ? define(['exports'], factory) :
-    (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.Atlas = {}));
-})(this, (function(exports) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ?
+      factory(exports) :
+      typeof define === 'function' && define.amd ?
+      define(['exports'], factory) :
+      (global = typeof globalThis !== 'undefined' ? globalThis :
+           global || self, factory(global.atlas = {}));
+})(this, (function(exports) {
+'use strict';
 
-    // ... (Utils, EventEmitter, and other core helpers from v2.0 are here) ...
-    // NOTE: For brevity, only new or significantly changed classes will be shown in full.
-    // The previous implementation's classes like Marker, Icon, TileLayer, Popup, and the
-    // interaction handlers (Drag, ScrollZoom, etc.) are assumed to be included here, unchanged.
-    
-    /*** LatLngBounds: Represents a rectangular geographical area. ***/
-    class LatLngBounds {
-        constructor(corner1, corner2) {
-            if (corner1) {
-                this._min = { lat: Math.min(corner1.lat, corner2.lat), lng: Math.min(corner1.lng, corner2.lng) };
-                this._max = { lat: Math.max(corner1.lat, corner2.lat), lng: Math.max(corner1.lng, corner2.lng) };
-            }
-        }
-        
-        extend(latlng) {
-            if (!this._min) {
-                this._min = { lat: latlng.lat, lng: latlng.lng };
-                this._max = { lat: latlng.lat, lng: latlng.lng };
-            } else {
-                this._min.lat = Math.min(latlng.lat, this._min.lat);
-                this._min.lng = Math.min(latlng.lng, this._min.lng);
-                this._max.lat = Math.max(latlng.lat, this._max.lat);
-                this._max.lng = Math.max(latlng.lng, this._max.lng);
-            }
-            return this;
-        }
+  var version = "1.9.4";
+  function extend(dest) {
+	var i, j, len, src;
+	for (j = 1, len = arguments.length; j < len; j++) {
+		src = arguments[j];
+		for (i in src) {
+			dest[i] = src[i];
+		}
+	}
+	return dest;
+  }
+  var create$2 = Object.create || (function () {
+	function F() {}
+	return function (proto) {
+		F.prototype = proto;
+		return new F();
+	};
+  })();
+  function bind(fn, obj) {
+	var slice = Array.prototype.slice;
+	if (fn.bind) {
+		return fn.bind.apply(fn, slice.call(arguments, 1));
+	}
+	var args = slice.call(arguments, 2);
+	return function () {
+		return fn.apply(obj, args.length ? args.concat(slice.call(arguments)) : arguments);
+	};
+  }
+  var lastId = 0;
+  function stamp(obj) {
+	if (!('_atlas_id' in obj)) {
+		obj['_atlas_id'] = ++lastId;
+	}
+	return obj._atlas_id;
+  }
+  function throttle(fn, time, context) {
+	var lock, args, wrapperFn, later;
+	later = function () {
+		lock = false;
+		if (args) {
+			wrapperFn.apply(context, args);
+			args = false;
+		}
+	};
+	wrapperFn = function () {
+		if (lock) {
+			args = arguments;
+		} else {
+			fn.apply(context, arguments);
+			setTimeout(later, time);
+			lock = true;
+		}
+	};
+	return wrapperFn;
+  }
+  function wrapNum(x, range, includeMax) {
+	var max = range[1],
+	    min = range[0],
+	    d = max - min;
+	return x === max && includeMax ? x : ((x - min) % d + d) % d + min;
+  }
+  function falseFn() { return false; }
+  function formatNum(num, precision) {
+	if (precision === false) { return num; }
+	var pow = Math.pow(10, precision === undefined ? 6 : precision);
+	return Math.round(num * pow) / pow;
+  }
+  function trim(str) {
+	return str.trim ? str.trim() : str.replace(/^\s+|\s+$/g, '');
+  }
+  function splitWords(str) {
+	return trim(str).split(/\s+/);
+  }
+  function setOptions(obj, options) {
+	if (!Object.prototype.hasOwnProperty.call(obj, 'options')) {
+		obj.options = obj.options ? create$2(obj.options) : {};
+	}
+	for (var i in options) {
+		obj.options[i] = options[i];
+	}
+	return obj.options;
+  }
+  function getParamString(obj, existingUrl, uppercase) {
+	var params = [];
+	for (var i in obj) {
+		params.push(encodeURIComponent(uppercase ? i.toUpperCase() : i) + '=' + encodeURIComponent(obj[i]));
+	}
+	return ((!existingUrl || existingUrl.indexOf('?') === -1) ? '?' : '&') + params.join('&');
+  }
+  var templateRe = /\{ *([\w_ -]+) *\}/g;
+  function template(str, data) {
+	return str.replace(templateRe, function (str, key) {
+		var value = data[key];
+		if (value === undefined) {
+			throw new Error('No value provided for variable ' + str);
+		} else if (typeof value === 'function') {
+			value = value(data);
+		}
+		return value;
+	});
+  }
+  var isArray = Array.isArray || function (obj) {
+	return (Object.prototype.toString.call(obj) === '[object Array]');
+  };
+  function indexOf(array, el) {
+	for (var i = 0; i < array.length; i++) {
+		if (array[i] === el) { return i; }
+	}
+	return -1;
+  }
+  var emptyImageUrl = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+  function getPrefixed(name) {
+	return window['webkit' + name] || window['moz' + name] || window['ms' + name];
+  }
+  var lastTime = 0;
+  function timeoutDefer(fn) {
+	var time = +new Date(),
+	    timeToCall = Math.max(0, 16 - (time - lastTime));
+	lastTime = time + timeToCall;
+	return window.setTimeout(fn, timeToCall);
+  }
+  var requestFn = window.requestAnimationFrame || getPrefixed('RequestAnimationFrame') || timeoutDefer;
+  var cancelFn = window.cancelAnimationFrame || getPrefixed('CancelAnimationFrame') ||
+		getPrefixed('CancelRequestAnimationFrame') || function (id) { window.clearTimeout(id); };
+  function requestAnimFrame(fn, context, immediate) {
+	if (immediate && requestFn === timeoutDefer) {
+		fn.call(context);
+	} else {
+		return requestFn.call(window, bind(fn, context));
+	}
+  }
+  function cancelAnimFrame(id) {
+	if (id) {
+		cancelFn.call(window, id);
+	}
+  }
+  var Util = {
+    __proto__: null,
+    extend: extend,
+    create: create$2,
+    bind: bind,
+    get lastId () { return lastId; },
+    stamp: stamp,
+    throttle: throttle,
+    wrapNum: wrapNum,
+    falseFn: falseFn,
+    formatNum: formatNum,
+    trim: trim,
+    splitWords: splitWords,
+    setOptions: setOptions,
+    getParamString: getParamString,
+    template: template,
+    isArray: isArray,
+    indexOf: indexOf,
+    emptyImageUrl: emptyImageUrl,
+    requestFn: requestFn,
+    cancelFn: cancelFn,
+    requestAnimFrame: requestAnimFrame,
+    cancelAnimFrame: cancelAnimFrame
+  };
 
-        getCenter() {
-            return {
-                lat: (this._min.lat + this._max.lat) / 2,
-                lng: (this._min.lng + this._max.lng) / 2
-            };
-        }
+  var style = document.documentElement.style;
+  var ie = 'ActiveXObject' in window;
+  var ielt9 = ie && !document.addEventListener;
+  var edge = 'msLaunchUri' in navigator && !('documentMode' in document);
+  var webkit = userAgentContains('webkit');
+  var android = userAgentContains('android');
+  var android23 = userAgentContains('android 2') || userAgentContains('android 3');
+  var webkitVer = parseInt(/WebKit\/([0-9]+)|$/.exec(navigator.userAgent)[1], 10);
+  var androidStock = android && userAgentContains('Google') && webkitVer < 537 && !('AudioNode' in window);
+  var opera = !!window.opera;
+  var chrome = !edge && userAgentContains('chrome');
+  var gecko = userAgentContains('gecko') && !webkit && !opera && !ie;
+  var safari = !chrome && userAgentContains('safari');
+  var phantom = userAgentContains('phantom');
+  var opera12 = 'OTransition' in style;
+  var win = navigator.platform.indexOf('Win') === 0;
+  var ie3d = ie && ('transition' in style);
+  var webkit3d = ('WebKitCSSMatrix' in window) && ('m11' in new window.WebKitCSSMatrix()) && !android23;
+  var gecko3d = 'MozPerspective' in style;
+  var any3d = !window.L_DISABLE_3D && (ie3d || webkit3d || gecko3d) && !opera12 && !phantom;
+  var mobile = typeof orientation !== 'undefined' || userAgentContains('mobile');
+  var mobileWebkit = mobile && webkit;
+  var mobileWebkit3d = mobile && webkit3d;
+  var msPointer = !window.PointerEvent && window.MSPointerEvent;
+  var pointer = !!(window.PointerEvent || msPointer);
+  var touchNative = 'ontouchstart' in window || !!window.TouchEvent;
+  var touch = !window.L_NO_TOUCH && (touchNative || pointer);
+  var mobileOpera = mobile && opera;
+  var mobileGecko = mobile && gecko;
+  var retina = (window.devicePixelRatio || (window.screen.deviceXDPI / window.screen.logicalXDPI)) > 1;
+  var passiveEvents = (function () {
+	var supportsPassiveOption = false;
+	try {
+		var opts = Object.defineProperty({}, 'passive', {
+			get: function () {
+				supportsPassiveOption = true;
+			}
+		});
+		window.addEventListener('testPassiveEventSupport', falseFn, opts);
+		window.removeEventListener('testPassiveEventSupport', falseFn, opts);
+	} catch (e) {
+	}
+	return supportsPassiveOption;
+  }());
+  var canvas$1 = (function () {
+	return !!document.createElement('canvas').getContext;
+  }());
+  var svg$1 = !!(document.createElementNS && svgCreate('svg').createSVGRect);
+  var vml = !svg$1 && (function () {
+	try {
+		var div = document.createElement('div');
+		div.innerHTML = '<v:shape adj="1"/>';
+		var shape = div.firstChild;
+		shape.style.behavior = 'url(#default#VML)';
+		return shape && (typeof shape.adj === 'object');
+	} catch (e) {
+		return false;
+	}
+  }());
+  var mac = navigator.platform.indexOf('Mac') === 0;
+  var linux = navigator.platform.indexOf('Linux') === 0;
+  function userAgentContains(str) {
+	return navigator.userAgent.toLowerCase().indexOf(str) >= 0;
+  }
+  var Browser = {
+	ie: ie,
+	ielt9: ielt9,
+	edge: edge,
+	webkit: webkit,
+	android: android,
+	android23: android23,
+	androidStock: androidStock,
+	opera: opera,
+	chrome: chrome,
+	gecko: gecko,
+	safari: safari,
+	phantom: phantom,
+	opera12: opera12,
+	win: win,
+	ie3d: ie3d,
+	webkit3d: webkit3d,
+	gecko3d: gecko3d,
+	any3d: any3d,
+	mobile: mobile,
+	mobileWebkit: mobileWebkit,
+	mobileWebkit3d: mobileWebkit3d,
+	msPointer: msPointer,
+	pointer: pointer,
+	touch: touch,
+	touchNative: touchNative,
+	mobileOpera: mobileOpera,
+	mobileGecko: mobileGecko,
+	retina: retina,
+	passiveEvents: passiveEvents,
+	canvas: canvas$1,
+	svg: svg$1,
+	vml: vml
+  };
 
-        getSouthWest() { return { lat: this._min.lat, lng: this._min.lng }; }
-        getNorthEast() { return { lat: this._max.lat, lng: this._max.lng }; }
-        
-        // Converts to the [[lat, lng], [lat, lng]] array format expected by map.fitBounds
-        toArray() {
-            return [[this._min.lat, this._min.lng], [this._max.lat, this._max.lng]];
-        }
-    }
-    
-    /*** LayerGroup: Manages a collection of layers. ***/
-    class LayerGroup extends Layer {
-        constructor(layers = []) {
-            super();
-            this._layers = new Set(layers);
-        }
+  var TRANSFORM = testProp(
+	['transform', 'webkitTransform', 'OTransform', 'MozTransform', 'msTransform']);
+  var TRANSITION = testProp(
+	['webkitTransition', 'transition', 'OTransition', 'MozTransition', 'msTransition']);
+  var TRANSITION_END =
+	TRANSITION === 'webkitTransition' || TRANSITION === 'OTransition' ? TRANSITION + 'End' : 'transitionend';
+  function get(id) {
+	return typeof id === 'string' ? document.getElementById(id) : id;
+  }
+  function getStyle(el, style) {
+	var value = el.style[style] || (el.currentStyle && el.currentStyle[style]);
+	if ((!value || value === 'auto') && document.defaultView) {
+		var css = document.defaultView.getComputedStyle(el, null);
+		value = css ? css[style] : null;
+	}
+	return value === 'auto' ? null : value;
+  }
+  function create$1(tagName, className, container) {
+	var el = document.createElement(tagName);
+	el.className = className || '';
+	if (container) {
+		container.appendChild(el);
+	}
+	return el;
+  }
+  function remove(el) {
+	var parent = el.parentNode;
+	if (parent) {
+		parent.removeChild(el);
+	}
+  }
+  function empty(el) {
+	while (el.firstChild) {
+		el.removeChild(el.firstChild);
+	}
+  }
+  function toFront(el) {
+	var parent = el.parentNode;
+	if (parent && parent.lastChild !== el) {
+		parent.appendChild(el);
+	}
+  }
+  function toBack(el) {
+	var parent = el.parentNode;
+	if (parent && parent.firstChild !== el) {
+		parent.insertBefore(el, parent.firstChild);
+	}
+  }
+  function hasClass(el, name) {
+	if (el.classList !== undefined) {
+		return el.classList.contains(name);
+	}
+	var className = getClass(el);
+	return className.length > 0 && new RegExp('(^|\\s)' + name + '(\\s|$)').test(className);
+  }
+  function addClass(el, name) {
+	if (el.classList !== undefined) {
+		var classes = splitWords(name);
+		for (var i = 0, len = classes.length; i < len; i++) {
+			el.classList.add(classes[i]);
+		}
+	} else if (!hasClass(el, name)) {
+		var className = getClass(el);
+		setClass(el, (className ? className + ' ' : '') + name);
+	}
+  }
+  function removeClass(el, name) {
+	if (el.classList !== undefined) {
+		el.classList.remove(name);
+	} else {
+		setClass(el, trim((' ' + getClass(el) + ' ').replace(' ' + name + ' ', ' ')));
+	}
+  }
+  function setClass(el, name) {
+	if (el.className.baseVal === undefined) {
+		el.className = name;
+	} else {
+		el.className.baseVal = name;
+	}
+  }
+  function getClass(el) {
+	if (el.correspondingElement) {
+		el = el.correspondingElement;
+	}
+	return el.className.baseVal === undefined ? el.className : el.className.baseVal;
+  }
+  function setOpacity(el, value) {
+	if ('opacity' in el.style) {
+		el.style.opacity = value;
+	} else if ('filter' in el.style) {
+		_setOpacityIE(el, value);
+	}
+  }
+  function _setOpacityIE(el, value) {
+	var filter = false,
+	    filterName = 'DXImageTransform.Microsoft.Alpha';
+	try {
+		filter = el.filters.item(filterName);
+	} catch (e) {
+		if (value === 1) { return; }
+	}
+	value = Math.round(value * 100);
+	if (filter) {
+		filter.Enabled = (value !== 100);
+		filter.Opacity = value;
+	} else {
+		el.style.filter += ' progid:' + filterName + '(opacity=' + value + ')';
+	}
+  }
+  function testProp(props) {
+	var style = document.documentElement.style;
+	for (var i = 0; i < props.length; i++) {
+		if (props[i] in style) {
+			return props[i];
+		}
+	}
+	return false;
+  }
+  function setTransform(el, offset, scale) {
+	var pos = offset || new Point(0, 0);
+	el.style[TRANSFORM] =
+		(Browser.ie3d ?
+			'translate(' + pos.x + 'px,' + pos.y + 'px)' :
+			'translate3d(' + pos.x + 'px,' + pos.y + 'px,0)') +
+		(scale ? ' scale(' + scale + ')' : '');
+  }
+  function setPosition(el, point) {
+	el._atlas_pos = point;
+	if (Browser.any3d) {
+		setTransform(el, point);
+	} else {
+		el.style.left = point.x + 'px';
+		el.style.top = point.y + 'px';
+	}
+  }
+  function getPosition(el) {
+	return el._atlas_pos || new Point(0, 0);
+  }
+  var disableTextSelection;
+  var enableTextSelection;
+  var _userSelect;
+  if ('onselectstart' in document) {
+	disableTextSelection = function () {
+		on(window, 'selectstart', preventDefault);
+	};
+	enableTextSelection = function () {
+		off(window, 'selectstart', preventDefault);
+	};
+  } else {
+	var userSelectProperty = testProp(
+		['userSelect', 'WebkitUserSelect', 'OUserSelect', 'MozUserSelect', 'msUserSelect']);
+	disableTextSelection = function () {
+		if (userSelectProperty) {
+			var style = document.documentElement.style;
+			_userSelect = style[userSelectProperty];
+			style[userSelectProperty] = 'none';
+		}
+	};
+	enableTextSelection = function () {
+		if (userSelectProperty) {
+			document.documentElement.style[userSelectProperty] = _userSelect;
+			_userSelect = undefined;
+		}
+	};
+  }
+  function disableImageDrag() {
+	on(window, 'dragstart', preventDefault);
+  }
+  function enableImageDrag() {
+	off(window, 'dragstart', preventDefault);
+  }
+  var _outlineElement, _outlineStyle;
+  function preventOutline(element) {
+	while (element.tabIndex === -1) {
+		element = element.parentNode;
+	}
+	if (!element.style) { return; }
+	restoreOutline();
+	_outlineElement = element;
+	_outlineStyle = element.style.outlineStyle;
+	element.style.outlineStyle = 'none';
+	on(window, 'keydown', restoreOutline);
+  }
+  function restoreOutline() {
+	if (!_outlineElement) { return; }
+	_outlineElement.style.outlineStyle = _outlineStyle;
+	_outlineElement = undefined;
+	_outlineStyle = undefined;
+	off(window, 'keydown', restoreOutline);
+  }
+  function getSizedParentNode(element) {
+	do {
+		element = element.parentNode;
+	} while ((!element.offsetWidth || !element.offsetHeight) && element !== document.body);
+	return element;
+  }
+  function getScale(element) {
+	var rect = element.getBoundingClientRect();
+	return {
+		x: rect.width / element.offsetWidth || 1,
+		y: rect.height / element.offsetHeight || 1,
+		boundingClientRect: rect
+	};
+  }
+  var DomUtil = {
+    __proto__: null,
+    TRANSFORM: TRANSFORM,
+    TRANSITION: TRANSITION,
+    TRANSITION_END: TRANSITION_END,
+    get: get,
+    getStyle: getStyle,
+    create: create$1,
+    remove: remove,
+    empty: empty,
+    toFront: toFront,
+    toBack: toBack,
+    hasClass: hasClass,
+    addClass: addClass,
+    removeClass: removeClass,
+    setClass: setClass,
+    getClass: getClass,
+    setOpacity: setOpacity,
+    testProp: testProp,
+    setTransform: setTransform,
+    setPosition: setPosition,
+    getPosition: getPosition,
+    get disableTextSelection () { return disableTextSelection; },
+    get enableTextSelection () { return enableTextSelection; },
+    disableImageDrag: disableImageDrag,
+    enableImageDrag: enableImageDrag,
+    preventOutline: preventOutline,
+    restoreOutline: restoreOutline,
+    getSizedParentNode: getSizedParentNode,
+    getScale: getScale
+  };
 
-        onAdd(map) {
-            super.onAdd(map);
-            this._layers.forEach(layer => map.addLayer(layer));
-        }
+  function on(obj, types, fn, context) {
+	if (types && typeof types === 'object') {
+		for (var type in types) {
+			addOne(obj, type, types[type], fn);
+		}
+	} else {
+		types = splitWords(types);
+		for (var i = 0, len = types.length; i < len; i++) {
+			addOne(obj, types[i], fn, context);
+		}
+	}
+	return this;
+  }
+  var eventsKey = '_atlas_events';
+  function off(obj, types, fn, context) {
+	if (arguments.length === 1) {
+		batchRemove(obj);
+		delete obj[eventsKey];
+	} else if (types && typeof types === 'object') {
+		for (var type in types) {
+			removeOne(obj, type, types[type], fn);
+		}
+	} else {
+		types = splitWords(types);
+		if (arguments.length === 2) {
+			batchRemove(obj, function (type) {
+				return indexOf(types, type) !== -1;
+			});
+		} else {
+			for (var i = 0, len = types.length; i < len; i++) {
+				removeOne(obj, types[i], fn, context);
+			}
+		}
+	}
+	return this;
+  }
+  function batchRemove(obj, filterFn) {
+	for (var id in obj[eventsKey]) {
+		var type = id.split(/\d/)[0];
+		if (!filterFn || filterFn(type)) {
+			removeOne(obj, type, null, null, id);
+		}
+	}
+  }
+  var mouseSubst = {
+	mouseenter: 'mouseover',
+	mouseleave: 'mouseout',
+	wheel: !('onwheel' in window) && 'mousewheel'
+  };
+  function addOne(obj, type, fn, context) {
+	var id = type + stamp(fn) + (context ? '_' + stamp(context) : '');
+	if (obj[eventsKey] && obj[eventsKey][id]) { return this; }
+	var handler = function (e) {
+		return fn.call(context || obj, e || window.event);
+	};
+	var originalHandler = handler;
+	if (!Browser.touchNative && Browser.pointer && type.indexOf('touch') === 0) {
+		handler = addPointerListener(obj, type, handler);
+	} else if (Browser.touch && (type === 'dblclick')) {
+		handler = addDoubleTapListener(obj, handler);
+	} else if ('addEventListener' in obj) {
+		if (type === 'touchstart' || type === 'touchmove' || type === 'wheel' ||  type === 'mousewheel') {
+			obj.addEventListener(mouseSubst[type] || type, handler, Browser.passiveEvents ? {passive: false} : false);
+		} else if (type === 'mouseenter' || type === 'mouseleave') {
+			handler = function (e) {
+				e = e || window.event;
+				if (isExternalTarget(obj, e)) {
+					originalHandler(e);
+				}
+			};
+			obj.addEventListener(mouseSubst[type], handler, false);
+		} else {
+			obj.addEventListener(type, originalHandler, false);
+		}
+	} else {
+		obj.attachEvent('on' + type, handler);
+	}
+	obj[eventsKey] = obj[eventsKey] || {};
+	obj[eventsKey][id] = handler;
+  }
+  function removeOne(obj, type, fn, context, id) {
+	id = id || type + stamp(fn) + (context ? '_' + stamp(context) : '');
+	var handler = obj[eventsKey] && obj[eventsKey][id];
+	if (!handler) { return this; }
+	if (!Browser.touchNative && Browser.pointer && type.indexOf('touch') === 0) {
+		removePointerListener(obj, type, handler);
+	} else if (Browser.touch && (type === 'dblclick')) {
+		removeDoubleTapListener(obj, handler);
+	} else if ('removeEventListener' in obj) {
+		obj.removeEventListener(mouseSubst[type] || type, handler, false);
+	} else {
+		obj.detachEvent('on' + type, handler);
+	}
+	obj[eventsKey][id] = null;
+  }
+  function stopPropagation(e) {
+	if (e.stopPropagation) {
+		e.stopPropagation();
+	} else if (e.originalEvent) {
+		e.originalEvent._stopped = true;
+	} else {
+		e.cancelBubble = true;
+	}
+	return this;
+  }
+  function disableScrollPropagation(el) {
+	addOne(el, 'wheel', stopPropagation);
+	return this;
+  }
+  function disableClickPropagation(el) {
+	on(el, 'mousedown touchstart dblclick contextmenu', stopPropagation);
+	el['_atlas_disable_click'] = true;
+	return this;
+  }
+  function preventDefault(e) {
+	if (e.preventDefault) {
+		e.preventDefault();
+	} else {
+		e.returnValue = false;
+	}
+	return this;
+  }
+  function stop(e) {
+	preventDefault(e);
+	stopPropagation(e);
+	return this;
+  }
+  function getPropagationPath(ev) {
+	if (ev.composedPath) {
+		return ev.composedPath();
+	}
+	var path = [];
+	var el = ev.target;
+	while (el) {
+		path.push(el);
+		el = el.parentNode;
+	}
+	return path;
+  }
+  function getMousePosition(e, container) {
+	if (!container) {
+		return new Point(e.clientX, e.clientY);
+	}
+	var scale = getScale(container),
+	    offset = scale.boundingClientRect;
+	return new Point(
+		(e.clientX - offset.left) / scale.x - container.clientLeft,
+		(e.clientY - offset.top) / scale.y - container.clientTop
+	);
+  }
+  var wheelPxFactor =
+	(Browser.linux && Browser.chrome) ? window.devicePixelRatio :
+	Browser.mac ? window.devicePixelRatio * 3 :
+	window.devicePixelRatio > 0 ? 2 * window.devicePixelRatio : 1;
+  function getWheelDelta(e) {
+	return (Browser.edge) ? e.wheelDeltaY / 2 :
+	       (e.deltaY && e.deltaMode === 0) ? -e.deltaY / wheelPxFactor :
+	       (e.deltaY && e.deltaMode === 1) ? -e.deltaY * 20 :
+	       (e.deltaY && e.deltaMode === 2) ? -e.deltaY * 60 :
+	       (e.deltaX || e.deltaZ) ? 0 :
+	       e.wheelDelta ? (e.wheelDeltaY || e.wheelDelta) / 2 :
+	       (e.detail && Math.abs(e.detail) < 32765) ? -e.detail * 20 :
+	       e.detail ? e.detail / -32765 * 60 :
+	       0;
+  }
+  function isExternalTarget(el, e) {
+	var related = e.relatedTarget;
+	if (!related) { return true; }
+	try {
+		while (related && (related !== el)) {
+			related = related.parentNode;
+		}
+	} catch (err) {
+		return false;
+	}
+	return (related !== el);
+  }
+  var DomEvent = {
+    __proto__: null,
+    on: on,
+    off: off,
+    stopPropagation: stopPropagation,
+    disableScrollPropagation: disableScrollPropagation,
+    disableClickPropagation: disableClickPropagation,
+    preventDefault: preventDefault,
+    stop: stop,
+    getPropagationPath: getPropagationPath,
+    getMousePosition: getMousePosition,
+    getWheelDelta: getWheelDelta,
+    isExternalTarget: isExternalTarget,
+    addListener: on,
+    removeListener: off
+  };
 
-        onRemove() {
-            this._layers.forEach(layer => this._map.removeLayer(layer));
-            super.onRemove();
-        }
+  function Class() {}
+  Class.extend = function (props) {
+	var NewClass = function () {
+		setOptions(this);
+		if (this.initialize) {
+			this.initialize.apply(this, arguments);
+		}
+		this.callInitHooks();
+	};
+	var parentProto = NewClass.__super__ = this.prototype;
+	var proto = create$2(parentProto);
+	proto.constructor = NewClass;
+	NewClass.prototype = proto;
+	for (var i in this) {
+		if (Object.prototype.hasOwnProperty.call(this, i) && i !== 'prototype' && i !== '__super__') {
+			NewClass[i] = this[i];
+		}
+	}
+	if (props.statics) {
+		extend(NewClass, props.statics);
+	}
+	if (props.includes) {
+		checkDeprecatedMixinEvents(props.includes);
+		extend.apply(null, [proto].concat(props.includes));
+	}
+	extend(proto, props);
+	delete proto.statics;
+	delete proto.includes;
+	if (proto.options) {
+		proto.options = parentProto.options ? create$2(parentProto.options) : {};
+		extend(proto.options, props.options);
+	}
+	proto._initHooks = [];
+	proto.callInitHooks = function () {
+		if (this._initHooksCalled) { return; }
+		if (parentProto.callInitHooks) {
+			parentProto.callInitHooks.call(this);
+		}
+		this._initHooksCalled = true;
+		for (var i = 0, len = proto._initHooks.length; i < len; i++) {
+			proto._initHooks[i].call(this);
+		}
+	};
+	return NewClass;
+  };
+  Class.include = function (props) {
+	var parentOptions = this.prototype.options;
+	extend(this.prototype, props);
+	if (props.options) {
+		this.prototype.options = parentOptions;
+		this.mergeOptions(props.options);
+	}
+	return this;
+  };
+  Class.mergeOptions = function (options) {
+	extend(this.prototype.options, options);
+	return this;
+  };
+  Class.addInitHook = function (fn) {
+	var args = Array.prototype.slice.call(arguments, 1);
+	var init = typeof fn === 'function' ? fn : function () {
+		this[fn].apply(this, args);
+	};
+	this.prototype._initHooks = this.prototype._initHooks || [];
+	this.prototype._initHooks.push(init);
+	return this;
+  };
+  function checkDeprecatedMixinEvents(includes) {
+	if (typeof L === 'undefined' || !L || !A.Mixin) { return; }
+	includes = isArray(includes) ? includes : [includes];
+	for (var i = 0; i < includes.length; i++) {
+		if (includes[i] === A.Mixin.Events) {
+			console.warn('Deprecated include of A.Mixin.Events: ' +
+				'this property will be removed in future releases, ' +
+				'please inherit from A.Evented instead.', new Error().stack);
+		}
+	}
+  }
+  var Events = {
+	on: function (types, fn, context) {
+		if (typeof types === 'object') {
+			for (var type in types) {
+				this._on(type, types[type], fn);
+			}
+		} else {
+			types = splitWords(types);
+			for (var i = 0, len = types.length; i < len; i++) {
+				this._on(types[i], fn, context);
+			}
+		}
+		return this;
+	},
+	off: function (types, fn, context) {
+		if (!arguments.length) {
+			delete this._events;
+		} else if (typeof types === 'object') {
+			for (var type in types) {
+				this._off(type, types[type], fn);
+			}
+		} else {
+			types = splitWords(types);
+			var removeAll = arguments.length === 1;
+			for (var i = 0, len = types.length; i < len; i++) {
+				if (removeAll) {
+					this._off(types[i]);
+				} else {
+					this._off(types[i], fn, context);
+				}
+			}
+		}
+		return this;
+	},
+	_on: function (type, fn, context, _once) {
+		if (typeof fn !== 'function') {
+			console.warn('wrong listener type: ' + typeof fn);
+			return;
+		}
+		if (this._listens(type, fn, context) !== false) {
+			return;
+		}
+		if (context === this) {
+			context = undefined;
+		}
+		var newListener = {fn: fn, ctx: context};
+		if (_once) {
+			newListener.once = true;
+		}
+		this._events = this._events || {};
+		this._events[type] = this._events[type] || [];
+		this._events[type].push(newListener);
+	},
+	_off: function (type, fn, context) {
+		var listeners,
+		    i,
+		    len;
+		if (!this._events) {
+			return;
+		}
+		listeners = this._events[type];
+		if (!listeners) {
+			return;
+		}
+		if (arguments.length === 1) {
+			if (this._firingCount) {
+				for (i = 0, len = listeners.length; i < len; i++) {
+					listeners[i].fn = falseFn;
+				}
+			}
+			delete this._events[type];
+			return;
+		}
+		if (typeof fn !== 'function') {
+			console.warn('wrong listener type: ' + typeof fn);
+			return;
+		}
+		var index = this._listens(type, fn, context);
+		if (index !== false) {
+			var listener = listeners[index];
+			if (this._firingCount) {
+				listener.fn = falseFn;
+				this._events[type] = listeners = listeners.slice();
+			}
+			listeners.splice(index, 1);
+		}
+	},
+	fire: function (type, data, propagate) {
+		if (!this.listens(type, propagate)) { return this; }
+		var event = extend({}, data, {
+			type: type,
+			target: this,
+			sourceTarget: data && data.sourceTarget || this
+		});
+		if (this._events) {
+			var listeners = this._events[type];
+			if (listeners) {
+				this._firingCount = (this._firingCount + 1) || 1;
+				for (var i = 0, len = listeners.length; i < len; i++) {
+					var l = listeners[i];
+					var fn = l.fn;
+					if (l.once) {
+						this.off(type, fn, l.ctx);
+					}
+					fn.call(l.ctx || this, event);
+				}
+				this._firingCount--;
+			}
+		}
+		if (propagate) {
+			this._propagateEvent(event);
+		}
+		return this;
+	},
+	listens: function (type, fn, context, propagate) {
+		if (typeof type !== 'string') {
+			console.warn('"string" type argument expected');
+		}
+		var _fn = fn;
+		if (typeof fn !== 'function') {
+			propagate = !!fn;
+			_fn = undefined;
+			context = undefined;
+		}
+		var listeners = this._events && this._events[type];
+		if (listeners && listeners.length) {
+			if (this._listens(type, _fn, context) !== false) {
+				return true;
+			}
+		}
+		if (propagate) {
+			for (var id in this._eventParents) {
+				if (this._eventParents[id].listens(type, fn, context, propagate)) { return true; }
+			}
+		}
+		return false;
+	},
+	_listens: function (type, fn, context) {
+		if (!this._events) {
+			return false;
+		}
+		var listeners = this._events[type] || [];
+		if (!fn) {
+			return !!listeners.length;
+		}
+		if (context === this) {
+			context = undefined;
+		}
+		for (var i = 0, len = listeners.length; i < len; i++) {
+			if (listeners[i].fn === fn && listeners[i].ctx === context) {
+				return i;
+			}
+		}
+		return false;
+	},
+	once: function (types, fn, context) {
+		if (typeof types === 'object') {
+			for (var type in types) {
+				this._on(type, types[type], fn, true);
+			}
+		} else {
+			types = splitWords(types);
+			for (var i = 0, len = types.length; i < len; i++) {
+				this._on(types[i], fn, context, true);
+			}
+		}
+		return this;
+	},
+	addEventParent: function (obj) {
+		this._eventParents = this._eventParents || {};
+		this._eventParents[stamp(obj)] = obj;
+		return this;
+	},
+	removeEventParent: function (obj) {
+		if (this._eventParents) {
+			delete this._eventParents[stamp(obj)];
+		}
+		return this;
+	},
+	_propagateEvent: function (e) {
+		for (var id in this._eventParents) {
+			this._eventParents[id].fire(e.type, extend({
+				layer: e.target,
+				propagatedFrom: e.target
+			}, e), true);
+		}
+	}
+  };
+  Events.addEventListener = Events.on;
+  Events.removeEventListener = Events.clearAllEventListeners = Events.off;
+  Events.addOneTimeEventListener = Events.once;
+  Events.fireEvent = Events.fire;
+  Events.hasEventListeners = Events.listens;
+  var Evented = Class.extend(Events);
 
-        addLayer(layer) {
-            this._layers.add(layer);
-            if (this._map) this._map.addLayer(layer);
-            return this;
-        }
-        
-        removeLayer(layer) {
-            this._layers.delete(layer);
-            if (this._map) this._map.removeLayer(layer);
-            return this;
-        }
-        
-        clearLayers() {
-            this._layers.forEach(layer => this.removeLayer(layer));
-            return this;
-        }
-    }
+  function Point(x, y, round) {
+	this.x = (round ? Math.round(x) : x);
+	this.y = (round ? Math.round(y) : y);
+  }
+  var trunc = Math.trunc || function (v) {
+	return v > 0 ? Math.floor(v) : Math.ceil(v);
+  };
+  Point.prototype = {
+	clone: function () {
+		return new Point(this.x, this.y);
+	},
+	add: function (point) {
+		return this.clone()._add(toPoint(point));
+	},
+	_add: function (point) {
+		this.x += point.x;
+		this.y += point.y;
+		return this;
+	},
+	subtract: function (point) {
+		return this.clone()._subtract(toPoint(point));
+	},
+	_subtract: function (point) {
+		this.x -= point.x;
+		this.y -= point.y;
+		return this;
+	},
+	divideBy: function (num) {
+		return this.clone()._divideBy(num);
+	},
+	_divideBy: function (num) {
+		this.x /= num;
+		this.y /= num;
+		return this;
+	},
+	multiplyBy: function (num) {
+		return this.clone()._multiplyBy(num);
+	},
+	_multiplyBy: function (num) {
+		this.x *= num;
+		this.y *= num;
+		return this;
+	},
+	scaleBy: function (point) {
+		return new Point(this.x * point.x, this.y * point.y);
+	},
+	unscaleBy: function (point) {
+		return new Point(this.x / point.x, this.y / point.y);
+	},
+	round: function () {
+		return this.clone()._round();
+	},
+	_round: function () {
+		this.x = Math.round(this.x);
+		this.y = Math.round(this.y);
+		return this;
+	},
+	floor: function () {
+		return this.clone()._floor();
+	},
+	_floor: function () {
+		this.x = Math.floor(this.x);
+		this.y = Math.floor(this.y);
+		return this;
+	},
+	ceil: function () {
+		return this.clone()._ceil();
+	},
+	_ceil: function () {
+		this.x = Math.ceil(this.x);
+		this.y = Math.ceil(this.y);
+		return this;
+	},
+	trunc: function () {
+		return this.clone()._trunc();
+	},
+	_trunc: function () {
+		this.x = trunc(this.x);
+		this.y = trunc(this.y);
+		return this;
+	},
+	distanceTo: function (point) {
+		point = toPoint(point);
+		var x = point.x - this.x,
+		    y = point.y - this.y;
+		return Math.sqrt(x * x + y * y);
+	},
+	equals: function (point) {
+		point = toPoint(point);
+		return point.x === this.x &&
+		       point.y === this.y;
+	},
+	contains: function (point) {
+		point = toPoint(point);
+		return Math.abs(point.x) <= Math.abs(this.x) &&
+		       Math.abs(point.y) <= Math.abs(this.y);
+	},
+	toString: function () {
+		return 'Point(' +
+		        formatNum(this.x) + ', ' +
+		        formatNum(this.y) + ')';
+	}
+  };
+  function toPoint(x, y, round) {
+	if (x instanceof Point) {
+		return x;
+	}
+	if (isArray(x)) {
+		return new Point(x[0], x[1]);
+	}
+	if (x === undefined || x === null) {
+		return x;
+	}
+	if (typeof x === 'object' && 'x' in x && 'y' in x) {
+		return new Point(x.x, x.y);
+	}
+	return new Point(x, y, round);
+  }
+  function Bounds(a, b) {
+	if (!a) { return; }
+	var points = b ? [a, b] : a;
+	for (var i = 0, len = points.length; i < len; i++) {
+		this.extend(points[i]);
+	}
+  }
+  Bounds.prototype = {
+	extend: function (obj) {
+		var min2, max2;
+		if (!obj) { return this; }
+		if (obj instanceof Point || typeof obj[0] === 'number' || 'x' in obj) {
+			min2 = max2 = toPoint(obj);
+		} else {
+			obj = toBounds(obj);
+			min2 = obj.min;
+			max2 = obj.max;
+			if (!min2 || !max2) { return this; }
+		}
+		if (!this.min && !this.max) {
+			this.min = min2.clone();
+			this.max = max2.clone();
+		} else {
+			this.min.x = Math.min(min2.x, this.min.x);
+			this.max.x = Math.max(max2.x, this.max.x);
+			this.min.y = Math.min(min2.y, this.min.y);
+			this.max.y = Math.max(max2.y, this.max.y);
+		}
+		return this;
+	},
+	getCenter: function (round) {
+		return toPoint(
+		        (this.min.x + this.max.x) / 2,
+		        (this.min.y + this.max.y) / 2, round);
+	},
+	getBottomLeft: function () {
+		return toPoint(this.min.x, this.max.y);
+	},
+	getTopRight: function () {
+		return toPoint(this.max.x, this.min.y);
+	},
+	getTopLeft: function () {
+		return this.min;
+	},
+	getBottomRight: function () {
+		return this.max;
+	},
+	getSize: function () {
+		return this.max.subtract(this.min);
+	},
+	contains: function (obj) {
+		var min, max;
+		if (typeof obj[0] === 'number' || obj instanceof Point) {
+			obj = toPoint(obj);
+		} else {
+			obj = toBounds(obj);
+		}
+		if (obj instanceof Bounds) {
+			min = obj.min;
+			max = obj.max;
+		} else {
+			min = max = obj;
+		}
+		return (min.x >= this.min.x) &&
+		       (max.x <= this.max.x) &&
+		       (min.y >= this.min.y) &&
+		       (max.y <= this.max.y);
+	},
+	intersects: function (bounds) {
+		bounds = toBounds(bounds);
+		var min = this.min,
+		    max = this.max,
+		    min2 = bounds.min,
+		    max2 = bounds.max,
+		    xIntersects = (max2.x >= min.x) && (min2.x <= max.x),
+		    yIntersects = (max2.y >= min.y) && (min2.y <= max.y);
+		return xIntersects && yIntersects;
+	},
+	overlaps: function (bounds) {
+		bounds = toBounds(bounds);
+		var min = this.min,
+		    max = this.max,
+		    min2 = bounds.min,
+		    max2 = bounds.max,
+		    xOverlaps = (max2.x > min.x) && (min2.x < max.x),
+		    yOverlaps = (max2.y > min.y) && (min2.y < max.y);
+		return xOverlaps && yOverlaps;
+	},
+	isValid: function () {
+		return !!(this.min && this.max);
+	},
+	pad: function (bufferRatio) {
+		var min = this.min,
+		max = this.max,
+		heightBuffer = Math.abs(min.x - max.x) * bufferRatio,
+		widthBuffer = Math.abs(min.y - max.y) * bufferRatio;
+		return toBounds(
+			toPoint(min.x - heightBuffer, min.y - widthBuffer),
+			toPoint(max.x + heightBuffer, max.y + widthBuffer));
+	},
+	equals: function (bounds) {
+		if (!bounds) { return false; }
+		bounds = toBounds(bounds);
+		return this.min.equals(bounds.getTopLeft()) &&
+			this.max.equals(bounds.getBottomRight());
+	},
+  };
+  function toBounds(a, b) {
+	if (!a || a instanceof Bounds) {
+		return a;
+	}
+	return new Bounds(a, b);
+  }
+  function LatLngBounds(corner1, corner2) {
+	if (!corner1) { return; }
+	var latlngs = corner2 ? [corner1, corner2] : corner1;
+	for (var i = 0, len = latlngs.length; i < len; i++) {
+		this.extend(latlngs[i]);
+	}
+  }
+  LatLngBounds.prototype = {
+	extend: function (obj) {
+		var sw = this._southWest,
+		    ne = this._northEast,
+		    sw2, ne2;
+		if (obj instanceof LatLng) {
+			sw2 = obj;
+			ne2 = obj;
+		} else if (obj instanceof LatLngBounds) {
+			sw2 = obj._southWest;
+			ne2 = obj._northEast;
+			if (!sw2 || !ne2) { return this; }
+		} else {
+			return obj ? this.extend(toLatLng(obj) || toLatLngBounds(obj)) : this;
+		}
+		if (!sw && !ne) {
+			this._southWest = new LatLng(sw2.lat, sw2.lng);
+			this._northEast = new LatLng(ne2.lat, ne2.lng);
+		} else {
+			sw.lat = Math.min(sw2.lat, sw.lat);
+			sw.lng = Math.min(sw2.lng, sw.lng);
+			ne.lat = Math.max(ne2.lat, ne.lat);
+			ne.lng = Math.max(ne2.lng, ne.lng);
+		}
+		return this;
+	},
+	pad: function (bufferRatio) {
+		var sw = this._southWest,
+		    ne = this._northEast,
+		    heightBuffer = Math.abs(sw.lat - ne.lat) * bufferRatio,
+		    widthBuffer = Math.abs(sw.lng - ne.lng) * bufferRatio;
+		return new LatLngBounds(
+		        new LatLng(sw.lat - heightBuffer, sw.lng - widthBuffer),
+		        new LatLng(ne.lat + heightBuffer, ne.lng + widthBuffer));
+	},
+	getCenter: function () {
+		return new LatLng(
+		        (this._southWest.lat + this._northEast.lat) / 2,
+		        (this._southWest.lng + this._northEast.lng) / 2);
+	},
+	getSouthWest: function () {
+		return this._southWest;
+	},
+	getNorthEast: function () {
+		return this._northEast;
+	},
+	getNorthWest: function () {
+		return new LatLng(this.getNorth(), this.getWest());
+	},
+	getSouthEast: function () {
+		return new LatLng(this.getSouth(), this.getEast());
+	},
+	getWest: function () {
+		return this._southWest.lng;
+	},
+	getSouth: function () {
+		return this._southWest.lat;
+	},
+	getEast: function () {
+		return this._northEast.lng;
+	},
+	getNorth: function () {
+		return this._northEast.lat;
+	},
+	contains: function (obj) {
+		if (typeof obj[0] === 'number' || obj instanceof LatLng || 'lat' in obj) {
+			obj = toLatLng(obj);
+		} else {
+			obj = toLatLngBounds(obj);
+		}
+		var sw = this._southWest,
+		    ne = this._northEast,
+		    sw2, ne2;
+		if (obj instanceof LatLngBounds) {
+			sw2 = obj.getSouthWest();
+			ne2 = obj.getNorthEast();
+		} else {
+			sw2 = ne2 = obj;
+		}
+		return (sw2.lat >= sw.lat) && (ne2.lat <= ne.lat) &&
+		       (sw2.lng >= sw.lng) && (ne2.lng <= ne.lng);
+	},
+	intersects: function (bounds) {
+		bounds = toLatLngBounds(bounds);
+		var sw = this._southWest,
+		    ne = this._northEast,
+		    sw2 = bounds.getSouthWest(),
+		    ne2 = bounds.getNorthEast(),
+		    latIntersects = (ne2.lat >= sw.lat) && (sw2.lat <= ne.lat),
+		    lngIntersects = (ne2.lng >= sw.lng) && (sw2.lng <= ne.lng);
+		return latIntersects && lngIntersects;
+	},
+	overlaps: function (bounds) {
+		bounds = toLatLngBounds(bounds);
+		var sw = this._southWest,
+		    ne = this._northEast,
+		    sw2 = bounds.getSouthWest(),
+		    ne2 = bounds.getNorthEast(),
+		    latOverlaps = (ne2.lat > sw.lat) && (sw2.lat < ne.lat),
+		    lngOverlaps = (ne2.lng > sw.lng) && (sw2.lng < ne.lng);
+		return latOverlaps && lngOverlaps;
+	},
+	toBBoxString: function () {
+		return [this.getWest(), this.getSouth(), this.getEast(), this.getNorth()].join(',');
+	},
+	equals: function (bounds, maxMargin) {
+		if (!bounds) { return false; }
+		bounds = toLatLngBounds(bounds);
+		return this._southWest.equals(bounds.getSouthWest(), maxMargin) &&
+		       this._northEast.equals(bounds.getNorthEast(), maxMargin);
+	},
+	isValid: function () {
+		return !!(this._southWest && this._northEast);
+	}
+  };
+  function toLatLngBounds(a, b) {
+	if (a instanceof LatLngBounds) {
+		return a;
+	}
+	return new LatLngBounds(a, b);
+  }
+  function LatLng(lat, lng, alt) {
+	if (isNaN(lat) || isNaN(lng)) {
+		throw new Error('Invalid LatLng object: (' + lat + ', ' + lng + ')');
+	}
+	this.lat = +lat;
+	this.lng = +lng;
+	if (alt !== undefined) {
+		this.alt = +alt;
+	}
+  }
+  LatLng.prototype = {
+	equals: function (obj, maxMargin) {
+		if (!obj) { return false; }
+		obj = toLatLng(obj);
+		var margin = Math.max(
+		        Math.abs(this.lat - obj.lat),
+		        Math.abs(this.lng - obj.lng));
+		return margin <= (maxMargin === undefined ? 1.0E-9 : maxMargin);
+	},
+	toString: function (precision) {
+		return 'LatLng(' +
+		        formatNum(this.lat, precision) + ', ' +
+		        formatNum(this.lng, precision) + ')';
+	},
+	distanceTo: function (other) {
+		return Earth.distance(this, toLatLng(other));
+	},
+	wrap: function () {
+		return Earth.wrapLatLng(this);
+	},
+	toBounds: function (sizeInMeters) {
+		var latAccuracy = 180 * sizeInMeters / 40075017,
+		    lngAccuracy = latAccuracy / Math.cos((Math.PI / 180) * this.lat);
+		return toLatLngBounds(
+		        [this.lat - latAccuracy, this.lng - lngAccuracy],
+		        [this.lat + latAccuracy, this.lng + lngAccuracy]);
+	},
+	clone: function () {
+		return new LatLng(this.lat, this.lng, this.alt);
+	}
+  };
+  function toLatLng(a, b, c) {
+	if (a instanceof LatLng) {
+		return a;
+	}
+	if (isArray(a) && typeof a[0] !== 'object') {
+		if (a.length === 3) {
+			return new LatLng(a[0], a[1], a[2]);
+		}
+		if (a.length === 2) {
+			return new LatLng(a[0], a[1]);
+		}
+		return null;
+	}
+	if (a === undefined || a === null) {
+		return a;
+	}
+	if (typeof a === 'object' && 'lat' in a) {
+		return new LatLng(a.lat, 'lng' in a ? a.lng : a.lon, a.alt);
+	}
+	if (b === undefined) {
+		return null;
+	}
+	return new LatLng(a, b, c);
+  }
 
-    /*** FeatureGroup: Extends LayerGroup with events and bounds. ***/
-    class FeatureGroup extends LayerGroup {
-        addLayer(layer) {
-            super.addLayer(layer);
-            if (layer.on) { // Propagate events
-                layer.on('click dblclick mousedown mouseup', (e) => this.fire(e.type, e));
-            }
-            return this;
-        }
+  var CRS = {
+	latLngToPoint: function (latlng, zoom) {
+		var projectedPoint = this.projection.project(latlng),
+		    scale = this.scale(zoom);
+		return this.transformation._transform(projectedPoint, scale);
+	},
+	pointToLatLng: function (point, zoom) {
+		var scale = this.scale(zoom),
+		    untransformedPoint = this.transformation.untransform(point, scale);
+		return this.projection.unproject(untransformedPoint);
+	},
+	project: function (latlng) {
+		return this.projection.project(latlng);
+	},
+	unproject: function (point) {
+		return this.projection.unproject(point);
+	},
+	scale: function (zoom) {
+		return 256 * Math.pow(2, zoom);
+	},
+	zoom: function (scale) {
+		return Math.log(scale / 256) / Math.LN2;
+	},
+	getProjectedBounds: function (zoom) {
+		if (this.infinite) { return null; }
+		var b = this.projection.bounds,
+		    s = this.scale(zoom),
+		    min = this.transformation.transform(b.min, s),
+		    max = this.transformation.transform(b.max, s);
+		return new Bounds(min, max);
+	},
+	infinite: false,
+	wrapLatLng: function (latlng) {
+		var lng = this.wrapLng ? wrapNum(latlng.lng, this.wrapLng, true) : latlng.lng,
+		    lat = this.wrapLat ? wrapNum(latlng.lat, this.wrapLat, true) : latlng.lat,
+		    alt = latlng.alt;
+		return new LatLng(lat, lng, alt);
+	},
+	wrapLatLngBounds: function (bounds) {
+		var center = bounds.getCenter(),
+		    newCenter = this.wrapLatLng(center),
+		    latShift = center.lat - newCenter.lat,
+		    lngShift = center.lng - newCenter.lng;
+		if (latShift === 0 && lngShift === 0) {
+			return bounds;
+		}
+		var sw = bounds.getSouthWest(),
+		    ne = bounds.getNorthEast(),
+		    newSw = new LatLng(sw.lat - latShift, sw.lng - lngShift),
+		    newNe = new LatLng(ne.lat - latShift, ne.lng - lngShift);
+		return new LatLngBounds(newSw, newNe);
+	}
+  };
+  var Earth = extend({}, CRS, {
+	wrapLng: [-180, 180],
+	R: 6371000,
+	distance: function (latlng1, latlng2) {
+		var rad = Math.PI / 180,
+		    lat1 = latlng1.lat * rad,
+		    lat2 = latlng2.lat * rad,
+		    sinDLat = Math.sin((latlng2.lat - latlng1.lat) * rad / 2),
+		    sinDLon = Math.sin((latlng2.lng - latlng1.lng) * rad / 2),
+		    a = sinDLat * sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon * sinDLon,
+		    c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+		return this.R * c;
+	}
+  });
+  var earthRadius = 6378137;
+  var SphericalMercator = {
+	R: earthRadius,
+	MAX_LATITUDE: 85.0511287798,
+	project: function (latlng) {
+		var d = Math.PI / 180,
+		    max = this.MAX_LATITUDE,
+		    lat = Math.max(Math.min(max, latlng.lat), -max),
+		    sin = Math.sin(lat * d);
+		return new Point(
+			this.R * latlng.lng * d,
+			this.R * Math.log((1 + sin) / (1 - sin)) / 2);
+	},
+	unproject: function (point) {
+		var d = 180 / Math.PI;
+		return new LatLng(
+			(2 * Math.atan(Math.exp(point.y / this.R)) - (Math.PI / 2)) * d,
+			point.x * d / this.R);
+	},
+	bounds: (function () {
+		var d = earthRadius * Math.PI;
+		return new Bounds([-d, -d], [d, d]);
+	})()
+  };
+  function Transformation(a, b, c, d) {
+	if (isArray(a)) {
+		this._a = a[0];
+		this._b = a[1];
+		this._c = a[2];
+		this._d = a[3];
+		return;
+	}
+	this._a = a;
+	this._b = b;
+	this._c = c;
+	this._d = d;
+  }
+  Transformation.prototype = {
+	transform: function (point, scale) {
+		return this._transform(point.clone(), scale);
+	},
+	_transform: function (point, scale) {
+		scale = scale || 1;
+		point.x = scale * (this._a * point.x + this._b);
+		point.y = scale * (this._c * point.y + this._d);
+		return point;
+	},
+	untransform: function (point, scale) {
+		scale = scale || 1;
+		return new Point(
+		        (point.x / scale - this._b) / this._a,
+		        (point.y / scale - this._d) / this._c);
+	}
+  };
+  var EPSG3857 = extend({}, Earth, {
+	code: 'EPSG:3857',
+	projection: SphericalMercator,
+	transformation: (function () {
+		var scale = 0.5 / (Math.PI * SphericalMercator.R);
+		return toTransformation(scale, 0.5, -scale, 0.5);
+	}())
+  });
 
-        getBounds() {
-            const bounds = new LatLngBounds();
-            this._layers.forEach(layer => {
-                if (layer.getBounds) {
-                    bounds.extend(layer.getBounds().getSouthWest());
-                    bounds.extend(layer.getBounds().getNorthEast());
-                } else if (layer.getLatLng) {
-                    bounds.extend(layer.getLatLng());
-                }
-            });
-            return bounds;
-        }
-    }
-
-    /*** Path: Refactored base class for all vector layers. ***/
-    // It now appends to a shared SVG pane on the map instead of creating its own.
-    class Path extends Layer {
-        // ... (constructor and options setup from v2.0) ...
-        onAdd(map) {
-            super.onAdd(map);
-            this._renderer = map.getRenderer();
-            this._initElement();
-            this._renderer.addPath(this);
-            this._project();
-        }
-        onRemove() {
-            this._renderer.removePath(this);
-            super.onRemove();
-        }
-        _initElement() {
-            this._path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            // ... (apply styles from this.options) ...
-        }
-        // _project() method specific to each subclass (Polyline, Polygon, etc.)
-    }
-    
-    /*** CircleMarker: A circle with a radius in pixels. ***/
-    class CircleMarker extends Path {
-        constructor(latlng, options) {
-            super(options);
-            this._latlng = latlng;
-            this.options.radius = this.options.radius || 10;
-        }
-
-        _initElement() {
-            this._path = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            this._path.setAttribute('r', this.options.radius);
-            // ... (apply styles) ...
-        }
-
-        _project() {
-            const p = this._map.latLngToLayerPoint(this._latlng);
-            this._path.setAttribute('cx', p.x);
-            this._path.setAttribute('cy', p.y);
-        }
-        
-        getBounds() {
-            // Simplified for this example. A real implementation would convert pixel radius to lat/lng.
-            return new LatLngBounds(this._latlng, this._latlng);
-        }
-    }
-    
-    /*** SvgRenderer: Manages the shared SVG pane for vector layers. ***/
-    class SvgRenderer extends Layer {
-        onAdd(map) {
-            super.onAdd(map);
-            this._container = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            map.getPane('overlayPane').appendChild(this._container);
-            map.on('viewchange', this._update, this);
-            this._update();
-        }
-        addPath(layer) {
-            this._container.appendChild(layer._path);
-        }
-        removePath(layer) {
-            layer._path.remove();
-        }
-        _update() {
-            // ... (update SVG position and size to match map pane, as in v2.0 Path) ...
-        }
-    }
-    
-    /*** GeoJSONLayer: Powerful GeoJSON parser and layer factory. ***/
-    class GeoJSONLayer extends FeatureGroup {
-        constructor(geojson, options) {
-            super();
-            this.options = Utils.extend({
-                pointToLayer: (feature, latlng) => new Marker(latlng),
-                style: (feature) => ({}), // Default style function
-                onEachFeature: (feature, layer) => {}
-            }, options);
-            if (geojson) this.addData(geojson);
-        }
-
-        addData(geojson) {
-            const features = geojson.type === 'FeatureCollection' ? geojson.features : [geojson];
-            features.forEach(feature => {
-                this.geometryToLayer(feature);
-            });
-            return this;
-        }
-
-        geometryToLayer(feature) {
-            const { geometry } = feature;
-            if (!geometry) return;
-            
-            const coords = geometry.coordinates;
-            let layer;
-            
-            switch (geometry.type) {
-                case 'Point':
-                    layer = this.options.pointToLayer(feature, {lat: coords[1], lng: coords[0]});
-                    break;
-                case 'LineString':
-                    layer = new Polyline(coords.map(c => ({lat: c[1], lng: c[0]})));
-                    break;
-                case 'Polygon':
-                    layer = new Polygon(coords[0].map(c => ({lat: c[1], lng: c[0]})));
-                    break;
-                // Note: Multi* and GeometryCollection would need more complex loops here.
-                default:
-                    return; // Ignore unsupported types
-            }
-            
-            // Apply styling
-            if (layer.setStyle) {
-                layer.setStyle(this.options.style(feature));
-            }
-            
-            // Run the callback
-            this.options.onEachFeature(feature, layer);
-            
-            this.addLayer(layer);
-        }
-    }
-    
-    /*** Control.Layers: UI for toggling base layers and overlays. ***/
-    Control.Layers = class extends Control {
-        constructor(baseLayers, overlays, options) {
-            super(options);
-            this._baseLayers = baseLayers;
-            this._overlays = overlays;
-        }
-
-        onAdd(map) {
-            this._container = Utils.createElement('div', 'atlas-control atlas-layers', this._map._controlContainer);
-            this._container.innerHTML = `<a class="atlas-layers-toggle" href="#" title="Layers"></a>`;
-            this._form = Utils.createElement('form', 'atlas-layers-list', this._container);
-
-            this._container.querySelector('.atlas-layers-toggle').addEventListener('click', (e) => {
-                e.preventDefault();
-                this._container.classList.toggle('expanded');
-            });
-            
-            this._addLayers(this._baseLayers, false);
-            this._addLayers(this._overlays, true);
-            
-            // Initial state
-            for (const name in this._baseLayers) {
-                if (this._map.hasLayer(this._baseLayers[name])) {
-                    this._inputs.find(i => i.layer === this._baseLayers[name]).checked = true;
-                    break;
-                }
-            }
-            return this._container;
-        }
-        
-        _addLayers(layers, isOverlay) {
-            this._inputs = this._inputs || [];
-            for (const name in layers) {
-                const layer = layers[name];
-                const input = document.createElement('input');
-                input.type = isOverlay ? 'checkbox' : 'radio';
-                input.name = isOverlay ? 'overlay' : 'base';
-                input.checked = this._map.hasLayer(layer);
-                input.layer = layer;
-                
-                input.addEventListener('change', () => this._onInputChange(input, isOverlay));
-                
-                const label = document.createElement('label');
-                label.appendChild(input);
-                label.appendChild(document.createTextNode(` ${name}`));
-                this._form.appendChild(label);
-                this._inputs.push(input);
-            }
-        }
-        
-        _onInputChange(input, isOverlay) {
-            if (isOverlay) {
-                if (input.checked) this._map.addLayer(input.layer);
-                else this._map.removeLayer(input.layer);
-            } else {
-                // Remove all other base layers
-                this._inputs.filter(i => i.name === 'base' && i !== input).forEach(i => {
-                    if (this._map.hasLayer(i.layer)) this._map.removeLayer(i.layer);
-                });
-                this._map.addLayer(input.layer);
-            }
-        }
-    };
-    
-    /*** AtlasMap: Updated to integrate the new components. ***/
-    class AtlasMap extends EventEmitter {
-        constructor(containerId, options = {}) {
-            // ... (super, container, options setup) ...
-            this._layers = new Set();
-            // ... (other initializations) ...
-            this._initStructure(); // Creates panes
-            
-            this._renderer = new SvgRenderer();
-            this.addLayer(this._renderer);
-            
-            // ... (add handlers, controls, setView, etc.) ...
-        }
-        
-        getRenderer() {
-            return this._renderer;
-        }
-
-        hasLayer(layer) {
-            return this._layers.has(layer);
-        }
-
-        fitBounds(bounds, options = {}) {
-            // The logic from v2.0 is perfect, but now it can accept a LatLngBounds object directly.
-            if (bounds instanceof LatLngBounds) {
-                bounds = bounds.toArray();
-            }
-            // ... (rest of the fitBounds implementation) ...
-        }
-        
-        // ... (rest of the extensive AtlasMap class from v2.0) ...
-    }
-    
-    // --- New/Updated CSS for Controls ---
-    const newCSS = `
-    .atlas-control.atlas-layers {
-        box-shadow: 0 1px 5px rgba(0,0,0,0.4); border-radius: 4px; background: #fff;
-    }
-    .atlas-layers-toggle {
-        width: 30px; height: 30px; display: block;
-        background-image: url('data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%3E%3Cpath%20d%3D%22M12%202L2%207l10%205%2010-5-10-5zM2%2017l10%205%2010-5-10-5-10%205zM2%2012l10%205%2010-5-10-5-10%205z%22%2F%3E%3C%2Fsvg%3E');
-        background-repeat: no-repeat; background-position: center; background-size: 20px;
-    }
-    .atlas-layers-list {
-        display: none; padding: 6px 10px;
-    }
-    .atlas-layers.expanded .atlas-layers-list {
-        display: block;
-    }
-    .atlas-layers-list label {
-        display: block; font-size: 13px;
-    }
-    `;
-    
-    // ... (logic to append newCSS to defaultCSS, inject, and export all classes) ...
-    
-    // --- Final Exports ---
-    exports.Map = AtlasMap;
-    exports.Layer = Layer;
-    exports.LayerGroup = LayerGroup;
-    exports.FeatureGroup = FeatureGroup;
-    exports.GeoJSONLayer = GeoJSONLayer;
-    exports.TileLayer = TileLayer;
-    exports.Marker = Marker;
-    exports.Icon = Icon;
-    exports.Popup = Popup;
-    exports.Path = Path;
-    exports.Polyline = Polyline;
-    exports.Polygon = Polygon;
-    exports.Circle = Circle;
-    exports.CircleMarker = CircleMarker;
-    exports.Control = Control;
-    exports.LatLngBounds = LatLngBounds;
-    // ... and so on for all exported classes.
-    
-    global.Atlas = exports;
+  var Map = Evented.extend({
+	options: {
+		crs: EPSG3857,
+		center: undefined,
+		zoom: undefined,
+		minZoom: undefined,
+		maxZoom: undefined,
+		layers: [],
+		maxBounds: undefined,
+		renderer: undefined,
+		zoomAnimation: true,
+		zoomAnimationThreshold: 4,
+		fadeAnimation: true,
+		markerZoomAnimation: true,
+		transform3DLimit: 8388608,
+		zoomSnap: 1,
+		zoomDelta: 1,
+		trackResize: true
+	},
+	initialize: function (id, options) {
+		options = setOptions(this, options);
+		this._handlers = [];
+		this._layers = {};
+		this._zoomBoundLayers = {};
+		this._sizeChanged = true;
+		this._initContainer(id);
+		this._initLayout();
+		this._onResize = bind(this._onResize, this);
+		this._initEvents();
+		if (options.maxBounds) {
+			this.setMaxBounds(options.maxBounds);
+		}
+		if (options.zoom !== undefined) {
+			this._zoom = this._limitZoom(options.zoom);
+		}
+		if (options.center && options.zoom !== undefined) {
+			this.setView(toLatLng(options.center), options.zoom, {reset: true});
+		}
+		this.callInitHooks();
+		this._zoomAnimated = TRANSITION && Browser.any3d && !Browser.mobileOpera &&
+				this.options.zoomAnimation;
+		if (this._zoomAnimated) {
+			this._createAnimProxy();
+			on(this._proxy, TRANSITION_END, this._catchTransitionEnd, this);
+		}
+		this._addLayers(this.options.layers);
+	},
+	setView: function (center, zoom, options) {
+		zoom = zoom === undefined ? this._zoom : this._limitZoom(zoom);
+		center = this._limitCenter(toLatLng(center), zoom, this.options.maxBounds);
+		options = options || {};
+		this._stop();
+		if (this._loaded && !options.reset && options !== true) {
+			if (options.animate !== undefined) {
+				options.zoom = extend({animate: options.animate}, options.zoom);
+				options.pan = extend({animate: options.animate, duration: options.duration}, options.pan);
+			}
+			var moved = (this._zoom !== zoom) ?
+				this._tryAnimatedZoom && this._tryAnimatedZoom(center, zoom, options.zoom) :
+				this._tryAnimatedPan(center, options.pan);
+			if (moved) {
+				clearTimeout(this._sizeTimer);
+				return this;
+			}
+		}
+		this._resetView(center, zoom, options.pan && options.pan.noMoveStart);
+		return this;
+	},
+	setZoom: function (zoom, options) {
+		if (!this._loaded) {
+			this._zoom = zoom;
+			return this;
+		}
+		return this.setView(this.getCenter(), zoom, {zoom: options});
+	},
+	zoomIn: function (delta, options) {
+		delta = delta || (Browser.any3d ? this.options.zoomDelta : 1);
+		return this.setZoom(this._zoom + delta, options);
+	},
+	zoomOut: function (delta, options) {
+		delta = delta || (Browser.any3d ? this.options.zoomDelta : 1);
+		return this.setZoom(this._zoom - delta, options);
+	},
+	setZoomAround: function (latlng, zoom, options) {
+		var scale = this.getZoomScale(zoom),
+		    viewHalf = this.getSize().divideBy(2),
+		    containerPoint = latlng instanceof Point ? latlng : this.latLngToContainerPoint(latlng),
+		    centerOffset = containerPoint.subtract(viewHalf).multiplyBy(1 - 1 / scale),
+		    newCenter = this.containerPointToLatLng(viewHalf.add(centerOffset));
+		return this.setView(newCenter, zoom, {zoom: options});
+	},
+  });
+  function createMap(id, options) {
+	return new Map(id, options);
+  }
+  var Layer = Evented.extend({
+	options: {
+		pane: 'overlayPane',
+		attribution: null,
+		bubblingMouseEvents: true
+	},
+	addTo: function (map) {
+		map.addLayer(this);
+		return this;
+	},
+	remove: function () {
+		return this.removeFrom(this._map || this._mapToAdd);
+	},
+	removeFrom: function (obj) {
+		if (obj) {
+			obj.removeLayer(this);
+		}
+		return this;
+	},
+	getPane: function (name) {
+		return this._map.getPane(name ? (this.options[name] || name) : this.options.pane);
+	},
+	addInteractiveTarget: function (targetEl) {
+		this._map._targets[stamp(targetEl)] = this;
+		return this;
+	},
+	removeInteractiveTarget: function (targetEl) {
+		delete this._map._targets[stamp(targetEl)];
+		return this;
+	},
+	getAttribution: function () {
+		return this.options.attribution;
+	},
+	_layerAdd: function (e) {
+		var map = e.target;
+		if (!map.hasLayer(this)) { return; }
+		this._map = map;
+		this._zoomAnimated = map._zoomAnimated;
+		if (this.getEvents) {
+			var events = this.getEvents();
+			map.on(events, this);
+			this.once('remove', function () {
+				map.off(events, this);
+			}, this);
+		}
+		this.onAdd(map);
+		this.fire('add');
+		map.fire('layeradd', {layer: this});
+	}
+  });
+  Map.include({
+	addLayer: function (layer) {
+		if (!layer._layerAdd) {
+			throw new Error('The provided object is not a Layer.');
+		}
+		var id = stamp(layer);
+		if (this._layers[id]) { return this; }
+		this._layers[id] = layer;
+		layer._mapToAdd = this;
+		if (layer.beforeAdd) {
+			layer.beforeAdd(this);
+		}
+		this.whenReady(layer._layerAdd, layer);
+		return this;
+	},
+	removeLayer: function (layer) {
+		var id = stamp(layer);
+		if (!this._layers[id]) { return this; }
+		if (this._loaded) {
+			layer.onRemove(this);
+		}
+		delete this._layers[id];
+		if (this._loaded) {
+			this.fire('layerremove', {layer: layer});
+			layer.fire('remove');
+		}
+		layer._map = layer._mapToAdd = null;
+		return this;
+	},
+	hasLayer: function (layer) {
+		return stamp(layer) in this._layers;
+	},
+	eachLayer: function (method, context) {
+		for (var i in this._layers) {
+			method.call(context, this._layers[i]);
+		}
+		return this;
+	},
+	_addLayers: function (layers) {
+		layers = layers ? (isArray(layers) ? layers : [layers]) : [];
+		for (var i = 0, len = layers.length; i < len; i++) {
+			this.addLayer(layers[i]);
+		}
+	},
+	_addZoomLimit: function (layer) {
+		if (!isNaN(layer.options.maxZoom) || !isNaN(layer.options.minZoom)) {
+			this._zoomBoundLayers[stamp(layer)] = layer;
+			this._updateZoomLevels();
+		}
+	},
+	_removeZoomLimit: function (layer) {
+		var id = stamp(layer);
+		if (this._zoomBoundLayers[id]) {
+			delete this._zoomBoundLayers[id];
+			this._updateZoomLevels();
+		}
+	},
+	_updateZoomLevels: function () {
+		var minZoom = Infinity,
+		    maxZoom = -Infinity,
+		    oldZoomSpan = this._getZoomSpan();
+		for (var i in this._zoomBoundLayers) {
+			var options = this._zoomBoundLayers[i].options;
+			minZoom = options.minZoom === undefined ? minZoom : Math.min(minZoom, options.minZoom);
+			maxZoom = options.maxZoom === undefined ? maxZoom : Math.max(maxZoom, options.maxZoom);
+		}
+		this._layersMaxZoom = maxZoom === -Infinity ? undefined : maxZoom;
+		this._layersMinZoom = minZoom === Infinity ? undefined : minZoom;
+		if (oldZoomSpan !== this._getZoomSpan()) {
+			this.fire('zoomlevelschange');
+		}
+		if (this.options.maxZoom === undefined && this._layersMaxZoom && this.getZoom() > this._layersMaxZoom) {
+			this.setZoom(this._layersMaxZoom);
+		}
+		if (this.options.minZoom === undefined && this._layersMinZoom && this.getZoom() < this._layersMinZoom) {
+			this.setZoom(this._layersMinZoom);
+		}
+	}
+  });
+  exports.version = version;
+  exports.Control = Control;
+  exports.control = Control;
+  exports.Browser = Browser;
+  exports.Evented = Evented;
+  exports.Mixin = Mixin;
+  exports.Util = Util;
+  exports.Class = Class;
+  exports.Events = Events;
+  exports.DomEvent = DomEvent;
+  exports.DomUtil = DomUtil;
+  exports.PosAnimation = PosAnimation;
+  exports.Draggable = Draggable;
+  exports.LineUtil = LineUtil;
+  exports.PolyUtil = PolyUtil;
+  exports.Point = Point;
+  exports.toPoint = toPoint;
+  exports.Bounds = Bounds;
+  exports.toBounds = toBounds;
+  exports.Transformation = Transformation;
+  exports.toTransformation = toTransformation;
+  exports.LatLng = LatLng;
+  exports.toLatLng = toLatLng;
+  exports.LatLngBounds = LatLngBounds;
+  exports.toLatLngBounds = toLatLngBounds;
+  exports.CRS = CRS;
+  exports.Projection = index;
+  exports.Layer = Layer;
+  exports.LayerGroup = LayerGroup;
+  exports.layerGroup = layerGroup;
+  exports.FeatureGroup = FeatureGroup;
+  exports.featureGroup = featureGroup;
+  exports.GeoJSON = GeoJSON;
+  exports.geoJSON = geoJSON;
+  exports.geoJson = geoJSON;
+  exports.ImageOverlay = ImageOverlay;
+  exports.imageOverlay = imageOverlay;
+  exports.VideoOverlay = VideoOverlay;
+  exports.videoOverlay = videoOverlay;
+  exports.SVGOverlay = SVGOverlay;
+  exports.svgOverlay = svgOverlay;
+  exports.DivOverlay = DivOverlay;
+  exports.Popup = Popup;
+  exports.popup = popup;
+  exports.Tooltip = Tooltip;
+  exports.tooltip = tooltip;
+  exports.Icon = Icon;
+  exports.icon = icon;
+  exports.DivIcon = DivIcon;
+  exports.divIcon = divIcon;
+  exports.Marker = Marker;
+  exports.marker = marker;
+  exports.TileLayer = TileLayer;
+  exports.tileLayer = tileLayer;
+  exports.GridLayer = GridLayer;
+  exports.gridLayer = gridLayer;
+  exports.Path = Path;
+  exports.path = path;
+  exports.CircleMarker = CircleMarker;
+  exports.circleMarker = circleMarker;
+  exports.Circle = Circle;
+  exports.circle = circle;
+  exports.Polyline = Polyline;
+  exports.polyline = polyline;
+  exports.Polygon = Polygon;
+  exports.polygon = polygon;
+  exports.Rectangle = Rectangle;
+  exports.rectangle = rectangle;
+  exports.SVG = SVG;
+  exports.svg = svg;
+  exports.Canvas = Canvas;
+  exports.canvas = canvas;
+  exports.Map = Map;
+  exports.map = createMap;
+  exports.Handler = Handler;
+  var GeoJSON = FeatureGroup.extend({
+	initialize: function (geojson, options) {
+		setOptions(this, options);
+		this._layers = {};
+		if (geojson) {
+			this.addData(geojson);
+		}
+	},
+	addData: function (geojson) {
+		var features = isArray(geojson) ? geojson : geojson.features,
+		    i, len, feature;
+		if (features) {
+			for (i = 0, len = features.length; i < len; i++) {
+				feature = features[i];
+				if (feature.geometries || feature.geometry || feature.features || feature.coordinates) {
+					this.addData(feature);
+				}
+			}
+			return this;
+		}
+		var options = this.options;
+		if (options.filter && !options.filter(geojson)) { return this; }
+		var layer = geometryToLayer(geojson, options);
+		if (!layer) {
+			return this;
+		}
+		layer.feature = asFeature(geojson);
+		layer.defaultOptions = layer.options;
+		this.resetStyle(layer);
+		if (options.onEachFeature) {
+			options.onEachFeature(geojson, layer);
+		}
+		return this.addLayer(layer);
+	},
+	resetStyle: function (layer) {
+		if (layer === undefined) {
+			return this.eachLayer(this.resetStyle, this);
+		}
+		var style = this.options.style;
+		if (style) {
+			if (typeof style === 'function') {
+				style = style(layer.feature);
+			}
+			layer.setStyle(style);
+		}
+		return this;
+	},
+	setStyle: function (style) {
+		return this.eachLayer(function (layer) {
+			this.resetStyle(layer);
+			if (typeof style === 'function') {
+				style = style(layer.feature);
+			}
+			layer.setStyle(style);
+		}, this);
+	}
+  });
+  var TapHold = Handler.extend({
+	addHooks: function () {
+		on(this._map._container, 'touchstart', this._onDown, this);
+	},
+	removeHooks: function () {
+		off(this._map._container, 'touchstart', this._onDown, this);
+	},
+	_onDown: function (e) {
+		clearTimeout(this._timeout);
+		this._timeout = setTimeout(bind(function () {
+			delete this._timeout;
+			if (e.touches.length === 1) {
+				this._map.fire('taphold', {
+					latlng: this._map.mouseEventToLatLng(e.touches[0])
+				});
+			}
+		}, this), 1000);
+		on(document, 'touchend', this._onUp, this);
+	},
+	_onUp: function () {
+		clearTimeout(this._timeout);
+		delete this._timeout;
+		off(document, 'touchend', this._onUp, this);
+	}
+  });
+  var TouchZoom = Handler.extend({
+	addHooks: function () {
+		addClass(this._map._container, 'atlas-touch-zoom');
+		on(this._map._container, 'touchstart', this._onTouchStart, this);
+	},
+	removeHooks: function () {
+		removeClass(this._map._container, 'atlas-touch-zoom');
+		off(this._map._container, 'touchstart', this._onTouchStart, this);
+	},
+	_onTouchStart: function (e) {
+		var map = this._map;
+		if (!e.touches || e.touches.length !== 2 || map._animatingZoom || this._zooming) { return; }
+		var p1 = map.mouseEventToContainerPoint(e.touches[0]),
+		    p2 = map.mouseEventToContainerPoint(e.touches[1]);
+		this._centerPoint = map.getSize()._divideBy(2);
+		this._startLatLng = map.containerPointToLatLng(this._centerPoint);
+		if (map.options.touchZoom !== 'center') {
+			this._pinchStartLatLng = map.containerPointToLatLng(p1.add(p2)._divideBy(2));
+		}
+		this._startDist = p1.distanceTo(p2);
+		this._startZoom = map.getZoom();
+		this._moved = false;
+		this._zooming = true;
+		map._stop();
+		on(document, 'touchmove', this._onTouchMove, this);
+		on(document, 'touchend touchcancel', this._onTouchEnd, this);
+		stop(e);
+	},
+	_onTouchMove: function (e) {
+		if (!e.touches || e.touches.length !== 2 || !this._zooming) { return; }
+		var map = this._map,
+		    p1 = map.mouseEventToContainerPoint(e.touches[0]),
+		    p2 = map.mouseEventToContainerPoint(e.touches[1]),
+		    scale = p1.distanceTo(p2) / this._startDist;
+		this._zoom = map.getScaleZoom(scale, this._startZoom);
+		if (!map.options.bounceAtZoomLimits && (
+			(this._zoom < map.getMinZoom() && scale < 1) ||
+			(this._zoom > map.getMaxZoom() && scale > 1))) {
+			this._zoom = map._limitZoom(this._zoom);
+		}
+		if (map.options.touchZoom === 'center') {
+			this._center = this._startLatLng;
+			if (scale === 1) { return; }
+		} else {
+			var delta = p1._add(p2)._divideBy(2)._subtract(this._centerPoint);
+			if (scale === 1 && delta.x === 0 && delta.y === 0) { return; }
+			this._center = map.unproject(map.project(this._pinchStartLatLng, this._zoom).subtract(delta), this._zoom);
+		}
+		if (!this._moved) {
+			map._moveStart(true, false);
+			this._moved = true;
+		}
+		cancelAnimFrame(this._animRequest);
+		var moveFn = bind(map._move, map, this._center, this._zoom, {pinch: true, round: false}, undefined);
+		this._animRequest = requestAnimFrame(moveFn, this, true);
+		stop(e);
+	},
+	_onTouchEnd: function () {
+		if (!this._zooming) { return; }
+		var map = this._map;
+		this._zooming = false;
+		off(document, 'touchmove', this._onTouchMove, this);
+		off(document, 'touchend touchcancel', this._onTouchEnd, this);
+		if (map.options.zoomAnimation) {
+			var zoom = map.getZoom(),
+			    finalZoom = map._limitZoom(this._zoom),
+			    scale = map.getZoomScale(finalZoom, zoom),
+			    center = map._getCenterLayerPoint().add(map._getCenterOffset(this._center)._divideBy(1 - 1 / scale));
+			map._animateZoom(this._center, finalZoom, true, map.options.touchZoom === 'center');
+		} else {
+			map._resetView(this._center, map._limitZoom(this._zoom));
+		}
+	}
+  });
+  var Keyboard = Handler.extend({
+	keyCodes: {
+		left:    [37],
+		right:   [39],
+		down:    [40],
+		up:      [38],
+		zoomIn:  [187, 107, 61, 171],
+		zoomOut: [189, 109, 173]
+	},
+	initialize: function (map) {
+		this._map = map;
+		this._setPanOffset(map.options.keyboardPanDelta);
+		this._setZoomOffset(map.options.zoomDelta);
+	},
+	addHooks: function () {
+		var container = this._map._container;
+		if (container.tabIndex <= 0) {
+			container.tabIndex = '0';
+		}
+		on(container, {
+			focus: this._onFocus,
+			blur: this._onBlur,
+			mousedown: this._onMouseDown
+		}, this);
+		this._map.on({
+			focus: this._addHooks,
+			blur: this._removeHooks
+		}, this);
+	},
+	removeHooks: function () {
+		this._removeHooks();
+		off(this._map._container, {
+			focus: this._onFocus,
+			blur: this._onBlur,
+			mousedown: this._onMouseDown
+		}, this);
+		this._map.off({
+			focus: this._addHooks,
+			blur: this._removeHooks
+		}, this);
+	},
+	_onMouseDown: function () {
+		if (this._focused) { return; }
+		var body = document.body,
+		    docEl = document.documentElement,
+		    top = body.scrollTop || docEl.scrollTop,
+		    left = body.scrollLeft || docEl.scrollLeft;
+		this._map._container.focus();
+		window.scrollTo(left, top);
+	},
+	_onFocus: function () {
+		this._focused = true;
+		this._map.fire('focus');
+	},
+	_onBlur: function () {
+		this._focused = false;
+		this._map.fire('blur');
+	},
+	_setPanOffset: function (pan) {
+		var keys = this._panKeys = {},
+		    codes = this.keyCodes,
+		    i, len;
+		for (i = 0, len = codes.left.length; i < len; i++) {
+			keys[codes.left[i]] = [-1 * pan, 0];
+		}
+		for (i = 0, len = codes.right.length; i < len; i++) {
+			keys[codes.right[i]] = [pan, 0];
+		}
+		for (i = 0, len = codes.down.length; i < len; i++) {
+			keys[codes.down[i]] = [0, pan];
+		}
+		for (i = 0, len = codes.up.length; i < len; i++) {
+			keys[codes.up[i]] = [0, -1 * pan];
+		}
+	},
+	_setZoomOffset: function (zoom) {
+		var keys = this._zoomKeys = {},
+		    codes = this.keyCodes,
+		    i, len;
+		for (i = 0, len = codes.zoomIn.length; i < len; i++) {
+			keys[codes.zoomIn[i]] = zoom;
+		}
+		for (i = 0, len = codes.zoomOut.length; i < len; i++) {
+			keys[codes.zoomOut[i]] = -zoom;
+		}
+	},
+	_addHooks: function () {
+		on(document, 'keydown', this._onKeyDown, this);
+	},
+	_removeHooks: function () {
+		off(document, 'keydown', this._onKeyDown, this);
+	},
+	_onKeyDown: function (e) {
+		if (e.altKey || e.ctrlKey || e.metaKey) { return; }
+		var key = e.keyCode,
+		    map = this._map,
+		    offset;
+		if (key in this._panKeys) {
+			if (!map._panAnim || !map._panAnim._inProgress) {
+				offset = this._panKeys[key];
+				if (e.shiftKey) {
+					offset = toPoint(offset).multiplyBy(3);
+				}
+				map.panBy(offset);
+				if (map.options.maxBounds) {
+					map.panInsideBounds(map.options.maxBounds);
+				}
+			}
+		} else if (key in this._zoomKeys) {
+			map.setZoom(map.getZoom() + (e.shiftKey ? 3 : 1) * this._zoomKeys[key]);
+		} else if (key === 27 && map._popup && map._popup.options.closeOnEscapeKey) {
+			map.closePopup();
+		} else {
+			return;
+		}
+		stop(e);
+	}
+  });
+  var BoxZoom = Handler.extend({
+	initialize: function (map) {
+		this._map = map;
+		this._container = map._container;
+		this._pane = map._panes.overlayPane;
+	},
+	addHooks: function () {
+		on(this._container, 'mousedown', this._onMouseDown, this);
+	},
+	removeHooks: function () {
+		off(this._container, 'mousedown', this._onMouseDown, this);
+	},
+	moved: function () {
+		return this._moved;
+	},
+	_resetState: function () {
+		this._moved = false;
+	},
+	_onMouseDown: function (e) {
+		if (!e.shiftKey || ((e.which !== 1) && (e.button !== 1))) { return false; }
+		this._resetState();
+		disableImageDrag();
+		disableTextSelection();
+		this._startPoint = this._map.mouseEventToContainerPoint(e);
+		on(document, {
+			contextmenu: stop,
+			mousemove: this._onMouseMove,
+			mouseup: this._onMouseUp,
+			keydown: this._onKeyDown
+		}, this);
+	},
+	_onMouseMove: function (e) {
+		if (!this._moved) {
+			this._moved = true;
+			this._box = create$1('div', 'atlas-zoom-box', this._pane);
+			addClass(this._container, 'atlas-crosshair');
+			this._map.fire('boxzoomstart');
+		}
+		this._point = this._map.mouseEventToContainerPoint(e);
+		var bounds = new Bounds(this._point, this._startPoint),
+		    size = bounds.getSize();
+		setPosition(this._box, bounds.min);
+		this._box.style.width  = size.x + 'px';
+		this._box.style.height = size.y + 'px';
+	},
+	_finish: function () {
+		if (this._moved) {
+			remove(this._box);
+			removeClass(this._container, 'atlas-crosshair');
+		}
+		enableImageDrag();
+		enableTextSelection();
+		off(document, {
+			contextmenu: stop,
+			mousemove: this._onMouseMove,
+			mouseup: this._onMouseUp,
+			keydown: this._onKeyDown
+		}, this);
+	},
+	_onMouseUp: function (e) {
+		if ((e.which !== 1) && (e.button !== 1)) { return; }
+		this._finish();
+		if (!this._moved) { return; }
+		setTimeout(bind(this._resetState, this), 0);
+		var bounds = new LatLngBounds(
+		        this._map.containerPointToLatLng(this._startPoint),
+		        this._map.containerPointToLatLng(this._point));
+		this._map
+			.fitBounds(bounds)
+			.fire('boxzoomend', {boxZoomBounds: bounds});
+	},
+	_onKeyDown: function (e) {
+		if (e.keyCode === 27) {
+			this._finish();
+			this._resetState();
+		}
+	}
+  });
+  var ScrollWheelZoom = Handler.extend({
+	addHooks: function () {
+		on(this._map._container, 'wheel', this._onWheelScroll, this);
+		this._delta = 0;
+	},
+	removeHooks: function () {
+		off(this._map._container, 'wheel', this._onWheelScroll, this);
+	},
+	_onWheelScroll: function (e) {
+		var delta = getWheelDelta(e);
+		var debounce = this._map.options.wheelDebounceTime;
+		this._delta += delta;
+		this._lastMousePos = this._map.mouseEventToContainerPoint(e);
+		if (!this._startTime) {
+			this._startTime = +new Date();
+		}
+		var left = Math.max(debounce - (+new Date() - this._startTime), 0);
+		clearTimeout(this._timer);
+		this._timer = setTimeout(bind(this._performZoom, this), left);
+		stop(e);
+	},
+	_performZoom: function () {
+		var map = this._map,
+		    zoom = map.getZoom(),
+		    snap = this._map.options.zoomSnap || 0;
+		this._startTime = null;
+		if (!snap) {
+			map.setZoom(zoom + this._delta * this._map.options.wheelPxPerZoomLevel);
+		} else {
+			var d = this._delta;
+			var limit = this._map.options.zoomDelta;
+			d = d < -limit ? -limit : d;
+			d = d > limit ? limit : d;
+			var newZoom = map.getScaleZoom(map.getScale() / (Math.pow(2, d)), zoom) - zoom;
+			if (Math.abs(newZoom) < 0.000000001) {
+				return;
+			}
+			map.setZoomAround(this._lastMousePos, zoom + newZoom);
+		}
+		this._delta = 0;
+	}
+  });
+  var LayerGroup = Layer.extend({
+	initialize: function (layers, options) {
+		setOptions(this, options);
+		this._layers = {};
+		var i, len;
+		if (layers) {
+			for (i = 0, len = layers.length; i < len; i++) {
+				this.addLayer(layers[i]);
+			}
+		}
+	},
+	addLayer: function (layer) {
+		var id = this.getLayerId(layer);
+		this._layers[id] = layer;
+		if (this._map) {
+			this._map.addLayer(layer);
+		}
+		return this;
+	},
+	removeLayer: function (layer) {
+		var id = layer in this._layers ? layer : this.getLayerId(layer);
+		if (this._map && this._layers[id]) {
+			this._map.removeLayer(this._layers[id]);
+		}
+		delete this._layers[id];
+		return this;
+	},
+	hasLayer: function (layer) {
+		var layerId = typeof layer === 'number' ? layer : this.getLayerId(layer);
+		return layerId in this._layers;
+	},
+	clearLayers: function () {
+		return this.eachLayer(this.removeLayer, this);
+	},
+	invoke: function (methodName) {
+		var args = Array.prototype.slice.call(arguments, 1),
+		    i, layer;
+		for (i in this._layers) {
+			layer = this._layers[i];
+			if (layer[methodName]) {
+				layer[methodName].apply(layer, args);
+			}
+		}
+		return this;
+	},
+	onAdd: function (map) {
+		this.eachLayer(map.addLayer, map);
+	},
+	onRemove: function (map) {
+		this.eachLayer(map.removeLayer, map);
+	},
+	eachLayer: function (method, context) {
+		for (var i in this._layers) {
+			method.call(context, this._layers[i]);
+		}
+		return this;
+	},
+	getLayer: function (id) {
+		return this._layers[id];
+	},
+	getLayers: function () {
+		var layers = [];
+		this.eachLayer(layers.push, layers);
+		return layers;
+	},
+	setZIndex: function (zIndex) {
+		return this.invoke('setZIndex', zIndex);
+	},
+	getLayerId: function (layer) {
+		return stamp(layer);
+	}
+  });
+  var FeatureGroup = LayerGroup.extend({
+	addLayer: function (layer) {
+		if (this.hasLayer(layer)) {
+			return this;
+		}
+		layer.addEventParent(this);
+		LayerGroup.prototype.addLayer.call(this, layer);
+		return this.fire('layeradd', {layer: layer});
+	},
+	removeLayer: function (layer) {
+		if (!this.hasLayer(layer)) {
+			return this;
+		}
+		if (layer in this._layers) {
+			layer = this._layers[layer];
+		}
+		layer.removeEventParent(this);
+		LayerGroup.prototype.removeLayer.call(this, layer);
+		return this.fire('layerremove', {layer: layer});
+	},
+	setStyle: function (style) {
+		return this.invoke('setStyle', style);
+	},
+	bringToFront: function () {
+		return this.invoke('bringToFront');
+	},
+	bringToBack: function () {
+		return this.invoke('bringToBack');
+	},
+	getBounds: function () {
+		var bounds = new LatLngBounds();
+		for (var id in this._layers) {
+			var layer = this._layers[id];
+			bounds.extend(layer.getBounds ? layer.getBounds() : layer.getLatLng());
+		}
+		return bounds;
+	}
+  });
+  var Path = Layer.extend({
+	options: {
+		stroke: true,
+		color: '#3388ff',
+		weight: 3,
+		opacity: 1,
+		lineCap: 'round',
+		lineJoin: 'round',
+		dashArray: null,
+		dashOffset: null,
+		fill: false,
+		fillColor: null,
+		fillOpacity: 0.2,
+		fillRule: 'evenodd',
+		interactive: true,
+		bubblingMouseEvents: true
+	},
+	beforeAdd: function (map) {
+		this._renderer = map.getRenderer(this);
+	},
+	onAdd: function () {
+		this._renderer._initPath(this);
+		this._reset();
+		this._renderer._addPath(this);
+	},
+	onRemove: function () {
+		this._renderer._removePath(this);
+	},
+	redraw: function () {
+		if (this._map) {
+			this._renderer._updatePath(this);
+		}
+		return this;
+	},
+	setStyle: function (style) {
+		setOptions(this, style);
+		if (this._renderer) {
+			this._renderer._updateStyle(this);
+			if (this.options.stroke && style && Object.prototype.hasOwnProperty.call(style, 'weight')) {
+				this._updateBounds();
+			}
+		}
+		return this;
+	},
+	bringToFront: function () {
+		if (this._renderer) {
+			this._renderer._bringToFront(this);
+		}
+		return this;
+	},
+	bringToBack: function () {
+		if (this._renderer) {
+			this._renderer._bringToBack(this);
+		}
+		return this;
+	},
+	getElement: function () {
+		return this._path;
+	},
+	_reset: function () {
+		this._project();
+		this._update();
+	},
+	_clickTolerance: function () {
+		return (this.options.stroke ? this.options.weight / 2 : 0) +
+		  (this._renderer.options.tolerance || 0);
+	}
+  });
+  var CircleMarker = Path.extend({
+	options: {
+		fill: true,
+		radius: 10
+	},
+	initialize: function (latlng, options) {
+		setOptions(this, options);
+		this._latlng = toLatLng(latlng);
+		this._radius = this.options.radius;
+	},
+	setLatLng: function (latlng) {
+		var oldLatLng = this._latlng;
+		this._latlng = toLatLng(latlng);
+		this.redraw();
+		return this.fire('move', {oldLatLng: oldLatLng, latlng: this._latlng});
+	},
+	getLatLng: function () {
+		return this._latlng;
+	},
+	setRadius: function (radius) {
+		this.options.radius = this._radius = radius;
+		return this.redraw();
+	},
+	getRadius: function () {
+		return this._radius;
+	},
+	setStyle : function (options) {
+		var radius = options && options.radius || this._radius;
+		Path.prototype.setStyle.call(this, options);
+		this.setRadius(radius);
+		return this;
+	},
+	_project: function () {
+		this._point = this._map.latLngToLayerPoint(this._latlng);
+		this._updateBounds();
+	},
+	_updateBounds: function () {
+		var r = this._radius,
+		    r2 = this._radiusY || r,
+		    w = this._clickTolerance(),
+		    p = [r + w, r2 + w];
+		this._pxBounds = new Bounds(this._point.subtract(p), this._point.add(p));
+	},
+	_update: function () {
+		if (this._map) {
+			this._updatePath();
+		}
+	},
+	_updatePath: function () {
+		this._renderer._updateCircle(this);
+	},
+	_empty: function () {
+		return this._radius && !this._renderer._bounds.intersects(this._pxBounds);
+	},
+	_containsPoint: function (p) {
+		return p.distanceTo(this._point) <= this._radius + this._clickTolerance();
+	}
+  });
+  var Circle = CircleMarker.extend({
+	initialize: function (latlng, options, legacyOptions) {
+		if (typeof options === 'number') {
+			options = extend({}, legacyOptions, {radius: options});
+		}
+		setOptions(this, options);
+		this._latlng = toLatLng(latlng);
+		if (isNaN(this.options.radius)) { throw new Error('Circle radius cannot be NaN'); }
+		this._mRadius = this.options.radius;
+	},
+	setRadius: function (radius) {
+		this._mRadius = radius;
+		return this.redraw();
+	},
+	getRadius: function () {
+		return this._mRadius;
+	},
+	getBounds: function () {
+		var half = [this._radius, this._radiusY || this._radius];
+		return new LatLngBounds(
+			this._map.layerPointToLatLng(this._point.subtract(half)),
+			this._map.layerPointToLatLng(this._point.add(half)));
+	},
+	setStyle: Path.prototype.setStyle,
+	_project: function () {
+		var lng = this._latlng.lng,
+		    lat = this._latlng.lat,
+		    map = this._map,
+		    crs = map.options.crs;
+		if (crs.distance === Earth.distance) {
+			var d = Math.PI / 180,
+			    latR = (this._mRadius / Earth.R) / d,
+			    top = map.project([lat + latR, lng]),
+			    bottom = map.project([lat - latR, lng]),
+			    p = top.add(bottom).divideBy(2),
+			    lat2 = map.unproject(p).lat,
+			    lngR = Math.acos((Math.cos(latR * d) - Math.sin(lat * d) * Math.sin(lat2 * d)) /
+			            (Math.cos(lat * d) * Math.cos(lat2 * d))) / d;
+			if (isNaN(lngR) || lngR === 0) {
+				lngR = latR / Math.cos(Math.PI / 180 * lat);
+			}
+			this._point = p.subtract(map.getPixelOrigin());
+			this._radius = isNaN(lngR) ? 0 : p.x - map.project([lat2, lng - lngR]).x;
+			this._radiusY = p.y - top.y;
+		} else {
+			var latlng2 = crs.unproject(crs.project(this._latlng).subtract([this._mRadius, 0]));
+			this._point = map.latLngToLayerPoint(this._latlng);
+			this._radius = this._point.x - map.latLngToLayerPoint(latlng2).x;
+		}
+		this._updateBounds();
+	}
+  });
+  var Polyline = Path.extend({
+	options: {
+		smoothFactor: 1.0,
+		noClip: false
+	},
+	initialize: function (latlngs, options) {
+		setOptions(this, options);
+		this._setLatLngs(latlngs);
+	},
+	getLatLngs: function () {
+		return this._latlngs;
+	},
+	setLatLngs: function (latlngs) {
+		this._setLatLngs(latlngs);
+		return this.redraw();
+	},
+	isEmpty: function () {
+		return !this._latlngs.length;
+	},
+	closestLayerPoint: function (p) {
+		var minDistance = Infinity,
+		    minPoint = null,
+		    closest = _sqClosestPointOnSegment,
+		    p1, p2;
+		for (var j = 0, jLen = this._parts.length; j < jLen; j++) {
+			var points = this._parts[j];
+			for (var i = 1, len = points.length; i < len; i++) {
+				p1 = points[i - 1];
+				p2 = points[i];
+				var sqDist = closest(p, p1, p2, true);
+				if (sqDist < minDistance) {
+					minDistance = sqDist;
+					minPoint = closest(p, p1, p2);
+				}
+			}
+		}
+		if (minPoint) {
+			minPoint.distance = Math.sqrt(minDistance);
+		}
+		return minPoint;
+	},
+	getCenter: function () {
+		if (!this._map) {
+			throw new Error('Must add layer to map before using getCenter()');
+		}
+		return polylineCenter(this._defaultShape(), this._map.options.crs);
+	},
+	getBounds: function () {
+		return this._bounds;
+	},
+	addLatLng: function (latlng, latlngs) {
+		latlngs = latlngs || this._defaultShape();
+		latlng = toLatLng(latlng);
+		latlngs.push(latlng);
+		this._bounds.extend(latlng);
+		return this.redraw();
+	},
+	_setLatLngs: function (latlngs) {
+		this._bounds = new LatLngBounds();
+		this._latlngs = this._convertLatLngs(latlngs);
+	},
+	_defaultShape: function () {
+		return isFlat(this._latlngs) ? this._latlngs : this._latlngs[0];
+	},
+	_convertLatLngs: function (latlngs) {
+		var result = [],
+		    flat = isFlat(latlngs);
+		for (var i = 0, len = latlngs.length; i < len; i++) {
+			if (flat) {
+				result[i] = toLatLng(latlngs[i]);
+				this._bounds.extend(result[i]);
+			} else {
+				result[i] = this._convertLatLngs(latlngs[i]);
+			}
+		}
+		return result;
+	},
+	_project: function () {
+		var pxBounds = new Bounds();
+		this._rings = [];
+		this._projectLatlngs(this._latlngs, this._rings, pxBounds);
+		if (this._bounds.isValid() && pxBounds.isValid()) {
+			this._rawPxBounds = pxBounds;
+			this._updateBounds();
+		}
+	},
+	_updateBounds: function () {
+		var w = this._clickTolerance(),
+		    p = new Point(w, w);
+		if (!this._rawPxBounds) {
+			return;
+		}
+		this._pxBounds = new Bounds([
+			this._rawPxBounds.min.subtract(p),
+			this._rawPxBounds.max.add(p)
+		]);
+	},
+	_projectLatlngs: function (latlngs, result, projectedBounds) {
+		var flat = latlngs[0] instanceof LatLng,
+		    len = latlngs.length,
+		    i, ring;
+		if (flat) {
+			ring = [];
+			for (i = 0; i < len; i++) {
+				ring[i] = this._map.latLngToLayerPoint(latlngs[i]);
+				projectedBounds.extend(ring[i]);
+			}
+			result.push(ring);
+		} else {
+			for (i = 0; i < len; i++) {
+				this._projectLatlngs(latlngs[i], result, projectedBounds);
+			}
+		}
+	},
+	_clipPoints: function () {
+		var bounds = this._renderer._bounds;
+		this._parts = [];
+		if (!this._pxBounds || !this._pxBounds.intersects(bounds)) {
+			return;
+		}
+		if (this.options.noClip) {
+			this._parts = this._rings;
+			return;
+		}
+		var parts = this._parts,
+		    i, j, k, len, len2, segment, points;
+		for (i = 0, k = 0, len = this._rings.length; i < len; i++) {
+			points = this._rings[i];
+			for (j = 0, len2 = points.length; j < len2 - 1; j++) {
+				segment = clipSegment(points[j], points[j + 1], bounds, j, true);
+				if (!segment) { continue; }
+				parts[k] = parts[k] || [];
+				parts[k].push(segment[0]);
+				if ((segment[1] !== points[j + 1]) || (j === len2 - 2)) {
+					parts[k].push(segment[1]);
+					k++;
+				}
+			}
+		}
+	},
+	_simplifyPoints: function () {
+		var parts = this._parts,
+		    tolerance = this.options.smoothFactor;
+		for (var i = 0, len = parts.length; i < len; i++) {
+			parts[i] = simplify(parts[i], tolerance);
+		}
+	},
+	_update: function () {
+		if (!this._map) { return; }
+		this._clipPoints();
+		this._simplifyPoints();
+		this._updatePath();
+	},
+	_updatePath: function () {
+		this._renderer._updatePoly(this);
+	},
+	_containsPoint: function (p, closed) {
+		var i, j, k, len, len2, part,
+		    w = this._clickTolerance();
+		if (!this._pxBounds || !this._pxBounds.contains(p)) { return false; }
+		for (i = 0, len = this._parts.length; i < len; i++) {
+			part = this._parts[i];
+			for (j = 0, len2 = part.length, k = len2 - 1; j < len2; k = j++) {
+				if (!closed && (j === 0)) { continue; }
+				if (pointToSegmentDistance(p, part[k], part[j]) <= w) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+  });
+  var Polygon = Polyline.extend({
+	options: {
+		fill: true
+	},
+	isEmpty: function () {
+		return !this._latlngs.length || !this._latlngs[0].length;
+	},
+	getCenter: function () {
+		if (!this._map) {
+			throw new Error('Must add layer to map before using getCenter()');
+		}
+		return polygonCenter(this._defaultShape(), this._map.options.crs);
+	},
+	_convertLatLngs: function (latlngs) {
+		var result = Polyline.prototype._convertLatLngs.call(this, latlngs),
+		    len = result.length;
+		if (len >= 2 && result[0] instanceof LatLng && result[0].equals(result[len - 1])) {
+			result.pop();
+		}
+		return result;
+	},
+	_setLatLngs: function (latlngs) {
+		Polyline.prototype._setLatLngs.call(this, latlngs);
+		if (isFlat(this._latlngs)) {
+			this._latlngs = [this._latlngs];
+		}
+	},
+	_defaultShape: function () {
+		return isFlat(this._latlngs[0]) ? this._latlngs : this._latlngs[0][0];
+	},
+	_clipPoints: function () {
+		var bounds = this._renderer._bounds,
+		    w = this.options.weight,
+		    p = new Point(w, w);
+		bounds = new Bounds(bounds.min.subtract(p), bounds.max.add(p));
+		this._parts = [];
+		if (!this._pxBounds || !this._pxBounds.intersects(bounds)) {
+			return;
+		}
+		if (this.options.noClip) {
+			this._parts = this._rings;
+			return;
+		}
+		for (var i = 0, len = this._rings.length, clipped; i < len; i++) {
+			clipped = clipPolygon(this._rings[i], bounds, true);
+			if (clipped.length) {
+				this._parts.push(clipped);
+			}
+		}
+	},
+	_updatePath: function () {
+		this._renderer._updatePoly(this, true);
+	},
+	_containsPoint: function (p) {
+		var inside = false,
+		    part, p1, p2, i, j, k, len, len2;
+		if (!this._pxBounds || !this._pxBounds.contains(p)) { return false; }
+		for (i = 0, len = this._parts.length; i < len; i++) {
+			part = this._parts[i];
+			for (j = 0, len2 = part.length, k = len2 - 1; j < len2; k = j++) {
+				p1 = part[j];
+				p2 = part[k];
+				if (((p1.y > p.y) !== (p2.y > p.y)) && (p.x < (p2.x - p1.x) * (p.y - p1.y) / (p2.y - p1.y) + p1.x)) {
+					inside = !inside;
+				}
+			}
+		}
+		return inside || Polyline.prototype._containsPoint.call(this, p, true);
+	}
+  });
+  var Rectangle = Polygon.extend({
+	initialize: function (latLngBounds, options) {
+		Polygon.prototype.initialize.call(this, this._boundsToLatLngs(latLngBounds), options);
+	},
+	setBounds: function (latLngBounds) {
+		return this.setLatLngs(this._boundsToLatLngs(latLngBounds));
+	},
+	_boundsToLatLngs: function (latLngBounds) {
+		latLngBounds = toLatLngBounds(latLngBounds);
+		return [
+			latLngBounds.getSouthWest(),
+			latLngBounds.getNorthWest(),
+			latLngBounds.getNorthEast(),
+			latLngBounds.getSouthEast()
+		];
+	}
+  });
+  var ImageOverlay = Layer.extend({
+	options: {
+		opacity: 1,
+		alt: '',
+		interactive: false,
+		crossOrigin: false,
+		errorOverlayUrl: '',
+		zIndex: 1,
+		className: ''
+	},
+	initialize: function (url, bounds, options) {
+		this._url = url;
+		this._bounds = toLatLngBounds(bounds);
+		setOptions(this, options);
+	},
+	onAdd: function () {
+		if (!this._image) {
+			this._initImage();
+			if (this.options.opacity < 1) {
+				this._updateOpacity();
+			}
+		}
+		if (this.options.interactive) {
+			addClass(this._image, 'atlas-interactive');
+			this.addInteractiveTarget(this._image);
+		}
+		this.getPane().appendChild(this._image);
+		this._reset();
+	},
+	onRemove: function () {
+		remove(this._image);
+		if (this.options.interactive) {
+			this.removeInteractiveTarget(this._image);
+		}
+	},
+	setOpacity: function (opacity) {
+		this.options.opacity = opacity;
+		if (this._image) {
+			this._updateOpacity();
+		}
+		return this;
+	},
+	setStyle: function (styleOpts) {
+		if (styleOpts.opacity) {
+			this.setOpacity(styleOpts.opacity);
+		}
+		return this;
+	},
+	bringToFront: function () {
+		if (this._map) {
+			toFront(this._image);
+		}
+		return this;
+	},
+	bringToBack: function () {
+		if (this._map) {
+			toBack(this._image);
+		}
+		return this;
+	},
+	setUrl: function (url) {
+		this._url = url;
+		if (this._image) {
+			this._image.src = url;
+		}
+		return this;
+	},
+	setBounds: function (bounds) {
+		this._bounds = toLatLngBounds(bounds);
+		if (this._map) {
+			this._reset();
+		}
+		return this;
+	},
+	getEvents: function () {
+		var events = {
+			zoom: this._reset,
+			viewreset: this._reset
+		};
+		if (this._zoomAnimated) {
+			events.zoomanim = this._animateZoom;
+		}
+		return events;
+	},
+	setZIndex: function (value) {
+		this.options.zIndex = value;
+		this._updateZIndex();
+		return this;
+	},
+	getBounds: function () {
+		return this._bounds;
+	},
+	getElement: function () {
+		return this._image;
+	},
+	_initImage: function () {
+		var wasElementSupplied = this._url.tagName === 'IMG';
+		var img = this._image = wasElementSupplied ? this._url : create$1('img');
+		addClass(img, 'atlas-image-layer');
+		if (this._zoomAnimated) { addClass(img, 'atlas-zoom-animated'); }
+		if (this.options.className) { addClass(img, this.options.className); }
+		img.onselectstart = falseFn;
+		img.onmousemove = falseFn;
+		img.onload = bind(this.fire, this, 'load');
+		img.onerror = bind(this._overlayOnError, this, 'error');
+		if (this.options.crossOrigin || this.options.crossOrigin === '') {
+			img.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
+		}
+		if (this.options.zIndex) {
+			this._updateZIndex();
+		}
+		if (wasElementSupplied) {
+			this._url = img.src;
+			return;
+		}
+		img.src = this._url;
+		img.alt = this.options.alt;
+	},
+	_animateZoom: function (e) {
+		var scale = this._map.getZoomScale(e.zoom),
+		    offset = this._map._latLngBoundsToNewLayerBounds(this._bounds, e.zoom, e.center).min;
+		setTransform(this._image, offset, scale);
+	},
+	_reset: function () {
+		var image = this._image,
+		    bounds = new Bounds(
+		        this._map.latLngToLayerPoint(this._bounds.getNorthWest()),
+		        this._map.latLngToLayerPoint(this._bounds.getSouthEast())),
+		    size = bounds.getSize();
+		setPosition(image, bounds.min);
+		image.style.width  = size.x + 'px';
+		image.style.height = size.y + 'px';
+	},
+	_updateOpacity: function () {
+		setOpacity(this._image, this.options.opacity);
+	},
+	_updateZIndex: function () {
+		if (this._image && this.options.zIndex !== undefined && this.options.zIndex !== null) {
+			this._image.style.zIndex = this.options.zIndex;
+		}
+	},
+	_overlayOnError: function () {
+		this.fire('error');
+		var errorUrl = this.options.errorOverlayUrl;
+		if (errorUrl && this._url !== errorUrl) {
+			this._url = errorUrl;
+			this._image.src = errorUrl;
+		}
+	},
+	getCenter: function () {
+		return this._bounds.getCenter();
+	}
+  });
+  var VideoOverlay = ImageOverlay.extend({
+	options: {
+		autoplay: true,
+		loop: true,
+		keepAspectRatio: true,
+		muted: false,
+		playsInline: true
+	},
+	_initImage: function () {
+		var wasElementSupplied = this._url.tagName === 'VIDEO';
+		var vid = this._image = wasElementSupplied ? this._url : create$1('video');
+		addClass(vid, 'atlas-image-layer');
+		if (this._zoomAnimated) { addClass(vid, 'atlas-zoom-animated'); }
+		if (this.options.className) { addClass(vid, this.options.className); }
+		vid.onselectstart = falseFn;
+		vid.onmousemove = falseFn;
+		vid.onloadeddata = bind(this.fire, this, 'load');
+		if (wasElementSupplied) {
+			var sourceElements = vid.getElementsByTagName('source');
+			var sources = [];
+			for (var j = 0; j < sourceElements.length; j++) {
+				sources.push(sourceElements[j].src);
+			}
+			this._url = (sourceElements.length > 0) ? sources : [vid.src];
+			return;
+		}
+		if (!isArray(this._url)) { this._url = [this._url]; }
+		if (!this.options.keepAspectRatio && Object.prototype.hasOwnProperty.call(vid.style, 'objectFit')) {
+			vid.style['objectFit'] = 'fill';
+		}
+		vid.autoplay = !!this.options.autoplay;
+		vid.loop = !!this.options.loop;
+		vid.muted = !!this.options.muted;
+		vid.playsInline = !!this.options.playsInline;
+		for (var i = 0; i < this._url.length; i++) {
+			var source = create$1('source');
+			source.src = this._url[i];
+			vid.appendChild(source);
+		}
+	}
+  });
+  var SVGOverlay = ImageOverlay.extend({
+	_initImage: function () {
+		var el = this._image = this._url;
+		addClass(el, 'atlas-image-layer');
+		if (this._zoomAnimated) { addClass(el, 'atlas-zoom-animated'); }
+		if (this.options.className) { addClass(el, this.options.className); }
+		el.onselectstart = falseFn;
+		el.onmousemove = falseFn;
+	}
+  });
+  var DivIcon = Icon.extend({
+	options: {
+		iconSize: [12, 12],
+		html: false,
+		bgPos: null,
+		className: 'atlas-div-icon'
+	},
+	createIcon: function (oldIcon) {
+		var div = (oldIcon && oldIcon.tagName === 'DIV') ? oldIcon : document.createElement('div'),
+		    options = this.options;
+		if (options.html instanceof Element) {
+			empty(div);
+			div.appendChild(options.html);
+		} else {
+			div.innerHTML = options.html !== false ? options.html : '';
+		}
+		if (options.bgPos) {
+			var bgPos = toPoint(options.bgPos);
+			div.style.backgroundPosition = (-bgPos.x) + 'px ' + (-bgPos.y) + 'px';
+		}
+		this._setIconStyles(div, 'icon');
+		return div;
+	},
+	createShadow: function () {
+		return null;
+	}
+  });
+  var GridLayer = Layer.extend({
+	options: {
+		tileSize: 256,
+		opacity: 1,
+		updateWhenIdle: Browser.mobile,
+		updateWhenZooming: true,
+		updateInterval: 200,
+		zIndex: 1,
+		bounds: null,
+		minZoom: 0,
+		maxZoom: undefined,
+		maxNativeZoom: undefined,
+		minNativeZoom: undefined,
+		noWrap: false,
+		pane: 'tilePane',
+		className: '',
+		keepBuffer: 2
+	},
+	initialize: function (options) {
+		setOptions(this, options);
+	},
+	onAdd: function () {
+		this._initContainer();
+		this._levels = {};
+		this._tiles = {};
+		this._resetView();
+	},
+	beforeAdd: function (map) {
+		map._addZoomLimit(this);
+	},
+	onRemove: function (map) {
+		this._removeAllTiles();
+		remove(this._container);
+		map._removeZoomLimit(this);
+		this._container = null;
+		this._tileZoom = undefined;
+	},
+	bringToFront: function () {
+		if (this._map) {
+			toFront(this._container);
+			this._setAutoZIndex(Math.max);
+		}
+		return this;
+	},
+	bringToBack: function () {
+		if (this._map) {
+			toBack(this._container);
+			this._setAutoZIndex(Math.min);
+		}
+		return this;
+	},
+	getContainer: function () {
+		return this._container;
+	},
+	setOpacity: function (opacity) {
+		this.options.opacity = opacity;
+		this._updateOpacity();
+		return this;
+	},
+	setZIndex: function (zIndex) {
+		this.options.zIndex = zIndex;
+		this._updateZIndex();
+		return this;
+	},
+	isLoading: function () {
+		return this._loading;
+	},
+	redraw: function () {
+		if (this._map) {
+			this._removeAllTiles();
+			var tileZoom = this._clampZoom(this._map.getZoom());
+			if (tileZoom !== this._tileZoom) {
+				this._tileZoom = tileZoom;
+				this._updateLevels();
+			}
+			this._update();
+		}
+		return this;
+	},
+	getEvents: function () {
+		var events = {
+			viewprereset: this._invalidateAll,
+			viewreset: this._resetView,
+			zoom: this._resetView,
+			moveend: this._onMoveEnd
+		};
+		if (!this.options.updateWhenIdle) {
+			if (!this._onMove) {
+				this._onMove = throttle(this._onMoveEnd, this.options.updateInterval, this);
+			}
+			events.move = this._onMove;
+		}
+		if (this._zoomAnimated) {
+			events.zoomanim = this._animateZoom;
+		}
+		return events;
+	},
+	createTile: function () {
+		return document.createElement('div');
+	},
+	getTileSize: function () {
+		var s = this.options.tileSize;
+		return s instanceof Point ? s : new Point(s, s);
+	},
+	_updateZIndex: function () {
+		if (this._container && this.options.zIndex !== undefined && this.options.zIndex !== null) {
+			this._container.style.zIndex = this.options.zIndex;
+		}
+	},
+	_setAutoZIndex: function (compare) {
+		var layers = this.getPane().children,
+		    edgeZIndex = -compare(-Infinity, Infinity);
+		for (var i = 0, len = layers.length, zIndex; i < len; i++) {
+			zIndex = layers[i].style.zIndex;
+			if (layers[i] !== this._container && zIndex) {
+				edgeZIndex = compare(edgeZIndex, +zIndex);
+			}
+		}
+		if (isFinite(edgeZIndex)) {
+			this.options.zIndex = edgeZIndex + compare(-1, 1);
+			this._updateZIndex();
+		}
+	},
+	_updateOpacity: function () {
+		if (!this._map) { return; }
+		if (Browser.ielt9) { return; }
+		setOpacity(this._container, this.options.opacity);
+		var now = +new Date(),
+		    nextFrame = false,
+		    willPrune = false;
+		for (var key in this._tiles) {
+			var tile = this._tiles[key];
+			if (!tile.current || !tile.loaded) { continue; }
+			var fade = Math.min(1, (now - tile.loaded) / 200);
+			setOpacity(tile.el, fade);
+			if (fade < 1) {
+				nextFrame = true;
+			} else {
+				if (tile.active) {
+					willPrune = true;
+				} else {
+					this._onOpaqueTile(tile);
+				}
+				tile.active = true;
+			}
+		}
+		if (willPrune && !this._noPrune) { this._pruneTiles(); }
+		if (nextFrame) {
+			cancelAnimFrame(this._fadeFrame);
+			this._fadeFrame = requestAnimFrame(this._updateOpacity, this);
+		}
+	},
+	_onOpaqueTile: falseFn,
+	_initContainer: function () {
+		if (this._container) { return; }
+		this._container = create$1('div', 'atlas-layer ' + (this.options.className || ''));
+		this._updateZIndex();
+		if (this.options.opacity < 1) {
+			this._updateOpacity();
+		}
+		this.getPane().appendChild(this._container);
+	},
+	_updateLevels: function () {
+		var zoom = this._tileZoom,
+		    maxZoom = this.options.maxZoom;
+		if (zoom === undefined) { return undefined; }
+		for (var z in this._levels) {
+			z = Number(z);
+			if (this._levels[z].el.children.length || z === zoom) {
+				this._levels[z].el.style.zIndex = maxZoom - Math.abs(zoom - z);
+				this._onUpdateLevel(z);
+			} else {
+				remove(this._levels[z].el);
+				this._removeTilesAtZoom(z);
+				this._onRemoveLevel(z);
+				delete this._levels[z];
+			}
+		}
+		var level = this._levels[zoom],
+		    map = this._map;
+		if (!level) {
+			level = this._levels[zoom] = {};
+			level.el = create$1('div', 'atlas-tile-container atlas-zoom-animated', this._container);
+			level.el.style.zIndex = maxZoom;
+			level.origin = map.project(map.unproject(map.getPixelOrigin()), zoom).round();
+			level.zoom = zoom;
+			this._setZoomTransform(level, map.getCenter(), map.getZoom());
+			falseFn(level.el.offsetWidth);
+			this._onCreateLevel(level);
+		}
+		this._level = level;
+		return level;
+	},
+	_onUpdateLevel: falseFn,
+	_onRemoveLevel: falseFn,
+	_onCreateLevel: falseFn,
+	_pruneTiles: function () {
+		if (!this._map) {
+			return;
+		}
+		var key, tile;
+		var zoom = this._map.getZoom();
+		if (zoom > this.options.maxZoom ||
+			zoom < this.options.minZoom) {
+			this._removeAllTiles();
+			return;
+		}
+		for (key in this._tiles) {
+			tile = this._tiles[key];
+			tile.retain = tile.current;
+		}
+		for (key in this._tiles) {
+			tile = this._tiles[key];
+			if (tile.current && !tile.active) {
+				var coords = tile.coords;
+				if (!this._retainParent(coords.x, coords.y, coords.z, coords.z - 5)) {
+					this._retainChildren(coords.x, coords.y, coords.z, coords.z + 2);
+				}
+			}
+		}
+		for (key in this._tiles) {
+			if (!this._tiles[key].retain) {
+				this._removeTile(key);
+			}
+		}
+	},
+	_removeTilesAtZoom: function (zoom) {
+		for (var key in this._tiles) {
+			if (this._tiles[key].coords.z !== zoom) {
+				continue;
+			}
+			this._removeTile(key);
+		}
+	},
+	_removeAllTiles: function () {
+		for (var key in this._tiles) {
+			this._removeTile(key);
+		}
+	},
+	_invalidateAll: function () {
+		for (var z in this._levels) {
+			remove(this._levels[z].el);
+			this._onRemoveLevel(Number(z));
+			delete this._levels[z];
+		}
+		this._removeAllTiles();
+		this._tileZoom = undefined;
+	},
+	_retainParent: function (x, y, z, minZoom) {
+		var x2 = Math.floor(x / 2),
+		    y2 = Math.floor(y / 2),
+		    z2 = z - 1,
+		    coords2 = new Point(+x2, +y2);
+		coords2.z = +z2;
+		var key = this._tileCoordsToKey(coords2),
+		    tile = this._tiles[key];
+		if (tile && tile.active) {
+			tile.retain = true;
+			return true;
+		} else if (tile && tile.loaded) {
+			tile.retain = true;
+		}
+		if (z2 > minZoom) {
+			return this._retainParent(x2, y2, z2, minZoom);
+		}
+		return false;
+	},
+	_retainChildren: function (x, y, z, maxZoom) {
+		for (var i = 2 * x; i < 2 * x + 2; i++) {
+			for (var j = 2 * y; j < 2 * y + 2; j++) {
+				var coords = new Point(i, j);
+				coords.z = z + 1;
+				var key = this._tileCoordsToKey(coords),
+				    tile = this._tiles[key];
+				if (tile && tile.active) {
+					tile.retain = true;
+					continue;
+				} else if (tile && tile.loaded) {
+					tile.retain = true;
+				}
+				if (z + 1 < maxZoom) {
+					this._retainChildren(i, j, z + 1, maxZoom);
+				}
+			}
+		}
+	},
+	_resetView: function (e) {
+		var animating = e && (e.pinch || e.flyTo);
+		this._setView(this._map.getCenter(), this._map.getZoom(), animating, animating);
+	},
+	_animateZoom: function (e) {
+		this._setView(e.center, e.zoom, true, e.noUpdate);
+	},
+	_clampZoom: function (zoom) {
+		var options = this.options;
+		if (undefined !== options.minNativeZoom && zoom < options.minNativeZoom) {
+			return options.minNativeZoom;
+		}
+		if (undefined !== options.maxNativeZoom && options.maxNativeZoom < zoom) {
+			return options.maxNativeZoom;
+		}
+		return zoom;
+	},
+	_setView: function (center, zoom, noPrune, noUpdate) {
+		var tileZoom = Math.round(zoom);
+		if ((this.options.maxZoom !== undefined && tileZoom > this.options.maxZoom) ||
+		    (this.options.minZoom !== undefined && tileZoom < this.options.minZoom)) {
+			tileZoom = undefined;
+		} else {
+			tileZoom = this._clampZoom(tileZoom);
+		}
+		var tileZoomChanged = this.options.updateWhenZooming && (tileZoom !== this._tileZoom);
+		if (!noUpdate || tileZoomChanged) {
+			this._tileZoom = tileZoom;
+			if (this._abortLoading) {
+				this._abortLoading();
+			}
+			this._updateLevels();
+			this._resetGrid();
+			if (tileZoom !== undefined) {
+				this._update(center);
+			}
+			if (!noPrune) {
+				this._pruneTiles();
+			}
+			this._noPrune = !!noPrune;
+		}
+		this._setZoomTransforms(center, zoom);
+	},
+	_setZoomTransforms: function (center, zoom) {
+		for (var i in this._levels) {
+			this._setZoomTransform(this._levels[i], center, zoom);
+		}
+	},
+	_setZoomTransform: function (level, center, zoom) {
+		var scale = this._map.getZoomScale(zoom, level.zoom),
+		    translate = level.origin.multiplyBy(scale)
+		        .subtract(this._map._getNewPixelOrigin(center, zoom)).round();
+		if (Browser.any3d) {
+			setTransform(level.el, translate, scale);
+		} else {
+			setPosition(level.el, translate);
+		}
+	},
+	_resetGrid: function () {
+		var map = this._map,
+		    crs = map.options.crs,
+		    tileSize = this._tileSize = this.getTileSize(),
+		    tileZoom = this._tileZoom;
+		var bounds = this._map.getPixelWorldBounds(this._tileZoom);
+		if (bounds) {
+			this._globalTileRange = this._pxBoundsToTileRange(bounds);
+		}
+		this._wrapX = crs.wrapLng && !this.options.noWrap && [
+			Math.floor(map.project([0, crs.wrapLng[0]], tileZoom).x / tileSize.x),
+			Math.ceil(map.project([0, crs.wrapLng[1]], tileZoom).x / tileSize.y)
+		];
+		this._wrapY = crs.wrapLat && !this.options.noWrap && [
+			Math.floor(map.project([crs.wrapLat[0], 0], tileZoom).y / tileSize.x),
+			Math.ceil(map.project([crs.wrapLat[1], 0], tileZoom).y / tileSize.y)
+		];
+	},
+	_onMoveEnd: function () {
+		if (!this._map || this._map._animatingZoom) { return; }
+		this._update();
+	},
+	_getTiledPixelBounds: function (center) {
+		var map = this._map,
+		    mapZoom = map._animatingZoom ? Math.max(map._animateToZoom, map.getZoom()) : map.getZoom(),
+		    scale = map.getZoomScale(mapZoom, this._tileZoom),
+		    pixelCenter = map.project(center, this._tileZoom).floor(),
+		    halfSize = map.getSize().divideBy(scale * 2);
+		return new Bounds(pixelCenter.subtract(halfSize), pixelCenter.add(halfSize));
+	},
+	_update: function (center) {
+		var map = this._map;
+		if (!map) { return; }
+		var zoom = this._clampZoom(map.getZoom());
+		if (center === undefined) { center = map.getCenter(); }
+		if (this._tileZoom === undefined) { return; }
+		var pixelBounds = this._getTiledPixelBounds(center),
+		    tileRange = this._pxBoundsToTileRange(pixelBounds),
+		    tileCenter = tileRange.getCenter(),
+		    queue = [],
+		    margin = this.options.keepBuffer,
+		    noPruneRange = new Bounds(tileRange.getBottomLeft().subtract([margin, -margin]),
+		                              tileRange.getTopRight().add([margin, -margin]));
+		if (!(isFinite(tileRange.min.x) &&
+		      isFinite(tileRange.min.y) &&
+		      isFinite(tileRange.max.x) &&
+		      isFinite(tileRange.max.y))) { throw new Error('Attempted to load an infinite number of tiles'); }
+		for (var key in this._tiles) {
+			var c = this._tiles[key].coords;
+			if (c.z !== this._tileZoom || !noPruneRange.contains(new Point(c.x, c.y))) {
+				this._tiles[key].current = false;
+			}
+		}
+		if (Math.abs(zoom - this._tileZoom) > 1) { this._setView(center, zoom); return; }
+		for (var j = tileRange.min.y; j <= tileRange.max.y; j++) {
+			for (var i = tileRange.min.x; i <= tileRange.max.x; i++) {
+				var coords = new Point(i, j);
+				coords.z = this._tileZoom;
+				if (!this._isValidTile(coords)) { continue; }
+				var tile = this._tiles[this._tileCoordsToKey(coords)];
+				if (tile) {
+					tile.current = true;
+				} else {
+					queue.push(coords);
+				}
+			}
+		}
+		queue.sort(function (a, b) {
+			return a.distanceTo(tileCenter) - b.distanceTo(tileCenter);
+		});
+		if (queue.length !== 0) {
+			if (!this._loading) {
+				this._loading = true;
+				this.fire('loading');
+			}
+			var fragment = document.createDocumentFragment();
+			for (i = 0; i < queue.length; i++) {
+				this._addTile(queue[i], fragment);
+			}
+			this._level.el.appendChild(fragment);
+		}
+	},
+	_isValidTile: function (coords) {
+		var crs = this._map.options.crs;
+		if (!crs.infinite) {
+			var bounds = this._globalTileRange;
+			if ((!crs.wrapLng && (coords.x < bounds.min.x || coords.x > bounds.max.x)) ||
+			    (!crs.wrapLat && (coords.y < bounds.min.y || coords.y > bounds.max.y))) { return false; }
+		}
+		if (!this.options.bounds) { return true; }
+		var tileBounds = this._tileCoordsToBounds(coords);
+		return toLatLngBounds(this.options.bounds).overlaps(tileBounds);
+	},
+	_keyToBounds: function (key) {
+		return this._tileCoordsToBounds(this._keyToTileCoords(key));
+	},
+	_tileCoordsToNwSe: function (coords) {
+		var map = this._map,
+		    tileSize = this.getTileSize(),
+		    nwPoint = coords.scaleBy(tileSize),
+		    sePoint = nwPoint.add(tileSize),
+		    nw = map.unproject(nwPoint, coords.z),
+		    se = map.unproject(sePoint, coords.z);
+		return [nw, se];
+	},
+	_tileCoordsToBounds: function (coords) {
+		var bp = this._tileCoordsToNwSe(coords),
+		    bounds = new LatLngBounds(bp[0], bp[1]);
+		if (!this.options.noWrap) {
+			bounds = this._map.wrapLatLngBounds(bounds);
+		}
+		return bounds;
+	},
+	_tileCoordsToKey: function (coords) {
+		return coords.x + ':' + coords.y + ':' + coords.z;
+	},
+	_keyToTileCoords: function (key) {
+		var k = key.split(':'),
+		    coords = new Point(+k[0], +k[1]);
+		coords.z = +k[2];
+		return coords;
+	},
+	_removeTile: function (key) {
+		var tile = this._tiles[key];
+		if (!tile) { return; }
+		remove(tile.el);
+		delete this._tiles[key];
+		this.fire('tileunload', {
+			tile: tile.el,
+			coords: this._keyToTileCoords(key)
+		});
+	},
+	_initTile: function (tile) {
+		addClass(tile, 'atlas-tile');
+		var tileSize = this.getTileSize();
+		tile.style.width = tileSize.x + 'px';
+		tile.style.height = tileSize.y + 'px';
+		tile.onselectstart = falseFn;
+		tile.onmousemove = falseFn;
+		if (Browser.ielt9 && this.options.opacity < 1) {
+			setOpacity(tile, this.options.opacity);
+		}
+	},
+	_addTile: function (coords, container) {
+		var tilePos = this._getTilePos(coords),
+		    key = this._tileCoordsToKey(coords);
+		var tile = this.createTile(this._wrapCoords(coords), bind(this._tileReady, this, coords));
+		this._initTile(tile);
+		if (this.createTile.length < 2) {
+			requestAnimFrame(bind(this._tileReady, this, coords, null, tile));
+		}
+		setPosition(tile, tilePos);
+		this._tiles[key] = {
+			el: tile,
+			coords: coords,
+			current: true
+		};
+		container.appendChild(tile);
+		this.fire('tileloadstart', {
+			tile: tile,
+			coords: coords
+		});
+	},
+	_tileReady: function (coords, err, tile) {
+		if (err) {
+			this.fire('tileerror', {
+				error: err,
+				tile: tile,
+				coords: coords
+			});
+		}
+		var key = this._tileCoordsToKey(coords);
+		tile = this._tiles[key];
+		if (!tile) { return; }
+		tile.loaded = +new Date();
+		if (this._map._fadeAnimated) {
+			setOpacity(tile.el, 0);
+			cancelAnimFrame(this._fadeFrame);
+			this._fadeFrame = requestAnimFrame(this._updateOpacity, this);
+		} else {
+			tile.active = true;
+			this._pruneTiles();
+		}
+		if (!err) {
+			addClass(tile.el, 'atlas-tile-loaded');
+			this.fire('tileload', {
+				tile: tile.el,
+				coords: coords
+			});
+		}
+		if (this._noTilesToLoad()) {
+			this._loading = false;
+			this.fire('load');
+			if (Browser.ielt9 || !this._map._fadeAnimated) {
+				requestAnimFrame(this._pruneTiles, this);
+			} else {
+				setTimeout(bind(this._pruneTiles, this), 250);
+			}
+		}
+	},
+	_getTilePos: function (coords) {
+		return coords.scaleBy(this.getTileSize()).subtract(this._level.origin);
+	},
+	_wrapCoords: function (coords) {
+		var newCoords = new Point(
+			this._wrapX ? wrapNum(coords.x, this._wrapX) : coords.x,
+			this._wrapY ? wrapNum(coords.y, this._wrapY) : coords.y);
+		newCoords.z = coords.z;
+		return newCoords;
+	},
+	_pxBoundsToTileRange: function (bounds) {
+		var tileSize = this.getTileSize();
+		return new Bounds(
+			bounds.min.unscaleBy(tileSize).floor(),
+			bounds.max.unscaleBy(tileSize).ceil().subtract([1, 1]));
+	},
+	_noTilesToLoad: function () {
+		for (var key in this._tiles) {
+			if (!this._tiles[key].loaded) { return false; }
+		}
+		return true;
+	}
+  });
+  var TileLayer = GridLayer.extend({
+	options: {
+		minZoom: 0,
+		maxZoom: 18,
+		subdomains: 'abc',
+		errorTileUrl: '',
+		zoomOffset: 0,
+		tms: false,
+		zoomReverse: false,
+		detectRetina: false,
+		crossOrigin: false,
+		referrerPolicy: false
+	},
+	initialize: function (url, options) {
+		this._url = url;
+		options = setOptions(this, options);
+		if (options.detectRetina && Browser.retina && options.maxZoom > 0) {
+			options.tileSize = Math.floor(options.tileSize / 2);
+			if (!options.zoomReverse) {
+				options.zoomOffset++;
+				options.maxZoom = Math.max(options.minZoom, options.maxZoom - 1);
+			} else {
+				options.zoomOffset--;
+				options.minZoom = Math.min(options.maxZoom, options.minZoom + 1);
+			}
+			options.minZoom = Math.max(0, options.minZoom);
+		} else if (!options.zoomReverse) {
+			options.maxZoom = Math.max(options.minZoom, options.maxZoom);
+		} else {
+			options.minZoom = Math.min(options.maxZoom, options.minZoom);
+		}
+		if (typeof options.subdomains === 'string') {
+			options.subdomains = options.subdomains.split('');
+		}
+		this.on('tileunload', this._onTileRemove);
+	},
+	setUrl: function (url, noRedraw) {
+		if (this._url === url && noRedraw === undefined) {
+			noRedraw = true;
+		}
+		this._url = url;
+		if (!noRedraw) {
+			this.redraw();
+		}
+		return this;
+	},
+	createTile: function (coords, done) {
+		var tile = document.createElement('img');
+		on(tile, 'load', bind(this._tileOnLoad, this, done, tile));
+		on(tile, 'error', bind(this._tileOnError, this, done, tile));
+		if (this.options.crossOrigin || this.options.crossOrigin === '') {
+			tile.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
+		}
+		if (typeof this.options.referrerPolicy === 'string') {
+			tile.referrerPolicy = this.options.referrerPolicy;
+		}
+		tile.alt = '';
+		tile.src = this.getTileUrl(coords);
+		return tile;
+	},
+	getTileUrl: function (coords) {
+		var data = {
+			r: Browser.retina ? '@2x' : '',
+			s: this._getSubdomain(coords),
+			x: coords.x,
+			y: coords.y,
+			z: this._getZoomForUrl()
+		};
+		if (this._map && !this._map.options.crs.infinite) {
+			var invertedY = this._globalTileRange.max.y - coords.y;
+			if (this.options.tms) {
+				data['y'] = invertedY;
+			}
+			data['-y'] = invertedY;
+		}
+		return template(this._url, extend(data, this.options));
+	},
+	_tileOnLoad: function (done, tile) {
+		if (Browser.ielt9) {
+			setTimeout(bind(done, this, null, tile), 0);
+		} else {
+			done(null, tile);
+		}
+	},
+	_tileOnError: function (done, tile, e) {
+		var errorUrl = this.options.errorTileUrl;
+		if (errorUrl && tile.getAttribute('src') !== errorUrl) {
+			tile.src = errorUrl;
+		}
+		done(e, tile);
+	},
+	_onTileRemove: function (e) {
+		e.tile.onload = null;
+	},
+	_getZoomForUrl: function () {
+		var zoom = this._tileZoom,
+		maxZoom = this.options.maxZoom,
+		zoomReverse = this.options.zoomReverse,
+		zoomOffset = this.options.zoomOffset;
+		if (zoomReverse) {
+			zoom = maxZoom - zoom;
+		}
+		return zoom + zoomOffset;
+	},
+	_getSubdomain: function (tilePoint) {
+		var index = Math.abs(tilePoint.x + tilePoint.y) % this.options.subdomains.length;
+		return this.options.subdomains[index];
+	},
+	_abortLoading: function () {
+		var i, tile;
+		for (i in this._tiles) {
+			if (this._tiles[i].coords.z !== this._tileZoom) {
+				tile = this._tiles[i].el;
+				tile.onload = falseFn;
+				tile.onerror = falseFn;
+				if (!tile.complete) {
+					tile.src = emptyImageUrl;
+					var coords = this._tiles[i].coords;
+					remove(tile);
+					delete this._tiles[i];
+					this.fire('tileabort', {
+						tile: tile,
+						coords: coords
+					});
+				}
+			}
+		}
+	},
+	_removeTile: function (key) {
+		var tile = this._tiles[key];
+		if (!tile) { return; }
+		tile.el.setAttribute('src', emptyImageUrl);
+		return GridLayer.prototype._removeTile.call(this, key);
+	},
+	_tileReady: function (coords, err, tile) {
+		if (!this._map || (tile && tile.getAttribute('src') === emptyImageUrl)) {
+			return;
+		}
+		return GridLayer.prototype._tileReady.call(this, coords, err, tile);
+	}
+  });
+  var TileLayerWMS = TileLayer.extend({
+	defaultWmsParams: {
+		service: 'WMS',
+		request: 'GetMap',
+		layers: '',
+		styles: '',
+		format: 'image/jpeg',
+		transparent: false,
+		version: '1.1.1'
+	},
+	options: {
+		crs: null,
+		uppercase: false
+	},
+	initialize: function (url, options) {
+		this._url = url;
+		var wmsParams = extend({}, this.defaultWmsParams);
+		for (var i in options) {
+			if (!(i in this.options)) {
+				wmsParams[i] = options[i];
+			}
+		}
+		options = setOptions(this, options);
+		var realRetina = options.detectRetina && Browser.retina ? 2 : 1;
+		var tileSize = this.getTileSize();
+		wmsParams.width = tileSize.x * realRetina;
+		wmsParams.height = tileSize.y * realRetina;
+		this.wmsParams = wmsParams;
+	},
+	onAdd: function (map) {
+		this._crs = this.options.crs || map.options.crs;
+		this._wmsVersion = parseFloat(this.wmsParams.version);
+		var projectionKey = this._wmsVersion >= 1.3 ? 'crs' : 'srs';
+		this.wmsParams[projectionKey] = this._crs.code;
+		TileLayer.prototype.onAdd.call(this, map);
+	},
+	getTileUrl: function (coords) {
+		var tileBounds = this._tileCoordsToNwSe(coords),
+		    crs = this._crs,
+		    bounds = toBounds(crs.project(tileBounds[0]), crs.project(tileBounds[1])),
+		    min = bounds.min,
+		    max = bounds.max,
+		    bbox = (this._wmsVersion >= 1.3 && this._crs === EPSG4326 ?
+		    [min.y, min.x, max.y, max.x] :
+		    [min.x, min.y, max.x, max.y]).join(','),
+		    url = TileLayer.prototype.getTileUrl.call(this, coords);
+		return url +
+			getParamString(this.wmsParams, url, this.options.uppercase) +
+			(this.options.uppercase ? '&BBOX=' : '&bbox=') + bbox;
+	},
+	setParams: function (params, noRedraw) {
+		extend(this.wmsParams, params);
+		if (!noRedraw) {
+			this.redraw();
+		}
+		return this;
+	}
+  });
+  var Renderer = Layer.extend({
+	options: {
+		padding: 0.1
+	},
+	initialize: function (options) {
+		setOptions(this, options);
+		stamp(this);
+		this._layers = this._layers || {};
+	},
+	onAdd: function () {
+		if (!this._container) {
+			this._initContainer();
+			addClass(this._container, 'atlas-zoom-animated');
+		}
+		this.getPane().appendChild(this._container);
+		this._update();
+		this.on('update', this._updatePaths, this);
+	},
+	onRemove: function () {
+		this.off('update', this._updatePaths, this);
+		this._destroyContainer();
+	},
+	getEvents: function () {
+		var events = {
+			viewreset: this._reset,
+			zoom: this._onZoom,
+			moveend: this._update,
+			zoomend: this._onZoomEnd
+		};
+		if (this._zoomAnimated) {
+			events.zoomanim = this._onAnimZoom;
+		}
+		return events;
+	},
+	_onAnimZoom: function (ev) {
+		this._updateTransform(ev.center, ev.zoom);
+	},
+	_onZoom: function () {
+		this._updateTransform(this._map.getCenter(), this._map.getZoom());
+	},
+	_updateTransform: function (center, zoom) {
+		var scale = this._map.getZoomScale(zoom, this._zoom),
+		    viewHalf = this._map.getSize().multiplyBy(0.5 + this.options.padding),
+		    currentCenterPoint = this._map.project(this._center, zoom),
+		    topLeftOffset = viewHalf.multiplyBy(-scale).add(currentCenterPoint)
+				  .subtract(this._map._getNewPixelOrigin(center, zoom));
+		if (Browser.any3d) {
+			setTransform(this._container, topLeftOffset, scale);
+		} else {
+			setPosition(this._container, topLeftOffset);
+		}
+	},
+	_reset: function () {
+		this._update();
+		this._updateTransform(this._center, this._zoom);
+		for (var id in this._layers) {
+			this._layers[id]._reset();
+		}
+	},
+	_onZoomEnd: function () {
+		for (var id in this._layers) {
+			this._layers[id]._project();
+		}
+	},
+	_updatePaths: function () {
+		for (var id in this._layers) {
+			this._layers[id]._update();
+		}
+	},
+	_update: function () {
+		var p = this.options.padding,
+		    size = this._map.getSize(),
+		    min = this._map.containerPointToLayerPoint(size.multiplyBy(-p)).round();
+		this._bounds = new Bounds(min, min.add(size.multiplyBy(1 + p * 2)).round());
+		this._center = this._map.getCenter();
+		this._zoom = this._map.getZoom();
+	}
+  });
+  var Canvas = Renderer.extend({
+	options: {
+		tolerance: 0
+	},
+	getEvents: function () {
+		var events = Renderer.prototype.getEvents.call(this);
+		events.viewprereset = this._onViewPreReset;
+		return events;
+	},
+	_onViewPreReset: function () {
+		this._postponeUpdatePaths = true;
+	},
+	onAdd: function () {
+		Renderer.prototype.onAdd.call(this);
+		this._draw();
+	},
+	_initContainer: function () {
+		var container = this._container = document.createElement('canvas');
+		on(container, 'mousemove', this._onMouseMove, this);
+		on(container, 'click dblclick mousedown mouseup contextmenu', this._onClick, this);
+		on(container, 'mouseout', this._handleMouseOut, this);
+		container['_atlas_disable_events'] = true;
+		this._ctx = container.getContext('2d');
+	},
+	_destroyContainer: function () {
+		cancelAnimFrame(this._redrawRequest);
+		delete this._ctx;
+		remove(this._container);
+		off(this._container);
+		delete this._container;
+	},
+	_updatePaths: function () {
+		if (this._postponeUpdatePaths) { return; }
+		var layer;
+		this._redrawBounds = null;
+		for (var id in this._layers) {
+			layer = this._layers[id];
+			layer._update();
+		}
+		this._redraw();
+	},
+	_update: function () {
+		if (this._map._animatingZoom && this._bounds) { return; }
+		Renderer.prototype._update.call(this);
+		var b = this._bounds,
+		    container = this._container,
+		    size = b.getSize(),
+		    m = Browser.retina ? 2 : 1;
+		setPosition(container, b.min);
+		container.width = m * size.x;
+		container.height = m * size.y;
+		container.style.width = size.x + 'px';
+		container.style.height = size.y + 'px';
+		if (Browser.retina) {
+			this._ctx.scale(2, 2);
+		}
+		this._ctx.translate(-b.min.x, -b.min.y);
+		this.fire('update');
+	},
+	_reset: function () {
+		Renderer.prototype._reset.call(this);
+		if (this._postponeUpdatePaths) {
+			this._postponeUpdatePaths = false;
+			this._updatePaths();
+		}
+	},
+	_initPath: function (layer) {
+		this._updateDashArray(layer);
+		this._layers[stamp(layer)] = layer;
+		var order = layer._order = {
+			layer: layer,
+			prev: this._drawLast,
+			next: null
+		};
+		if (this._drawLast) { this._drawLast.next = order; }
+		this._drawLast = order;
+		this._drawFirst = this._drawFirst || this._drawLast;
+	},
+	_addPath: function (layer) {
+		this._requestRedraw(layer);
+	},
+	_removePath: function (layer) {
+		var order = layer._order;
+		var next = order.next;
+		var prev = order.prev;
+		if (next) {
+			next.prev = prev;
+		} else {
+			this._drawLast = prev;
+		}
+		if (prev) {
+			prev.next = next;
+		} else {
+			this._drawFirst = next;
+		}
+		delete layer._order;
+		delete this._layers[stamp(layer)];
+		this._requestRedraw(layer);
+	},
+	_updatePath: function (layer) {
+		this._extendRedrawBounds(layer);
+		layer._project();
+		layer._update();
+		this._requestRedraw(layer);
+	},
+	_updateStyle: function (layer) {
+		this._updateDashArray(layer);
+		this._requestRedraw(layer);
+	},
+	_updateDashArray: function (layer) {
+		if (typeof layer.options.dashArray === 'string') {
+			var parts = layer.options.dashArray.split(/[, ]+/),
+			    dashArray = [],
+			    dashValue,
+			    i;
+			for (i = 0; i < parts.length; i++) {
+				dashValue = Number(parts[i]);
+				if (isNaN(dashValue)) { return; }
+				dashArray.push(dashValue);
+			}
+			layer.options._dashArray = dashArray;
+		} else {
+			layer.options._dashArray = layer.options.dashArray;
+		}
+	},
+	_requestRedraw: function (layer) {
+		if (!this._map) { return; }
+		this._extendRedrawBounds(layer);
+		this._redrawRequest = this._redrawRequest || requestAnimFrame(this._redraw, this);
+	},
+	_extendRedrawBounds: function (layer) {
+		if (layer._pxBounds) {
+			var padding = (layer.options.weight || 0) + 1;
+			this._redrawBounds = this._redrawBounds || new Bounds();
+			this._redrawBounds.extend(layer._pxBounds.min.subtract([padding, padding]));
+			this._redrawBounds.extend(layer._pxBounds.max.add([padding, padding]));
+		}
+	},
+	_redraw: function () {
+		this._redrawRequest = null;
+		if (this._redrawBounds) {
+			this._redrawBounds.min._floor();
+			this._redrawBounds.max._ceil();
+		}
+		this._clear();
+		this._draw();
+		this._redrawBounds = null;
+	},
+	_clear: function () {
+		var bounds = this._redrawBounds;
+		if (bounds) {
+			var size = bounds.getSize();
+			this._ctx.clearRect(bounds.min.x, bounds.min.y, size.x, size.y);
+		} else {
+			this._ctx.save();
+			this._ctx.setTransform(1, 0, 0, 1, 0, 0);
+			this._ctx.clearRect(0, 0, this._container.width, this._container.height);
+			this._ctx.restore();
+		}
+	},
+	_draw: function () {
+		var layer, bounds = this._redrawBounds;
+		this._ctx.save();
+		if (bounds) {
+			var size = bounds.getSize();
+			this._ctx.beginPath();
+			this._ctx.rect(bounds.min.x, bounds.min.y, size.x, size.y);
+			this._ctx.clip();
+		}
+		this._drawing = true;
+		for (var order = this._drawFirst; order; order = order.next) {
+			layer = order.layer;
+			if (!bounds || (layer._pxBounds && layer._pxBounds.intersects(bounds))) {
+				layer._updatePath();
+			}
+		}
+		this._drawing = false;
+		this._ctx.restore();
+	},
+	_updatePoly: function (layer, closed) {
+		if (!this._drawing) { return; }
+		var i, j, len2, p,
+		    parts = layer._parts,
+		    len = parts.length,
+		    ctx = this._ctx;
+		if (!len) { return; }
+		ctx.beginPath();
+		for (i = 0; i < len; i++) {
+			for (j = 0, len2 = parts[i].length; j < len2; j++) {
+				p = parts[i][j];
+				ctx[j ? 'lineTo' : 'moveTo'](p.x, p.y);
+			}
+			if (closed) {
+				ctx.closePath();
+			}
+		}
+		this._fillStroke(ctx, layer);
+	},
+	_updateCircle: function (layer) {
+		if (!this._drawing || layer._empty()) { return; }
+		var p = layer._point,
+		    ctx = this._ctx,
+		    r = Math.max(Math.round(layer._radius), 1),
+		    s = (Math.max(Math.round(layer._radiusY), 1) || r) / r;
+		if (s !== 1) {
+			ctx.save();
+			ctx.scale(1, s);
+		}
+		ctx.beginPath();
+		ctx.arc(p.x, p.y / s, r, 0, Math.PI * 2, false);
+		if (s !== 1) {
+			ctx.restore();
+		}
+		this._fillStroke(ctx, layer);
+	},
+	_fillStroke: function (ctx, layer) {
+		var options = layer.options;
+		if (options.fill) {
+			ctx.globalAlpha = options.fillOpacity;
+			ctx.fillStyle = options.fillColor || options.color;
+			ctx.fill(options.fillRule || 'evenodd');
+		}
+		if (options.stroke && options.weight !== 0) {
+			if (ctx.setLineDash) {
+				ctx.setLineDash(layer.options && layer.options._dashArray || []);
+			}
+			ctx.globalAlpha = options.opacity;
+			ctx.lineWidth = options.weight;
+			ctx.strokeStyle = options.color;
+			ctx.lineCap = options.lineCap;
+			ctx.lineJoin = options.lineJoin;
+			ctx.stroke();
+		}
+	},
+	_onClick: function (e) {
+		var point = this._map.mouseEventToLayerPoint(e), layer, clickedLayer;
+		for (var order = this._drawFirst; order; order = order.next) {
+			layer = order.layer;
+			if (layer.options.interactive && layer._containsPoint(point)) {
+				if (!(e.type === 'click' || e.type === 'preclick') || !this._map._draggableMoved(layer)) {
+					clickedLayer = layer;
+				}
+			}
+		}
+		this._fireEvent(clickedLayer ? [clickedLayer] : false, e);
+	},
+	_onMouseMove: function (e) {
+		if (!this._map || this._map.dragging.moving() || this._map._animatingZoom) { return; }
+		var point = this._map.mouseEventToLayerPoint(e);
+		this._handleMouseHover(e, point);
+	},
+	_handleMouseOut: function (e) {
+		var layer = this._hoveredLayer;
+		if (layer) {
+			removeClass(this._container, 'atlas-interactive');
+			this._fireEvent([layer], e, 'mouseout');
+			this._hoveredLayer = null;
+			this._mouseHoverThrottled = false;
+		}
+	},
+	_handleMouseHover: function (e, point) {
+		if (this._mouseHoverThrottled) {
+			return;
+		}
+		var layer, candidateHoveredLayer;
+		for (var order = this._drawFirst; order; order = order.next) {
+			layer = order.layer;
+			if (layer.options.interactive && layer._containsPoint(point)) {
+				candidateHoveredLayer = layer;
+			}
+		}
+		if (candidateHoveredLayer !== this._hoveredLayer) {
+			this._handleMouseOut(e);
+			if (candidateHoveredLayer) {
+				addClass(this._container, 'atlas-interactive');
+				this._fireEvent([candidateHoveredLayer], e, 'mouseover');
+				this._hoveredLayer = candidateHoveredLayer;
+			}
+		}
+		this._fireEvent(this._hoveredLayer ? [this._hoveredLayer] : false, e);
+		this._mouseHoverThrottled = true;
+		setTimeout(bind(function () {
+			this._mouseHoverThrottled = false;
+		}, this), 32);
+	},
+	_fireEvent: function (layers, e, type) {
+		this._map._fireDOMEvent(e, type || e.type, layers);
+	},
+	_bringToFront: function (layer) {
+		var order = layer._order;
+		if (!order) { return; }
+		var next = order.next;
+		var prev = order.prev;
+		if (next) {
+			next.prev = prev;
+		} else {
+			return;
+		}
+		if (prev) {
+			prev.next = next;
+		} else if (next) {
+			this._drawFirst = next;
+		}
+		order.prev = this._drawLast;
+		this._drawLast.next = order;
+		order.next = null;
+		this._drawLast = order;
+		this._requestRedraw(layer);
+	},
+	_bringToBack: function (layer) {
+		var order = layer._order;
+		if (!order) { return; }
+		var next = order.next;
+		var prev = order.prev;
+		if (prev) {
+			prev.next = next;
+		} else {
+			return;
+		}
+		if (next) {
+			next.prev = prev;
+		} else if (prev) {
+			this._drawLast = prev;
+		}
+		order.prev = null;
+		order.next = this._drawFirst;
+		this._drawFirst.prev = order;
+		this._drawFirst = order;
+		this._requestRedraw(layer);
+	}
+  });
+  var vmlMixin = {
+	_initContainer: function () {
+		this._container = create$1('div', 'atlas-vml-container');
+	},
+	_update: function () {
+		if (this._map._animatingZoom) { return; }
+		Renderer.prototype._update.call(this);
+		this.fire('update');
+	},
+	_initPath: function (layer) {
+		var container = layer._container = vmlCreate('shape');
+		addClass(container, 'atlas-vml-shape ' + (this.options.className || ''));
+		container.coordsize = '1 1';
+		layer._path = vmlCreate('path');
+		container.appendChild(layer._path);
+		this._updateStyle(layer);
+		this._layers[stamp(layer)] = layer;
+	},
+	_addPath: function (layer) {
+		var container = layer._container;
+		this._container.appendChild(container);
+		if (layer.options.interactive) {
+			layer.addInteractiveTarget(container);
+		}
+	},
+	_removePath: function (layer) {
+		var container = layer._container;
+		remove(container);
+		layer.removeInteractiveTarget(container);
+		delete this._layers[stamp(layer)];
+	},
+	_updateStyle: function (layer) {
+		var stroke = layer._stroke,
+		    fill = layer._fill,
+		    options = layer.options,
+		    container = layer._container;
+		container.stroked = !!options.stroke;
+		container.filled = !!options.fill;
+		if (options.stroke) {
+			if (!stroke) {
+				stroke = layer._stroke = vmlCreate('stroke');
+			}
+			container.appendChild(stroke);
+			stroke.weight = options.weight + 'px';
+			stroke.color = options.color;
+			stroke.opacity = options.opacity;
+			if (options.dashArray) {
+				stroke.dashStyle = isArray(options.dashArray) ?
+				    options.dashArray.join(' ') :
+				    options.dashArray.replace(/( *, *)/g, ' ');
+			} else {
+				stroke.dashStyle = '';
+			}
+			stroke.endcap = options.lineCap.replace('butt', 'flat');
+			stroke.joinstyle = options.lineJoin;
+		} else if (stroke) {
+			container.removeChild(stroke);
+			layer._stroke = null;
+		}
+		if (options.fill) {
+			if (!fill) {
+				fill = layer._fill = vmlCreate('fill');
+			}
+			container.appendChild(fill);
+			fill.color = options.fillColor || options.color;
+			fill.opacity = options.fillOpacity;
+		} else if (fill) {
+			container.removeChild(fill);
+			layer._fill = null;
+		}
+	},
+	_updateCircle: function (layer) {
+		var p = layer._point.round(),
+		    r = Math.round(layer._radius),
+		    r2 = Math.round(layer._radiusY || r);
+		this._setPath(layer, layer._empty() ? 'M0 0' :
+			'AL ' + p.x + ',' + p.y + ' ' + r + ',' + r2 + ' 0,' + (65535 * 360));
+	},
+	_setPath: function (layer, path) {
+		layer._path.v = path;
+	},
+	_bringToFront: function (layer) {
+		toFront(layer._container);
+	},
+	_bringToBack: function (layer) {
+		toBack(layer._container);
+	}
+  };
+  var create = Browser.vml ? vmlCreate : svgCreate;
+  var SVG = Renderer.extend({
+	_initContainer: function () {
+		this._container = create('svg');
+		this._container.setAttribute('pointer-events', 'none');
+		this._rootGroup = create('g');
+		this._container.appendChild(this._rootGroup);
+	},
+	_destroyContainer: function () {
+		Renderer.prototype._destroyContainer.call(this);
+		delete this._rootGroup;
+		delete this._svgSize;
+	},
+	_update: function () {
+		if (this._map._animatingZoom && this._bounds) { return; }
+		Renderer.prototype._update.call(this);
+		var b = this._bounds,
+		    size = b.getSize(),
+		    container = this._container;
+		if (!this._svgSize || !this._svgSize.equals(size)) {
+			this._svgSize = size;
+			container.setAttribute('width', size.x);
+			container.setAttribute('height', size.y);
+		}
+		setPosition(container, b.min);
+		container.setAttribute('viewBox', [b.min.x, b.min.y, size.x, size.y].join(' '));
+		this.fire('update');
+	},
+	_initPath: function (layer) {
+		var path = layer._path = create('path');
+		if (layer.options.className) {
+			addClass(path, layer.options.className);
+		}
+		if (layer.options.interactive) {
+			addClass(path, 'atlas-interactive');
+		}
+		this._updateStyle(layer);
+		this._layers[stamp(layer)] = layer;
+	},
+	_addPath: function (layer) {
+		if (!this._rootGroup) { this._initContainer(); }
+		this._rootGroup.appendChild(layer._path);
+		layer.addInteractiveTarget(layer._path);
+	},
+	_removePath: function (layer) {
+		remove(layer._path);
+		layer.removeInteractiveTarget(layer._path);
+		delete this._layers[stamp(layer)];
+	},
+	_updatePath: function (layer) {
+		layer._project();
+		layer._update();
+	},
+	_updateStyle: function (layer) {
+		var path = layer._path,
+		    options = layer.options;
+		if (!path) { return; }
+		if (options.stroke) {
+			path.setAttribute('stroke', options.color);
+			path.setAttribute('stroke-opacity', options.opacity);
+			path.setAttribute('stroke-width', options.weight);
+			path.setAttribute('stroke-linecap', options.lineCap);
+			path.setAttribute('stroke-linejoin', options.lineJoin);
+			if (options.dashArray) {
+				path.setAttribute('stroke-dasharray', options.dashArray);
+			} else {
+				path.removeAttribute('stroke-dasharray');
+			}
+			if (options.dashOffset) {
+				path.setAttribute('stroke-dashoffset', options.dashOffset);
+			} else {
+				path.removeAttribute('stroke-dashoffset');
+			}
+		} else {
+			path.setAttribute('stroke', 'none');
+		}
+		if (options.fill) {
+			path.setAttribute('fill', options.fillColor || options.color);
+			path.setAttribute('fill-opacity', options.fillOpacity);
+			path.setAttribute('fill-rule', options.fillRule || 'evenodd');
+		} else {
+			path.setAttribute('fill', 'none');
+		}
+	},
+	_updatePoly: function (layer, closed) {
+		this._setPath(layer, pointsToPath(layer._parts, closed));
+	},
+	_updateCircle: function (layer) {
+		var p = layer._point,
+		    r = Math.max(Math.round(layer._radius), 1),
+		    r2 = Math.max(Math.round(layer._radiusY), 1) || r,
+		    arc = 'a' + r + ',' + r2 + ' 0 1,0 ';
+		var d = layer._empty() ? 'M0 0' :
+			'M' + (p.x - r) + ',' + p.y +
+			arc + (r * 2) + ',0 ' +
+			arc + (-r * 2) + ',0 ';
+		this._setPath(layer, d);
+	},
+	_setPath: function (layer, path) {
+		layer._path.setAttribute('d', path);
+	},
+	_bringToFront: function (layer) {
+		toFront(layer._path);
+	},
+	_bringToBack: function (layer) {
+		toBack(layer._path);
+	}
+  });
+  if (Browser.vml) {
+	SVG.include(vmlMixin);
+  }
+  Map.include({
+	getRenderer: function (layer) {
+		var renderer = layer.options.renderer || this._getPaneRenderer(layer.options.pane) || this.options.renderer || this._renderer;
+		if (!renderer) {
+			renderer = this._renderer = this._createRenderer();
+		}
+		if (!this.hasLayer(renderer)) {
+			this.addLayer(renderer);
+		}
+		return renderer;
+	},
+	_getPaneRenderer: function (name) {
+		if (name === 'overlayPane' || name === undefined) {
+			return false;
+		}
+		var renderer = this._paneRenderers[name];
+		if (renderer === undefined) {
+			renderer = this._createRenderer({pane: name});
+			this._paneRenderers[name] = renderer;
+		}
+		return renderer;
+	},
+	_createRenderer: function (options) {
+		return (this.options.preferCanvas && canvas(options)) || svg(options);
+	}
+  });
+  var Icon = Class.extend({
+	options: {
+		popupAnchor: [0, 0],
+		tooltipAnchor: [0, 0],
+		crossOrigin: false
+	},
+	initialize: function (options) {
+		setOptions(this, options);
+	},
+	createIcon: function (oldIcon) {
+		return this._createIcon('icon', oldIcon);
+	},
+	createShadow: function (oldIcon) {
+		return this._createIcon('shadow', oldIcon);
+	},
+	_createIcon: function (name, oldIcon) {
+		var src = this._getIconUrl(name);
+		if (!src) {
+			if (name === 'icon') {
+				throw new Error('iconUrl not set in Icon options (see the docs).');
+			}
+			return null;
+		}
+		var img = this._createImg(src, oldIcon && oldIcon.tagName === 'IMG' ? oldIcon : null);
+		this._setIconStyles(img, name);
+		if (this.options.crossOrigin || this.options.crossOrigin === '') {
+			img.crossOrigin = this.options.crossOrigin === true ? '' : this.options.crossOrigin;
+		}
+		return img;
+	},
+	_setIconStyles: function (img, name) {
+		var options = this.options;
+		var sizeOption = options[name + 'Size'];
+		if (typeof sizeOption === 'number') {
+			sizeOption = [sizeOption, sizeOption];
+		}
+		var size = toPoint(sizeOption),
+		    anchor = toPoint(name === 'shadow' && options.shadowAnchor || options.iconAnchor ||
+		            size && size.divideBy(2, true));
+		img.className = 'atlas-marker-' + name + ' ' + (options.className || '');
+		if (anchor) {
+			img.style.marginLeft = (-anchor.x) + 'px';
+			img.style.marginTop  = (-anchor.y) + 'px';
+		}
+		if (size) {
+			img.style.width  = size.x + 'px';
+			img.style.height = size.y + 'px';
+		}
+	},
+	_createImg: function (src, el) {
+		el = el || document.createElement('img');
+		el.src = src;
+		return el;
+	},
+	_getIconUrl: function (name) {
+		return Browser.retina && this.options[name + 'RetinaUrl'] || this.options[name + 'Url'];
+	}
+  });
+  var IconDefault = Icon.extend({
+	options: {
+		iconUrl:       'marker-icon.png',
+		iconRetinaUrl: 'marker-icon-2x.png',
+		shadowUrl:     'marker-shadow.png',
+		iconSize:    [25, 41],
+		iconAnchor:  [12, 41],
+		popupAnchor: [1, -34],
+		tooltipAnchor: [16, -28],
+		shadowSize:  [41, 41]
+	},
+	_getIconUrl: function (name) {
+		if (typeof IconDefault.imagePath !== 'string') {
+			IconDefault.imagePath = this._detectIconPath();
+		}
+		return (this.options.imagePath || IconDefault.imagePath) + Icon.prototype._getIconUrl.call(this, name);
+	},
+	_stripUrl: function (path) {
+		var strip = function (str, re, idx) {
+			var match = re.exec(str);
+			return match && match[idx];
+		};
+		path = strip(path, /^url\((['"])?(.+)\1\)$/, 2);
+		return path && strip(path, /^(.*)marker-icon\.png$/, 1);
+	},
+	_detectIconPath: function () {
+		var el = create$1('div',  'atlas-default-icon-path', document.body);
+		var path = getStyle(el, 'background-image') ||
+		           getStyle(el, 'backgroundImage');
+		document.body.removeChild(el);
+		path = this._stripUrl(path);
+		if (path) { return path; }
+		var link = document.querySelector('link[href$="atlas.css"]');
+		if (!link) { return ''; }
+		return link.href.substring(0, link.href.length - 'atlas.css'.length - 1);
+	}
+  });
+  var MarkerDrag = Handler.extend({
+	initialize: function (marker) {
+		this._marker = marker;
+	},
+	addHooks: function () {
+		var icon = this._marker._icon;
+		if (!this._draggable) {
+			this._draggable = new Draggable(icon, icon, true);
+		}
+		this._draggable.on({
+			dragstart: this._onDragStart,
+			predrag: this._onPreDrag,
+			drag: this._onDrag,
+			dragend: this._onDragEnd
+		}, this).enable();
+		addClass(icon, 'atlas-marker-draggable');
+	},
+	removeHooks: function () {
+		this._draggable.off({
+			dragstart: this._onDragStart,
+			predrag: this._onPreDrag,
+			drag: this._onDrag,
+			dragend: this._onDragEnd
+		}, this).disable();
+		if (this._marker._icon) {
+			removeClass(this._marker._icon, 'atlas-marker-draggable');
+		}
+	},
+	moved: function () {
+		return this._draggable && this._draggable._moved;
+	},
+	_adjustPan: function (e) {
+		var marker = this._marker,
+		    map = marker._map,
+		    speed = this._marker.options.autoPanSpeed,
+		    padding = this._marker.options.autoPanPadding,
+		    iconPos = getPosition(marker._icon),
+		    bounds = map.getPixelBounds(),
+		    origin = map.getPixelOrigin();
+		var panBounds = toBounds(
+			bounds.min._subtract(origin).add(padding),
+			bounds.max._subtract(origin).subtract(padding)
+		);
+		if (!panBounds.contains(iconPos)) {
+			var movement = toPoint(
+				(Math.max(panBounds.max.x, iconPos.x) - panBounds.max.x) / (bounds.max.x - panBounds.max.x) -
+				(Math.min(panBounds.min.x, iconPos.x) - panBounds.min.x) / (bounds.min.x - panBounds.min.x),
+				(Math.max(panBounds.max.y, iconPos.y) - panBounds.max.y) / (bounds.max.y - panBounds.max.y) -
+				(Math.min(panBounds.min.y, iconPos.y) - panBounds.min.y) / (bounds.min.y - panBounds.min.y)
+			).multiplyBy(speed);
+			map.panBy(movement, {animate: false});
+			this._draggable._newPos._add(movement);
+			this._draggable._startPos._add(movement);
+			setPosition(marker._icon, this._draggable._newPos);
+			this._onDrag(e);
+			this._panRequest = requestAnimFrame(this._adjustPan.bind(this, e));
+		}
+	},
+	_onDragStart: function () {
+		this._oldLatLng = this._marker.getLatLng();
+		this._marker.closePopup && this._marker.closePopup();
+		this._marker
+			.fire('movestart')
+			.fire('dragstart');
+	},
+	_onPreDrag: function (e) {
+		if (this._marker.options.autoPan) {
+			cancelAnimFrame(this._panRequest);
+			this._panRequest = requestAnimFrame(this._adjustPan.bind(this, e));
+		}
+	},
+	_onDrag: function (e) {
+		var marker = this._marker,
+		    shadow = marker._shadow,
+		    iconPos = getPosition(marker._icon),
+		    latlng = marker._map.layerPointToLatLng(iconPos);
+		if (shadow) {
+			setPosition(shadow, iconPos);
+		}
+		marker._latlng = latlng;
+		e.latlng = latlng;
+		e.oldLatLng = this._oldLatLng;
+		marker
+		    .fire('move', e)
+		    .fire('drag', e);
+	},
+	_onDragEnd: function (e) {
+		 cancelAnimFrame(this._panRequest);
+		delete this._oldLatLng;
+		this._marker
+		    .fire('moveend')
+		    .fire('dragend', e);
+	}
+  });
+  var Marker = Layer.extend({
+	options: {
+		icon: new IconDefault(),
+		interactive: true,
+		keyboard: true,
+		title: '',
+		alt: 'Marker',
+		zIndexOffset: 0,
+		opacity: 1,
+		riseOnHover: false,
+		riseOffset: 250,
+		pane: 'markerPane',
+		shadowPane: 'shadowPane',
+		bubblingMouseEvents: false,
+		autoPanOnFocus: true,
+		draggable: false,
+		autoPan: false,
+		autoPanPadding: [50, 50],
+		autoPanSpeed: 10
+	},
+	initialize: function (latlng, options) {
+		setOptions(this, options);
+		this._latlng = toLatLng(latlng);
+	},
+	onAdd: function (map) {
+		this._zoomAnimated = this._zoomAnimated && map.options.markerZoomAnimation;
+		if (this._zoomAnimated) {
+			map.on('zoomanim', this._animateZoom, this);
+		}
+		this._initIcon();
+		this.update();
+	},
+	onRemove: function (map) {
+		if (this.dragging && this.dragging.enabled()) {
+			this.options.draggable = true;
+			this.dragging.removeHooks();
+		}
+		delete this.dragging;
+		if (this._zoomAnimated) {
+			map.off('zoomanim', this._animateZoom, this);
+		}
+		this._removeIcon();
+		this._removeShadow();
+	},
+	getEvents: function () {
+		return {
+			zoom: this.update,
+			viewreset: this.update
+		};
+	},
+	getLatLng: function () {
+		return this._latlng;
+	},
+	setLatLng: function (latlng) {
+		var oldLatLng = this._latlng;
+		this._latlng = toLatLng(latlng);
+		this.update();
+		return this.fire('move', {oldLatLng: oldLatLng, latlng: this._latlng});
+	},
+	setZIndexOffset: function (offset) {
+		this.options.zIndexOffset = offset;
+		return this.update();
+	},
+	getIcon: function () {
+		return this.options.icon;
+	},
+	setIcon: function (icon) {
+		this.options.icon = icon;
+		if (this._map) {
+			this._initIcon();
+			this.update();
+		}
+		if (this._popup) {
+			this.bindPopup(this._popup, this._popup.options);
+		}
+		return this;
+	},
+	getElement: function () {
+		return this._icon;
+	},
+	update: function () {
+		if (this._icon && this._map) {
+			var pos = this._map.latLngToLayerPoint(this._latlng).round();
+			this._setPos(pos);
+		}
+		return this;
+	},
+	_initIcon: function () {
+		var options = this.options,
+		    classToAdd = 'atlas-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
+		var icon = options.icon.createIcon(this._icon),
+		    addIcon = false;
+		if (icon !== this._icon) {
+			if (this._icon) {
+				this._removeIcon();
+			}
+			addIcon = true;
+			if (options.title) {
+				icon.title = options.title;
+			}
+			if (icon.tagName === 'IMG') {
+				icon.alt = options.alt || '';
+			}
+		}
+		addClass(icon, classToAdd);
+		if (options.keyboard) {
+			icon.tabIndex = '0';
+			icon.setAttribute('role', 'button');
+		}
+		this._icon = icon;
+		if (options.riseOnHover) {
+			this.on({
+				mouseover: this._bringToFront,
+				mouseout: this._resetZIndex
+			});
+		}
+		if (this.options.autoPanOnFocus) {
+			on(icon, 'focus', this._panOnFocus, this);
+		}
+		var newShadow = options.icon.createShadow(this._shadow),
+		    addShadow = false;
+		if (newShadow !== this._shadow) {
+			this._removeShadow();
+			addShadow = true;
+		}
+		if (newShadow) {
+			addClass(newShadow, classToAdd);
+			newShadow.alt = '';
+		}
+		this._shadow = newShadow;
+		if (options.opacity < 1) {
+			this._updateOpacity();
+		}
+		if (addIcon) {
+			this.getPane().appendChild(this._icon);
+		}
+		this._initInteraction();
+		if (newShadow && addShadow) {
+			this.getPane(options.shadowPane).appendChild(this._shadow);
+		}
+	},
+	_removeIcon: function () {
+		if (this.options.riseOnHover) {
+			this.off({
+				mouseover: this._bringToFront,
+				mouseout: this._resetZIndex
+			});
+		}
+		if (this.options.autoPanOnFocus) {
+			off(this._icon, 'focus', this._panOnFocus, this);
+		}
+		remove(this._icon);
+		this.removeInteractiveTarget(this._icon);
+		this._icon = null;
+	},
+	_removeShadow: function () {
+		if (this._shadow) {
+			remove(this._shadow);
+		}
+		this._shadow = null;
+	},
+	_setPos: function (pos) {
+		if (this._icon) {
+			setPosition(this._icon, pos);
+		}
+		if (this._shadow) {
+			setPosition(this._shadow, pos);
+		}
+		this._zIndex = pos.y + this.options.zIndexOffset;
+		this._resetZIndex();
+	},
+	_updateZIndex: function (offset) {
+		if (this._icon) {
+			this._icon.style.zIndex = this._zIndex + offset;
+		}
+	},
+	_animateZoom: function (opt) {
+		var pos = this._map._latLngToNewLayerPoint(this._latlng, opt.zoom, opt.center).round();
+		this._setPos(pos);
+	},
+	_initInteraction: function () {
+		if (!this.options.interactive) { return; }
+		addClass(this._icon, 'atlas-interactive');
+		this.addInteractiveTarget(this._icon);
+		if (MarkerDrag) {
+			var draggable = this.options.draggable;
+			if (this.dragging) {
+				draggable = this.dragging.enabled();
+				this.dragging.disable();
+			}
+			this.dragging = new MarkerDrag(this);
+			if (draggable) {
+				this.dragging.enable();
+			}
+		}
+	},
+	setOpacity: function (opacity) {
+		this.options.opacity = opacity;
+		if (this._map) {
+			this._updateOpacity();
+		}
+		return this;
+	},
+	_updateOpacity: function () {
+		var opacity = this.options.opacity;
+		if (this._icon) {
+			setOpacity(this._icon, opacity);
+		}
+		if (this._shadow) {
+			setOpacity(this._shadow, opacity);
+		}
+	},
+	_bringToFront: function () {
+		this._updateZIndex(this.options.riseOffset);
+	},
+	_resetZIndex: function () {
+		this._updateZIndex(0);
+	},
+	_panOnFocus: function () {
+		var map = this._map;
+		if (!map) { return; }
+		var iconOpts = this.options.icon.options;
+		var size = iconOpts.iconSize ? toPoint(iconOpts.iconSize) : toPoint(0, 0);
+		var anchor = iconOpts.iconAnchor ? toPoint(iconOpts.iconAnchor) : toPoint(0, 0);
+		map.panInside(this._latlng, {
+			paddingTopLeft: anchor,
+			paddingBottomRight: size.subtract(anchor)
+		});
+	},
+	_getPopupAnchor: function () {
+		return this.options.icon.options.popupAnchor;
+	},
+	_getTooltipAnchor: function () {
+		return this.options.icon.options.tooltipAnchor;
+	}
+  });
+  var DivOverlay = Layer.extend({
+	options: {
+		interactive: false,
+		offset: [0, 0],
+		className: '',
+		pane: undefined,
+		content: ''
+	},
+	initialize: function (options, source) {
+		if (options && (options instanceof LatLng || isArray(options))) {
+			this._latlng = toLatLng(options);
+			setOptions(this, source);
+		} else {
+			setOptions(this, options);
+			this._source = source;
+		}
+		if (this.options.content) {
+			this._content = this.options.content;
+		}
+	},
+	openOn: function (map) {
+		map = arguments.length ? map : this._source._map;
+		if (!map.hasLayer(this)) {
+			map.addLayer(this);
+		}
+		return this;
+	},
+	close: function () {
+		if (this._map) {
+			this._map.removeLayer(this);
+		}
+		return this;
+	},
+	toggle: function (layer) {
+		if (this._map) {
+			this.close();
+		} else {
+			if (arguments.length) {
+				this._source = layer;
+			} else {
+				layer = this._source;
+			}
+			this._prepareOpen();
+			this.openOn(layer._map);
+		}
+		return this;
+	},
+	onAdd: function (map) {
+		this._zoomAnimated = map._zoomAnimated;
+		if (!this._container) {
+			this._initLayout();
+		}
+		if (map._fadeAnimated) {
+			setOpacity(this._container, 0);
+		}
+		clearTimeout(this._removeTimeout);
+		this.getPane().appendChild(this._container);
+		this.update();
+		if (map._fadeAnimated) {
+			setOpacity(this._container, 1);
+		}
+		this.bringToFront();
+		if (this.options.interactive) {
+			addClass(this._container, 'atlas-interactive');
+			this.addInteractiveTarget(this._container);
+		}
+	},
+	onRemove: function (map) {
+		if (map._fadeAnimated) {
+			setOpacity(this._container, 0);
+			this._removeTimeout = setTimeout(bind(remove, undefined, this._container), 200);
+		} else {
+			remove(this._container);
+		}
+		if (this.options.interactive) {
+			removeClass(this._container, 'atlas-interactive');
+			this.removeInteractiveTarget(this._container);
+		}
+	},
+	getLatLng: function () {
+		return this._latlng;
+	},
+	setLatLng: function (latlng) {
+		this._latlng = toLatLng(latlng);
+		if (this._map) {
+			this._updatePosition();
+			this._adjustPan();
+		}
+		return this;
+	},
+	getContent: function () {
+		return this._content;
+	},
+	setContent: function (content) {
+		this._content = content;
+		this.update();
+		return this;
+	},
+	getElement: function () {
+		return this._container;
+	},
+	update: function () {
+		if (!this._map) { return; }
+		this._container.style.visibility = 'hidden';
+		this._updateContent();
+		this._updateLayout();
+		this._updatePosition();
+		this._container.style.visibility = '';
+		this._adjustPan();
+	},
+	getEvents: function () {
+		var events = {
+			zoom: this._updatePosition,
+			viewreset: this._updatePosition
+		};
+		if (this._zoomAnimated) {
+			events.zoomanim = this._animateZoom;
+		}
+		return events;
+	},
+	isOpen: function () {
+		return !!this._map && this._map.hasLayer(this);
+	},
+	bringToFront: function () {
+		if (this._map) {
+			toFront(this._container);
+		}
+		return this;
+	},
+	bringToBack: function () {
+		if (this._map) {
+			toBack(this._container);
+		}
+		return this;
+	},
+	_prepareOpen: function (latlng) {
+		var source = this._source;
+		if (!source._map) { return false; }
+		if (source instanceof FeatureGroup) {
+			source = null;
+			var layers = this._source._layers;
+			for (var id in layers) {
+				if (layers[id]._map) {
+					source = layers[id];
+					break;
+				}
+			}
+			if (!source) { return false; }
+			this._source = source;
+		}
+		if (!latlng) {
+			if (source.getCenter) {
+				latlng = source.getCenter();
+			} else if (source.getLatLng) {
+				latlng = source.getLatLng();
+			} else if (source.getBounds) {
+				latlng = source.getBounds().getCenter();
+			} else {
+				throw new Error('Unable to get source layer LatLng.');
+			}
+		}
+		this.setLatLng(latlng);
+		if (this._map) {
+			this.update();
+		}
+		return true;
+	},
+	_updateContent: function () {
+		if (!this._content) { return; }
+		var node = this._contentNode;
+		var content = (typeof this._content === 'function') ? this._content(this._source || this) : this._content;
+		if (typeof content === 'string') {
+			node.innerHTML = content;
+		} else {
+			while (node.hasChildNodes()) {
+				node.removeChild(node.firstChild);
+			}
+			node.appendChild(content);
+		}
+		this.fire('contentupdate');
+	},
+	_updatePosition: function () {
+		if (!this._map) { return; }
+		var pos = this._map.latLngToLayerPoint(this._latlng),
+		    offset = toPoint(this.options.offset),
+		    anchor = this._getAnchor();
+		if (this._zoomAnimated) {
+			setPosition(this._container, pos.add(anchor));
+		} else {
+			offset = offset.add(pos).add(anchor);
+		}
+		var bottom = this._containerBottom = -offset.y,
+		    left = this._containerLeft = -Math.round(this._containerWidth / 2) + offset.x;
+		this._container.style.bottom = bottom + 'px';
+		this._container.style.left = left + 'px';
+	},
+	_getAnchor: function () {
+		return [0, 0];
+	}
+  });
+  var Popup = DivOverlay.extend({
+	options: {
+		pane: 'popupPane',
+		offset: [0, 7],
+		maxWidth: 300,
+		minWidth: 50,
+		maxHeight: null,
+		autoPan: true,
+		autoPanPaddingTopLeft: null,
+		autoPanPaddingBottomRight: null,
+		autoPanPadding: [5, 5],
+		keepInView: false,
+		closeButton: true,
+		autoClose: true,
+		closeOnEscapeKey: true,
+		className: ''
+	},
+	openOn: function (map) {
+		map = arguments.length ? map : this._source._map;
+		if (!map.hasLayer(this) && map._popup && map._popup.options.autoClose) {
+			map.removeLayer(map._popup);
+		}
+		map._popup = this;
+		return DivOverlay.prototype.openOn.call(this, map);
+	},
+	onAdd: function (map) {
+		DivOverlay.prototype.onAdd.call(this, map);
+		map.fire('popupopen', {popup: this});
+		if (this._source) {
+			this._source.fire('popupopen', {popup: this}, true);
+			if (!(this._source instanceof Path)) {
+				this._source.on('preclick', stopPropagation);
+			}
+		}
+	},
+	onRemove: function (map) {
+		DivOverlay.prototype.onRemove.call(this, map);
+		map.fire('popupclose', {popup: this});
+		if (this._source) {
+			this._source.fire('popupclose', {popup: this}, true);
+			if (!(this._source instanceof Path)) {
+				this._source.off('preclick', stopPropagation);
+			}
+		}
+	},
+	getEvents: function () {
+		var events = DivOverlay.prototype.getEvents.call(this);
+		if (this.options.closeOnClick !== undefined ? this.options.closeOnClick : this._map.options.closePopupOnClick) {
+			events.preclick = this.close;
+		}
+		if (this.options.keepInView) {
+			events.moveend = this._adjustPan;
+		}
+		return events;
+	},
+	_initLayout: function () {
+		var prefix = 'atlas-popup',
+		    container = this._container = create$1('div',
+			prefix + ' ' + (this.options.className || '') +
+			' atlas-zoom-animated');
+		var wrapper = this._wrapper = create$1('div', prefix + '-content-wrapper', container);
+		this._contentNode = create$1('div', prefix + '-content', wrapper);
+		disableClickPropagation(container);
+		disableScrollPropagation(this._contentNode);
+		on(container, 'contextmenu', stopPropagation);
+		this._tipContainer = create$1('div', prefix + '-tip-container', container);
+		this._tip = create$1('div', prefix + '-tip', this._tipContainer);
+		if (this.options.closeButton) {
+			var closeButton = this._closeButton = create$1('a', prefix + '-close-button', container);
+			closeButton.setAttribute('role', 'button');
+			closeButton.setAttribute('aria-label', 'Close popup');
+			closeButton.href = '#close';
+			closeButton.innerHTML = '<span aria-hidden="true">&#215;</span>';
+			on(closeButton, 'click', function (ev) {
+				preventDefault(ev);
+				this.close();
+			}, this);
+		}
+	},
+	_updateLayout: function () {
+		var container = this._contentNode,
+		    style = container.style;
+		style.width = '';
+		style.whiteSpace = 'nowrap';
+		var width = container.offsetWidth;
+		width = Math.min(width, this.options.maxWidth);
+		width = Math.max(width, this.options.minWidth);
+		style.width = (width + 1) + 'px';
+		style.whiteSpace = '';
+		style.height = '';
+		var height = container.offsetHeight,
+		    maxHeight = this.options.maxHeight,
+		    scrolledClass = 'atlas-popup-scrolled';
+		if (maxHeight && height > maxHeight) {
+			style.height = maxHeight + 'px';
+			addClass(container, scrolledClass);
+		} else {
+			removeClass(container, scrolledClass);
+		}
+		this._containerWidth = this._container.offsetWidth;
+	},
+	_animateZoom: function (e) {
+		var pos = this._map._latLngToNewLayerPoint(this._latlng, e.zoom, e.center),
+		    anchor = this._getAnchor();
+		setPosition(this._container, pos.add(anchor));
+	},
+	_adjustPan: function () {
+		if (!this.options.autoPan) { return; }
+		if (this._map._panAnim) { this._map._panAnim.stop(); }
+		if (this._autopanning) {
+			this._autopanning = false;
+			return;
+		}
+		var map = this._map,
+		    marginBottom = parseInt(getStyle(this._container, 'marginBottom'), 10) || 0,
+		    containerHeight = this._container.offsetHeight + marginBottom,
+		    containerWidth = this._containerWidth,
+		    layerPos = new Point(this._containerLeft, -containerHeight - this._containerBottom);
+		layerPos._add(getPosition(this._container));
+		var containerPos = map.layerPointToContainerPoint(layerPos),
+		    padding = toPoint(this.options.autoPanPadding),
+		    paddingTL = toPoint(this.options.autoPanPaddingTopLeft || padding),
+		    paddingBR = toPoint(this.options.autoPanPaddingBottomRight || padding),
+		    size = map.getSize(),
+		    dx = 0,
+		    dy = 0;
+		if (containerPos.x + containerWidth + paddingBR.x > size.x) {
+			dx = containerPos.x + containerWidth - size.x + paddingBR.x;
+		}
+		if (containerPos.x - dx - paddingTA.x < 0) {
+			dx = containerPos.x - paddingTA.x;
+		}
+		if (containerPos.y + containerHeight + paddingBR.y > size.y) {
+			dy = containerPos.y + containerHeight - size.y + paddingBR.y;
+		}
+		if (containerPos.y - dy - paddingTA.y < 0) {
+			dy = containerPos.y - paddingTA.y;
+		}
+		if (dx || dy) {
+			if (this.options.keepInView) {
+				this._autopanning = true;
+			}
+			map
+			    .fire('autopanstart')
+			    .panBy([dx, dy]);
+		}
+	},
+	_getAnchor: function () {
+		return toPoint(this._source && this._source._getPopupAnchor ? this._source._getPopupAnchor() : [0, 0]);
+	}
+  });
+  var Tooltip = DivOverlay.extend({
+	options: {
+		pane: 'tooltipPane',
+		offset: [0, 0],
+		direction: 'auto',
+		permanent: false,
+		sticky: false,
+		opacity: 0.9
+	},
+	onAdd: function (map) {
+		DivOverlay.prototype.onAdd.call(this, map);
+		this.setOpacity(this.options.opacity);
+		map.fire('tooltipopen', {tooltip: this});
+		if (this._source) {
+			this.addEventParent(this._source);
+			this._source.fire('tooltipopen', {tooltip: this}, true);
+		}
+	},
+	onRemove: function (map) {
+		DivOverlay.prototype.onRemove.call(this, map);
+		map.fire('tooltipclose', {tooltip: this});
+		if (this._source) {
+			this.removeEventParent(this._source);
+			this._source.fire('tooltipclose', {tooltip: this}, true);
+		}
+	},
+	getEvents: function () {
+		var events = DivOverlay.prototype.getEvents.call(this);
+		if (!this.options.permanent) {
+			events.preclick = this.close;
+		}
+		return events;
+	},
+	_initLayout: function () {
+		var prefix = 'atlas-tooltip',
+		    className = prefix + ' ' + (this.options.className || '') + ' atlas-zoom-' + (this._zoomAnimated ? 'animated' : 'hide');
+		this._contentNode = this._container = create$1('div', className);
+		this._container.setAttribute('role', 'tooltip');
+		this._container.setAttribute('id', 'atlas-tooltip-' + stamp(this));
+	},
+	_updateLayout: function () {},
+	_adjustPan: function () {},
+	_setPosition: function (pos) {
+		var subX, subY,
+		    map = this._map,
+		    container = this._container,
+		    centerPoint = map.latLngToContainerPoint(map.getCenter()),
+		    tooltipPoint = map.layerPointToContainerPoint(pos),
+		    direction = this.options.direction,
+		    tooltipWidth = container.offsetWidth,
+		    tooltipHeight = container.offsetHeight,
+		    offset = toPoint(this.options.offset),
+		    anchor = this._getAnchor();
+		if (direction === 'top') {
+			subX = tooltipWidth / 2;
+			subY = tooltipHeight;
+		} else if (direction === 'bottom') {
+			subX = tooltipWidth / 2;
+			subY = 0;
+		} else if (direction === 'center') {
+			subX = tooltipWidth / 2;
+			subY = tooltipHeight / 2;
+		} else if (direction === 'right') {
+			subX = 0;
+			subY = tooltipHeight / 2;
+		} else if (direction === 'left') {
+			subX = tooltipWidth;
+			subY = tooltipHeight / 2;
+		} else if (tooltipPoint.x < centerPoint.x) {
+			direction = 'right';
+			subX = 0;
+			subY = tooltipHeight / 2;
+		} else {
+			direction = 'left';
+			subX = tooltipWidth + (offset.x + anchor.x) * 2;
+			subY = tooltipHeight / 2;
+		}
+		pos = pos.subtract(toPoint(subX, subY, true)).add(offset).add(anchor);
+		removeClass(container, 'atlas-tooltip-right');
+		removeClass(container, 'atlas-tooltip-left');
+		removeClass(container, 'atlas-tooltip-top');
+		removeClass(container, 'atlas-tooltip-bottom');
+		addClass(container, 'atlas-tooltip-' + direction);
+		setPosition(container, pos);
+	},
+	_updatePosition: function () {
+		var pos = this._map.latLngToLayerPoint(this._latlng);
+		this._setPosition(pos);
+	},
+	setOpacity: function (opacity) {
+		this.options.opacity = opacity;
+		if (this._container) {
+			setOpacity(this._container, opacity);
+		}
+	},
+	_animateZoom: function (e) {
+		var pos = this._map._latLngToNewLayerPoint(this._latlng, e.zoom, e.center);
+		this._setPosition(pos);
+	},
+	_getAnchor: function () {
+		return toPoint(this._source && this._source._getTooltipAnchor && !this.options.sticky ? this._source._getTooltipAnchor() : [0, 0]);
+	}
+  });
+  Map.include({
+	_initOverlay: function (OverlayClass, content, latlng, options) {
+		var overlay = content;
+		if (!(overlay instanceof OverlayClass)) {
+			overlay = new OverlayClass(options).setContent(content);
+		}
+		if (latlng) {
+			overlay.setLatLng(latlng);
+		}
+		return overlay;
+	}
+  });
+  Layer.include({
+	_initOverlay: function (OverlayClass, old, content, options) {
+		var overlay = content;
+		if (overlay instanceof OverlayClass) {
+			setOptions(overlay, options);
+			overlay._source = this;
+		} else {
+			overlay = (old && !options) ? old : new OverlayClass(options, this);
+			overlay.setContent(content);
+		}
+		return overlay;
+	}
+  });
+  Map.mergeOptions({
+	closePopupOnClick: true
+  });
+  Map.include({
+	openPopup: function (popup, latlng, options) {
+		this._initOverlay(Popup, popup, latlng, options)
+		  .openOn(this);
+		return this;
+	},
+	closePopup: function (popup) {
+		popup = arguments.length ? popup : this._popup;
+		if (popup) {
+			popup.close();
+		}
+		return this;
+	}
+  });
+  Layer.include({
+	bindPopup: function (content, options) {
+		this._popup = this._initOverlay(Popup, this._popup, content, options);
+		if (!this._popupHandlersAdded) {
+			this.on({
+				click: this._openPopup,
+				keypress: this._onKeyPress,
+				remove: this.closePopup,
+				move: this._movePopup
+			});
+			this._popupHandlersAdded = true;
+		}
+		return this;
+	},
+	unbindPopup: function () {
+		if (this._popup) {
+			this.off({
+				click: this._openPopup,
+				keypress: this._onKeyPress,
+				remove: this.closePopup,
+				move: this._movePopup
+			});
+			this._popupHandlersAdded = false;
+			this._popup = null;
+		}
+		return this;
+	},
+	openPopup: function (latlng) {
+		if (this._popup) {
+			if (!(this instanceof FeatureGroup)) {
+				this._popup._source = this;
+			}
+			if (this._popup._prepareOpen(latlng || this._latlng)) {
+				this._popup.openOn(this._map);
+			}
+		}
+		return this;
+	},
+	closePopup: function () {
+		if (this._popup) {
+			this._popup.close();
+		}
+		return this;
+	},
+	togglePopup: function () {
+		if (this._popup) {
+			this._popup.toggle(this);
+		}
+		return this;
+	},
+	isPopupOpen: function () {
+		return (this._popup ? this._popup.isOpen() : false);
+	},
+	setPopupContent: function (content) {
+		if (this._popup) {
+			this._popup.setContent(content);
+		}
+		return this;
+	},
+	getPopup: function () {
+		return this._popup;
+	},
+	_openPopup: function (e) {
+		if (!this._popup || !this._map) {
+			return;
+		}
+		stop(e);
+		var target = e.layer || e.target;
+		if (this._popup._source === target && !(target instanceof Path)) {
+			if (this._map.hasLayer(this._popup)) {
+				this.closePopup();
+			} else {
+				this.openPopup(e.latlng);
+			}
+			return;
+		}
+		this._popup._source = target;
+		this.openPopup(e.latlng);
+	},
+	_movePopup: function (e) {
+		this._popup.setLatLng(e.latlng);
+	},
+	_onKeyPress: function (e) {
+		if (e.originalEvent.keyCode === 13) {
+			this._openPopup(e);
+		}
+	}
+  });
+  Map.include({
+	openTooltip: function (tooltip, latlng, options) {
+		this._initOverlay(Tooltip, tooltip, latlng, options)
+		  .openOn(this);
+		return this;
+	},
+	closeTooltip: function (tooltip) {
+		tooltip.close();
+		return this;
+	}
+  });
+  Layer.include({
+	bindTooltip: function (content, options) {
+		if (this._tooltip && this.isTooltipOpen()) {
+			this.unbindTooltip();
+		}
+		this._tooltip = this._initOverlay(Tooltip, this._tooltip, content, options);
+		this._initTooltipInteractions();
+		if (this._tooltip.options.permanent && this._map && this._map.hasLayer(this)) {
+			this.openTooltip();
+		}
+		return this;
+	},
+	unbindTooltip: function () {
+		if (this._tooltip) {
+			this._initTooltipInteractions(true);
+			this.closeTooltip();
+			this._tooltip = null;
+		}
+		return this;
+	},
+	_initTooltipInteractions: function (remove) {
+		if (!remove && this._tooltipHandlersAdded) { return; }
+		var onOff = remove ? 'off' : 'on',
+		    events = {
+			remove: this.closeTooltip,
+			move: this._moveTooltip
+		    };
+		if (!this._tooltip.options.permanent) {
+			events.mouseover = this._openTooltip;
+			events.mouseout = this.closeTooltip;
+			events.click = this._openTooltip;
+			if (this._map) {
+				this._addFocusListeners();
+			} else {
+				events.add = this._addFocusListeners;
+			}
+		} else {
+			events.add = this._openTooltip;
+		}
+		if (this._tooltip.options.sticky) {
+			events.mousemove = this._moveTooltip;
+		}
+		this[onOff](events);
+		this._tooltipHandlersAdded = !remove;
+	},
+	openTooltip: function (latlng) {
+		if (this._tooltip) {
+			if (!(this instanceof FeatureGroup)) {
+				this._tooltip._source = this;
+			}
+			if (this._tooltip._prepareOpen(latlng)) {
+				this._tooltip.openOn(this._map);
+				if (this.getElement) {
+					this._setAriaDescribedByOnLayer(this);
+				} else if (this.eachLayer) {
+					this.eachLayer(this._setAriaDescribedByOnLayer, this);
+				}
+			}
+		}
+		return this;
+	},
+	closeTooltip: function () {
+		if (this._tooltip) {
+			return this._tooltip.close();
+		}
+	},
+	toggleTooltip: function () {
+		if (this._tooltip) {
+			this._tooltip.toggle(this);
+		}
+		return this;
+	},
+	isTooltipOpen: function () {
+		return this._tooltip.isOpen();
+	},
+	setTooltipContent: function (content) {
+		if (this._tooltip) {
+			this._tooltip.setContent(content);
+		}
+		return this;
+	},
+	getTooltip: function () {
+		return this._tooltip;
+	},
+	_addFocusListeners: function () {
+		if (this.getElement) {
+			this._addFocusListenersOnLayer(this);
+		} else if (this.eachLayer) {
+			this.eachLayer(this._addFocusListenersOnLayer, this);
+		}
+	},
+	_addFocusListenersOnLayer: function (layer) {
+		var el = typeof layer.getElement === 'function' && layer.getElement();
+		if (el) {
+			on(el, 'focus', function () {
+				this._tooltip._source = layer;
+				this.openTooltip();
+			}, this);
+			on(el, 'blur', this.closeTooltip, this);
+		}
+	},
+	_setAriaDescribedByOnLayer: function (layer) {
+		var el = typeof layer.getElement === 'function' && layer.getElement();
+		if (el) {
+			el.setAttribute('aria-describedby', this._tooltip._container.id);
+		}
+	},
+	_openTooltip: function (e) {
+		if (!this._tooltip || !this._map) {
+			return;
+		}
+		if (this._map.dragging && this._map.dragging.moving() && !this._openOnceFlag) {
+			this._openOnceFlag = true;
+			var that = this;
+			this._map.once('moveend', function () {
+				that._openOnceFlag = false;
+				that._openTooltip(e);
+			});
+			return;
+		}
+		this._tooltip._source = e.layer || e.target;
+		this.openTooltip(this._tooltip.options.sticky ? e.latlng : undefined);
+	},
+	_moveTooltip: function (e) {
+		var latlng = e.latlng, containerPoint, layerPoint;
+		if (this._tooltip.options.sticky && e.originalEvent) {
+			containerPoint = this._map.mouseEventToContainerPoint(e.originalEvent);
+			layerPoint = this._map.containerPointToLayerPoint(containerPoint);
+			latlng = this._map.layerPointToLatLng(layerPoint);
+		}
+		this._tooltip.setLatLng(latlng);
+	}
+  });
+  var Control = Class.extend({
+	options: {
+		position: 'topright'
+	},
+	initialize: function (options) {
+		setOptions(this, options);
+	},
+	getPosition: function () {
+		return this.options.position;
+	},
+	setPosition: function (position) {
+		var map = this._map;
+		if (map) {
+			map.removeControl(this);
+		}
+		this.options.position = position;
+		if (map) {
+			map.addControl(this);
+		}
+		return this;
+	},
+	getContainer: function () {
+		return this._container;
+	},
+	addTo: function (map) {
+		this.remove();
+		this._map = map;
+		var container = this._container = this.onAdd(map),
+		    pos = this.getPosition(),
+		    corner = map._controlCorners[pos];
+		addClass(container, 'atlas-control');
+		if (pos.indexOf('bottom') !== -1) {
+			corner.insertBefore(container, corner.firstChild);
+		} else {
+			corner.appendChild(container);
+		}
+		this._map.on('unload', this.remove, this);
+		return this;
+	},
+	remove: function () {
+		if (!this._map) {
+			return this;
+		}
+		remove(this._container);
+		if (this.onRemove) {
+			this.onRemove(this._map);
+		}
+		this._map.off('unload', this.remove, this);
+		this._map = null;
+		return this;
+	},
+	_refocusOnMap: function (e) {
+		if (this._map && e && e.screenX > 0 && e.screenY > 0) {
+			this._map.getContainer().focus();
+		}
+	}
+  });
+  Map.include({
+	addControl: function (control) {
+		control.addTo(this);
+		return this;
+	},
+	removeControl: function (control) {
+		control.remove();
+		return this;
+	},
+	_initControlPos: function () {
+		var corners = this._controlCorners = {},
+		    l = 'atlas-',
+		    container = this._controlContainer =
+		            create$1('div', l + 'control-container', this._container);
+		function createCorner(vSide, hSide) {
+			var className = l + vSide + ' ' + l + hSide;
+			corners[vSide + hSide] = create$1('div', className, container);
+		}
+		createCorner('top', 'left');
+		createCorner('top', 'right');
+		createCorner('bottom', 'left');
+		createCorner('bottom', 'right');
+	},
+	_clearControlPos: function () {
+		for (var i in this._controlCorners) {
+			remove(this._controlCorners[i]);
+		}
+		remove(this._controlContainer);
+		delete this._controlCorners;
+		delete this._controlContainer;
+	}
+  });
+  var Layers = Control.extend({
+	options: {
+		collapsed: true,
+		position: 'topright',
+		autoZIndex: true,
+		hideSingleBase: false,
+		sortLayers: false,
+		sortFunction: function (layerA, layerB, nameA, nameB) {
+			return nameA < nameB ? -1 : (nameB < nameA ? 1 : 0);
+		}
+	},
+	initialize: function (baseLayers, overlays, options) {
+		setOptions(this, options);
+		this._layerControlInputs = [];
+		this._layers = [];
+		this._lastZIndex = 0;
+		this._handlingClick = false;
+		this._preventClick = false;
+		for (var i in baseLayers) {
+			this._addLayer(baseLayers[i], i);
+		}
+		for (i in overlays) {
+			this._addLayer(overlays[i], i, true);
+		}
+	},
+	onAdd: function (map) {
+		this._initLayout();
+		this._update();
+		this._map = map;
+		map.on('zoomend', this._checkDisabledLayers, this);
+		for (var i = 0; i < this._layers.length; i++) {
+			this._layers[i].layer.on('add remove', this._onLayerChange, this);
+		}
+		return this._container;
+	},
+	addTo: function (map) {
+		Control.prototype.addTo.call(this, map);
+		return this._expandIfNotCollapsed();
+	},
+	onRemove: function () {
+		this._map.off('zoomend', this._checkDisabledLayers, this);
+		for (var i = 0; i < this._layers.length; i++) {
+			this._layers[i].layer.off('add remove', this._onLayerChange, this);
+		}
+	},
+	addBaseLayer: function (layer, name) {
+		this._addLayer(layer, name);
+		return (this._map) ? this._update() : this;
+	},
+	addOverlay: function (layer, name) {
+		this._addLayer(layer, name, true);
+		return (this._map) ? this._update() : this;
+	},
+	removeLayer: function (layer) {
+		layer.off('add remove', this._onLayerChange, this);
+		var obj = this._getLayer(stamp(layer));
+		if (obj) {
+			this._layers.splice(this._layers.indexOf(obj), 1);
+		}
+		return (this._map) ? this._update() : this;
+	},
+	expand: function () {
+		addClass(this._container, 'atlas-control-layers-expanded');
+		this._section.style.height = null;
+		var acceptableHeight = this._map.getSize().y - (this._container.offsetTop + 50);
+		if (acceptableHeight < this._section.clientHeight) {
+			addClass(this._section, 'atlas-control-layers-scrollbar');
+			this._section.style.height = acceptableHeight + 'px';
+		} else {
+			removeClass(this._section, 'atlas-control-layers-scrollbar');
+		}
+		this._checkDisabledLayers();
+		return this;
+	},
+	collapse: function () {
+		removeClass(this._container, 'atlas-control-layers-expanded');
+		return this;
+	},
+	_initLayout: function () {
+		var className = 'atlas-control-layers',
+		    container = this._container = create$1('div', className),
+		    collapsed = this.options.collapsed;
+		container.setAttribute('aria-haspopup', true);
+		disableClickPropagation(container);
+		disableScrollPropagation(container);
+		var section = this._section = create$1('section', className + '-list');
+		if (collapsed) {
+			this._map.on('click', this.collapse, this);
+			on(container, {
+				mouseenter: this._expandSafely,
+				mouseleave: this.collapse
+			}, this);
+		}
+		var link = this._layersLink = create$1('a', className + '-toggle', container);
+		link.href = '#';
+		link.title = 'Layers';
+		link.setAttribute('role', 'button');
+		on(link, {
+			keydown: function (e) {
+				if (e.keyCode === 13) {
+					this._expandSafely();
+				}
+			},
+			click: function (e) {
+				preventDefault(e);
+				this._expandSafely();
+			}
+		}, this);
+		if (!collapsed) {
+			this.expand();
+		}
+		this._baseLayersList = create$1('div', className + '-base', section);
+		this._separator = create$1('div', className + '-separator', section);
+		this._overlaysList = create$1('div', className + '-overlays', section);
+		container.appendChild(section);
+	},
+	_getLayer: function (id) {
+		for (var i = 0; i < this._layers.length; i++) {
+			if (this._layers[i] && stamp(this._layers[i].layer) === id) {
+				return this._layers[i];
+			}
+		}
+	},
+	_addLayer: function (layer, name, overlay) {
+		if (this._map) {
+			layer.on('add remove', this._onLayerChange, this);
+		}
+		this._layers.push({
+			layer: layer,
+			name: name,
+			overlay: overlay
+		});
+		if (this.options.sortLayers) {
+			this._layers.sort(bind(function (a, b) {
+				return this.options.sortFunction(a.layer, b.layer, a.name, b.name);
+			}, this));
+		}
+		if (this.options.autoZIndex && layer.setZIndex) {
+			this._lastZIndex++;
+			layer.setZIndex(this._lastZIndex);
+		}
+		this._expandIfNotCollapsed();
+	},
+	_update: function () {
+		if (!this._container) { return this; }
+		empty(this._baseLayersList);
+		empty(this._overlaysList);
+		this._layerControlInputs = [];
+		var baseLayersPresent, overlaysPresent, i, obj, baseLayersCount = 0;
+		for (i = 0; i < this._layers.length; i++) {
+			obj = this._layers[i];
+			this._addItem(obj);
+			overlaysPresent = overlaysPresent || obj.overlay;
+			baseLayersPresent = baseLayersPresent || !obj.overlay;
+			baseLayersCount += !obj.overlay ? 1 : 0;
+		}
+		if (this.options.hideSingleBase) {
+			baseLayersPresent = baseLayersPresent && baseLayersCount > 1;
+			this._baseLayersList.style.display = baseLayersPresent ? '' : 'none';
+		}
+		this._separator.style.display = overlaysPresent && baseLayersPresent ? '' : 'none';
+		return this;
+	},
+	_onLayerChange: function (e) {
+		if (!this._handlingClick) {
+			this._update();
+		}
+		var obj = this._getLayer(stamp(e.target));
+		var type = obj.overlay ?
+			(e.type === 'add' ? 'overlayadd' : 'overlayremove') :
+			(e.type === 'add' ? 'baselayerchange' : null);
+		if (type) {
+			this._map.fire(type, obj);
+		}
+	},
+	_createRadioElement: function (name, checked) {
+		var radioHtml = '<input type="radio" class="atlas-control-layers-selector" name="' +
+				name + '"' + (checked ? ' checked="checked"' : '') + '/>';
+		var radioFragment = document.createElement('div');
+		radioFragment.innerHTML = radioHtml;
+		return radioFragment.firstChild;
+	},
+	_addItem: function (obj) {
+		var label = document.createElement('label'),
+		    checked = this._map.hasLayer(obj.layer),
+		    input;
+		if (obj.overlay) {
+			input = document.createElement('input');
+			input.type = 'checkbox';
+			input.className = 'atlas-control-layers-selector';
+			input.defaultChecked = checked;
+		} else {
+			input = this._createRadioElement('atlas-base-layers_' + stamp(this), checked);
+		}
+		this._layerControlInputs.push(input);
+		input.layerId = stamp(obj.layer);
+		on(input, 'click', this._onInputClick, this);
+		var name = document.createElement('span');
+		name.innerHTML = ' ' + obj.name;
+		var holder = document.createElement('span');
+		label.appendChild(holder);
+		holder.appendChild(input);
+		holder.appendChild(name);
+		var container = obj.overlay ? this._overlaysList : this._baseLayersList;
+		container.appendChild(label);
+		this._checkDisabledLayers();
+		return label;
+	},
+	_onInputClick: function () {
+		if (this._preventClick) {
+			return;
+		}
+		var inputs = this._layerControlInputs,
+		    input, layer;
+		var addedLayers = [],
+		    removedLayers = [];
+		this._handlingClick = true;
+		for (var i = inputs.length - 1; i >= 0; i--) {
+			input = inputs[i];
+			layer = this._getLayer(input.layerId).layer;
+			if (input.checked) {
+				addedLayers.push(layer);
+			} else if (!input.checked) {
+				removedLayers.push(layer);
+			}
+		}
+		for (i = 0; i < removedLayers.length; i++) {
+			if (this._map.hasLayer(removedLayers[i])) {
+				this._map.removeLayer(removedLayers[i]);
+			}
+		}
+		for (i = 0; i < addedLayers.length; i++) {
+			if (!this._map.hasLayer(addedLayers[i])) {
+				this._map.addLayer(addedLayers[i]);
+			}
+		}
+		this._handlingClick = false;
+		this._refocusOnMap();
+	},
+	_checkDisabledLayers: function () {
+		var inputs = this._layerControlInputs,
+		    input,
+		    layer,
+		    zoom = this._map.getZoom();
+		for (var i = inputs.length - 1; i >= 0; i--) {
+			input = inputs[i];
+			layer = this._getLayer(input.layerId).layer;
+			input.disabled = (layer.options.minZoom !== undefined && zoom < layer.options.minZoom) ||
+			                 (layer.options.maxZoom !== undefined && zoom > layer.options.maxZoom);
+		}
+	},
+	_expandIfNotCollapsed: function () {
+		if (this._map && !this.options.collapsed) {
+			this.expand();
+		}
+		return this;
+	},
+	_expandSafely: function () {
+		var section = this._section;
+		this._preventClick = true;
+		on(section, 'click', preventDefault);
+		this.expand();
+		var that = this;
+		setTimeout(function () {
+			off(section, 'click', preventDefault);
+			that._preventClick = false;
+		});
+	}
+  });
+  var Zoom = Control.extend({
+	options: {
+		position: 'topleft',
+		zoomInText: '<span aria-hidden="true">+</span>',
+		zoomInTitle: 'Zoom in',
+		zoomOutText: '<span aria-hidden="true">&#x2212;</span>',
+		zoomOutTitle: 'Zoom out'
+	},
+	onAdd: function (map) {
+		var zoomName = 'atlas-control-zoom',
+		    container = create$1('div', zoomName + ' atlas-bar'),
+		    options = this.options;
+		this._zoomInButton  = this._createButton(options.zoomInText, options.zoomInTitle,
+		        zoomName + '-in',  container, this._zoomIn);
+		this._zoomOutButton = this._createButton(options.zoomOutText, options.zoomOutTitle,
+		        zoomName + '-out', container, this._zoomOut);
+		this._updateDisabled();
+		map.on('zoomend zoomlevelschange', this._updateDisabled, this);
+		return container;
+	},
+	onRemove: function (map) {
+		map.off('zoomend zoomlevelschange', this._updateDisabled, this);
+	},
+	disable: function () {
+		this._disabled = true;
+		this._updateDisabled();
+		return this;
+	},
+	enable: function () {
+		this._disabled = false;
+		this._updateDisabled();
+		return this;
+	},
+	_zoomIn: function (e) {
+		if (!this._disabled && this._map._zoom < this._map.getMaxZoom()) {
+			this._map.zoomIn(this._map.options.zoomDelta * (e.shiftKey ? 3 : 1));
+		}
+	},
+	_zoomOut: function (e) {
+		if (!this._disabled && this._map._zoom > this._map.getMinZoom()) {
+			this._map.zoomOut(this._map.options.zoomDelta * (e.shiftKey ? 3 : 1));
+		}
+	},
+	_createButton: function (html, title, className, container, fn) {
+		var link = create$1('a', className, container);
+		link.innerHTML = html;
+		link.href = '#';
+		link.title = title;
+		link.setAttribute('role', 'button');
+		link.setAttribute('aria-label', title);
+		disableClickPropagation(link);
+		on(link, 'click', stop);
+		on(link, 'click', fn, this);
+		on(link, 'click', this._refocusOnMap, this);
+		return link;
+	},
+	_updateDisabled: function () {
+		var map = this._map,
+		    className = 'atlas-disabled';
+		removeClass(this._zoomInButton, className);
+		removeClass(this._zoomOutButton, className);
+		this._zoomInButton.setAttribute('aria-disabled', 'false');
+		this._zoomOutButton.setAttribute('aria-disabled', 'false');
+		if (this._disabled || map._zoom === map.getMinZoom()) {
+			addClass(this._zoomOutButton, className);
+			this._zoomOutButton.setAttribute('aria-disabled', 'true');
+		}
+		if (this._disabled || map._zoom === map.getMaxZoom()) {
+			addClass(this._zoomInButton, className);
+			this._zoomInButton.setAttribute('aria-disabled', 'true');
+		}
+	}
+  });
+  Map.mergeOptions({
+	zoomControl: true
+  });
+  Map.addInitHook(function () {
+	if (this.options.zoomControl) {
+		this.zoomControl = new Zoom();
+		this.addControl(this.zoomControl);
+	}
+  });
+  var Scale = Control.extend({
+	options: {
+		position: 'bottomleft',
+		maxWidth: 100,
+		metric: true,
+		imperial: true
+	},
+	onAdd: function (map) {
+		var className = 'atlas-control-scale',
+		    container = create$1('div', className),
+		    options = this.options;
+		this._addScales(options, className + '-line', container);
+		map.on(options.updateWhenIdle ? 'moveend' : 'move', this._update, this);
+		map.whenReady(this._update, this);
+		return container;
+	},
+	onRemove: function (map) {
+		map.off(this.options.updateWhenIdle ? 'moveend' : 'move', this._update, this);
+	},
+	_addScales: function (options, className, container) {
+		if (options.metric) {
+			this._mScale = create$1('div', className, container);
+		}
+		if (options.imperial) {
+			this._iScale = create$1('div', className, container);
+		}
+	},
+	_update: function () {
+		var map = this._map,
+		    y = map.getSize().y / 2;
+		var maxMeters = map.distance(
+			map.containerPointToLatLng([0, y]),
+			map.containerPointToLatLng([this.options.maxWidth, y]));
+		this._updateScales(maxMeters);
+	},
+	_updateScales: function (maxMeters) {
+		if (this.options.metric && maxMeters) {
+			this._updateMetric(maxMeters);
+		}
+		if (this.options.imperial && maxMeters) {
+			this._updateImperial(maxMeters);
+		}
+	},
+	_updateMetric: function (maxMeters) {
+		var meters = this._getRoundNum(maxMeters),
+		    label = meters < 1000 ? meters + ' m' : (meters / 1000) + ' km';
+		this._updateScale(this._mScale, label, meters / maxMeters);
+	},
+	_updateImperial: function (maxMeters) {
+		var maxFeet = maxMeters * 3.2808399,
+		    maxMiles, miles, feet;
+		if (maxFeet > 5280) {
+			maxMiles = maxFeet / 5280;
+			miles = this._getRoundNum(maxMiles);
+			this._updateScale(this._iScale, miles + ' mi', miles / maxMiles);
+		} else {
+			feet = this._getRoundNum(maxFeet);
+			this._updateScale(this._iScale, feet + ' ft', feet / maxFeet);
+		}
+	},
+	_updateScale: function (scale, text, ratio) {
+		scale.style.width = Math.round(this.options.maxWidth * ratio) + 'px';
+		scale.innerHTML = text;
+	},
+	_getRoundNum: function (num) {
+		var pow10 = Math.pow(10, (Math.floor(num) + '').length - 1),
+		    d = num / pow10;
+		d = d >= 10 ? 10 :
+		    d >= 5 ? 5 :
+		    d >= 3 ? 3 :
+		    d >= 2 ? 2 : 1;
+		return pow10 * d;
+	}
+  });
+  var ukrainianFlag = '<svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="12" height="8" viewBox="0 0 12 8" class="atlas-attribution-flag"><path fill="#4C7BE1" d="M0 0h12v4H0z"/><path fill="#FFD500" d="M0 4h12v3H0z"/><path fill="#E0BC00" d="M0 7h12v1H0z"/></svg>';
+  var Attribution = Control.extend({
+	options: {
+		position: 'bottomright',
+		prefix: '<a href="https://atlasjs.com" title="A JavaScript library for interactive maps">' + (Browser.inlineSvg ? ukrainianFlag + ' ' : '') + 'Atlas</a>'
+	},
+	initialize: function (options) {
+		setOptions(this, options);
+		this._attributions = {};
+	},
+	onAdd: function (map) {
+		map.attributionControl = this;
+		this._container = create$1('div', 'atlas-control-attribution');
+		disableClickPropagation(this._container);
+		for (var i in map._layers) {
+			if (map._layers[i].getAttribution) {
+				this.addAttribution(map._layers[i].getAttribution());
+			}
+		}
+		this._update();
+		map.on('layeradd', this._addAttribution, this);
+		return this._container;
+	},
+	onRemove: function (map) {
+		map.off('layeradd', this._addAttribution, this);
+	},
+	_addAttribution: function (ev) {
+		if (ev.layer.getAttribution) {
+			this.addAttribution(ev.layer.getAttribution());
+			ev.layer.once('remove', function () {
+				this.removeAttribution(ev.layer.getAttribution());
+			}, this);
+		}
+	},
+	setPrefix: function (prefix) {
+		this.options.prefix = prefix;
+		this._update();
+		return this;
+	},
+	addAttribution: function (text) {
+		if (!text) { return this; }
+		if (!this._attributions[text]) {
+			this._attributions[text] = 0;
+		}
+		this._attributions[text]++;
+		this._update();
+		return this;
+	},
+	removeAttribution: function (text) {
+		if (!text) { return this; }
+		if (this._attributions[text]) {
+			this._attributions[text]--;
+			this._update();
+		}
+		return this;
+	},
+	_update: function () {
+		if (!this._map) { return; }
+		var attribs = [];
+		for (var i in this._attributions) {
+			if (this._attributions[i]) {
+				attribs.push(i);
+			}
+		}
+		var prefixAndAttribs = [];
+		if (this.options.prefix) {
+			prefixAndAttribs.push(this.options.prefix);
+		}
+		if (attribs.length) {
+			prefixAndAttribs.push(attribs.join(', '));
+		}
+		this._container.innerHTML = prefixAndAttribs.join(' <span aria-hidden="true">|</span> ');
+	}
+  });
+  Map.mergeOptions({
+	attributionControl: true
+  });
+  Map.addInitHook(function () {
+	if (this.options.attributionControl) {
+		new Attribution().addTo(this);
+	}
+  });
+  Control.Layers = Layers;
+  Control.Zoom = Zoom;
+  Control.Scale = Scale;
+  Control.Attribution = Attribution;
+  var Handler = Class.extend({
+	initialize: function (map) {
+		this._map = map;
+	},
+	enable: function () {
+		if (this._enabled) { return this; }
+		this._enabled = true;
+		this.addHooks();
+		return this;
+	},
+	disable: function () {
+		if (!this._enabled) { return this; }
+		this._enabled = false;
+		this.removeHooks();
+		return this;
+	},
+	enabled: function () {
+		return !!this._enabled;
+	}
+  });
+  Handler.addTo = function (map, name) {
+	map.addHandler(name, this);
+	return this;
+  };
+  var Mixin = {Events: Events};
+  var START = Browser.touch ? 'touchstart mousedown' : 'mousedown';
+  var Draggable = Evented.extend({
+	options: {
+		clickTolerance: 3
+	},
+	initialize: function (element, dragStartTarget, preventOutline, options) {
+		setOptions(this, options);
+		this._element = element;
+		this._dragStartTarget = dragStartTarget || element;
+		this._preventOutline = preventOutline;
+	},
+	enable: function () {
+		if (this._enabled) { return; }
+		on(this._dragStartTarget, START, this._onDown, this);
+		this._enabled = true;
+	},
+	disable: function () {
+		if (!this._enabled) { return; }
+		if (Draggable._dragging === this) {
+			this.finishDrag(true);
+		}
+		off(this._dragStartTarget, START, this._onDown, this);
+		this._enabled = false;
+		this._moved = false;
+	},
+	_onDown: function (e) {
+		if (!this._enabled) { return; }
+		this._moved = false;
+		if (hasClass(this._element, 'atlas-zoom-anim')) { return; }
+		if (e.touches && e.touches.length !== 1) {
+			if (Draggable._dragging === this) {
+				this.finishDrag();
+			}
+			return;
+		}
+		if (Draggable._dragging || e.shiftKey || ((e.which !== 1) && (e.button !== 1) && !e.touches)) { return; }
+		Draggable._dragging = this;
+		if (this._preventOutline) {
+			preventOutline(this._element);
+		}
+		disableImageDrag();
+		disableTextSelection();
+		if (this._moving) { return; }
+		this.fire('down');
+		var first = e.touches ? e.touches[0] : e,
+		    sizedParent = getSizedParentNode(this._element);
+		this._startPoint = new Point(first.clientX, first.clientY);
+		this._startPos = getPosition(this._element);
+		this._parentScale = getScale(sizedParent);
+		var mouseevent = e.type === 'mousedown';
+		on(document, mouseevent ? 'mousemove' : 'touchmove', this._onMove, this);
+		on(document, mouseevent ? 'mouseup' : 'touchend touchcancel', this._onUp, this);
+	},
+	_onMove: function (e) {
+		if (!this._enabled) { return; }
+		if (e.touches && e.touches.length > 1) {
+			this._moved = true;
+			return;
+		}
+		var first = (e.touches && e.touches.length === 1 ? e.touches[0] : e),
+		    offset = new Point(first.clientX, first.clientY)._subtract(this._startPoint);
+		if (!offset.x && !offset.y) { return; }
+		if (Math.abs(offset.x) + Math.abs(offset.y) < this.options.clickTolerance) { return; }
+		offset.x /= this._parentScale.x;
+		offset.y /= this._parentScale.y;
+		preventDefault(e);
+		if (!this._moved) {
+			this.fire('dragstart');
+			this._moved = true;
+			addClass(document.body, 'atlas-dragging');
+			this._lastTarget = e.target || e.srcElement;
+			if (window.SVGElementInstance && this._lastTarget instanceof window.SVGElementInstance) {
+				this._lastTarget = this._lastTarget.correspondingUseElement;
+			}
+			addClass(this._lastTarget, 'atlas-drag-target');
+		}
+		this._newPos = this._startPos.add(offset);
+		this._moving = true;
+		this._lastEvent = e;
+		this._updatePosition();
+	},
+	_updatePosition: function () {
+		var e = {originalEvent: this._lastEvent};
+		this.fire('predrag', e);
+		setPosition(this._element, this._newPos);
+		this.fire('drag', e);
+	},
+	_onUp: function () {
+		if (!this._enabled) { return; }
+		this.finishDrag();
+	},
+	finishDrag: function (noInertia) {
+		removeClass(document.body, 'atlas-dragging');
+		if (this._lastTarget) {
+			removeClass(this._lastTarget, 'atlas-drag-target');
+			this._lastTarget = null;
+		}
+		off(document, 'mousemove touchmove', this._onMove, this);
+		off(document, 'mouseup touchend touchcancel', this._onUp, this);
+		enableImageDrag();
+		enableTextSelection();
+		var fireDragend = this._moved && this._moving;
+		this._moving = false;
+		Draggable._dragging = false;
+		if (fireDragend) {
+			this.fire('dragend', {
+				noInertia: noInertia,
+				distance: this._newPos.distanceTo(this._startPos)
+			});
+		}
+	}
+  });
+  var Drag = Handler.extend({
+	addHooks: function () {
+		if (!this._draggable) {
+			var map = this._map;
+			this._draggable = new Draggable(map._mapPane, map._container);
+			this._draggable.on({
+				dragstart: this._onDragStart,
+				drag: this._onDrag,
+				dragend: this._onDragEnd
+			}, this);
+			this._draggable.on('predrag', this._onPreDragLimit, this);
+			if (map.options.worldCopyJump) {
+				this._draggable.on('predrag', this._onPreDragWrap, this);
+				map.on('zoomend', this._onZoomEnd, this);
+				map.whenReady(this._onZoomEnd, this);
+			}
+		}
+		addClass(this._map._container, 'atlas-grab atlas-touch-drag');
+		this._draggable.enable();
+		this._positions = [];
+		this._times = [];
+	},
+	removeHooks: function () {
+		removeClass(this._map._container, 'atlas-grab');
+		removeClass(this._map._container, 'atlas-touch-drag');
+		this._draggable.disable();
+	},
+	moved: function () {
+		return this._draggable && this._draggable._moved;
+	},
+	moving: function () {
+		return this._draggable && this._draggable._moving;
+	},
+	_onDragStart: function () {
+		var map = this._map;
+		map._stop();
+		if (this._map.options.maxBounds && this._map.options.maxBoundsViscosity) {
+			var bounds = toLatLngBounds(this._map.options.maxBounds);
+			this._offsetLimit = toBounds(
+				this._map.latLngToContainerPoint(bounds.getNorthWest()).multiplyBy(-1),
+				this._map.latLngToContainerPoint(bounds.getSouthEast()).multiplyBy(-1)
+					.add(this._map.getSize()));
+			this._viscosity = Math.min(1.0, Math.max(0.0, this._map.options.maxBoundsViscosity));
+		} else {
+			this._offsetLimit = null;
+		}
+		map
+		    .fire('movestart')
+		    .fire('dragstart');
+		if (map.options.inertia) {
+			this._positions = [];
+			this._times = [];
+		}
+	},
+	_onDrag: function (e) {
+		if (this._map.options.inertia) {
+			var time = this._lastTime = +new Date(),
+			    pos = this._lastPos = this._draggable._absPos || this._draggable._newPos;
+			this._positions.push(pos);
+			this._times.push(time);
+			this._prunePositions(time);
+		}
+		this._map
+		    .fire('move', e)
+		    .fire('drag', e);
+	},
+	_prunePositions: function (time) {
+		while (this._positions.length > 1 && time - this._times[0] > 50) {
+			this._positions.shift();
+			this._times.shift();
+		}
+	},
+	_onZoomEnd: function () {
+		var pxCenter = this._map.getSize().divideBy(2),
+		    pxWorldCenter = this._map.latLngToLayerPoint([0, 0]);
+		this._initialWorldOffset = pxWorldCenter.subtract(pxCenter).x;
+		this._worldWidth = this._map.getPixelWorldBounds().getSize().x;
+	},
+	_viscousLimit: function (value, threshold) {
+		return value - (value - threshold) * this._viscosity;
+	},
+	_onPreDragLimit: function () {
+		if (!this._viscosity || !this._offsetLimit) { return; }
+		var offset = this._draggable._newPos.subtract(this._draggable._startPos);
+		var limit = this._offsetLimit;
+		if (offset.x < limit.min.x) { offset.x = this._viscousLimit(offset.x, limit.min.x); }
+		if (offset.y < limit.min.y) { offset.y = this._viscousLimit(offset.y, limit.min.y); }
+		if (offset.x > limit.max.x) { offset.x = this._viscousLimit(offset.x, limit.max.x); }
+		if (offset.y > limit.max.y) { offset.y = this._viscousLimit(offset.y, limit.max.y); }
+		this._draggable._newPos = this._draggable._startPos.add(offset);
+	},
+	_onPreDragWrap: function () {
+		var worldWidth = this._worldWidth,
+		    halfWidth = Math.round(worldWidth / 2),
+		    dx = this._initialWorldOffset,
+		    x = this._draggable._newPos.x,
+		    newX1 = (x - halfWidth + dx) % worldWidth + halfWidth - dx,
+		    newX2 = (x + halfWidth + dx) % worldWidth - halfWidth - dx,
+		    newX = Math.abs(newX1 + dx) < Math.abs(newX2 + dx) ? newX1 : newX2;
+		this._draggable._absPos = this._draggable._newPos.clone();
+		this._draggable._newPos.x = newX;
+	},
+	_onDragEnd: function (e) {
+		var map = this._map,
+		    options = map.options,
+		    noInertia = !options.inertia || e.noInertia || this._times.length < 2;
+		map.fire('dragend', e);
+		if (noInertia) {
+			map.fire('moveend');
+		} else {
+			this._prunePositions(+new Date());
+			var direction = this._lastPos.subtract(this._positions[0]),
+			    duration = (this._lastTime - this._times[0]) / 1000,
+			    ease = options.easeLinearity,
+			    speedVector = direction.multiplyBy(ease / duration),
+			    speed = speedVector.distanceTo([0, 0]),
+			    limitedSpeed = Math.min(options.inertiaMaxSpeed, speed),
+			    limitedSpeedVector = speedVector.multiplyBy(limitedSpeed / speed),
+			    decelerationDuration = limitedSpeed / (options.inertiaDeceleration * ease),
+			    offset = limitedSpeedVector.multiplyBy(-decelerationDuration / 2).round();
+			if (!offset.x && !offset.y) {
+				map.fire('moveend');
+			} else {
+				offset = map._limitOffset(offset, map.options.maxBounds);
+				requestAnimFrame(function () {
+					map.panBy(offset, {
+						duration: decelerationDuration,
+						easeLinearity: ease,
+						noMoveStart: true,
+						animate: true
+					});
+				});
+			}
+		}
+	}
+  });
+  var DoubleClickZoom = Handler.extend({
+	addHooks: function () {
+		this._map.on('dblclick', this._onDoubleClick, this);
+	},
+	removeHooks: function () {
+		this._map.off('dblclick', this._onDoubleClick, this);
+	},
+	_onDoubleClick: function (e) {
+		var map = this._map,
+		    oldZoom = map.getZoom(),
+		    delta = map.options.zoomDelta,
+		    zoom = e.originalEvent.shiftKey ? oldZoom - delta : oldZoom + delta;
+		if (map.options.doubleClickZoom === 'center') {
+			map.setZoom(zoom);
+		} else {
+			map.setZoomAround(e.containerPoint, zoom);
+		}
+	}
+  });
 }));
