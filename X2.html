@@ -2039,7 +2039,9 @@
           const h = this._map.canvas.height / this._map.dpr;
           // Calculate the new center by finding the lat/lon of a point
           // that is dx, dy pixels away from the current screen center.
-          this._map.center = this._map.screenToLatLon(w / 2 + dx, h / 2 + dy);
+          // The bearing is forced to 0 to ensure the pan is geographic (North, South, etc.)
+          // regardless of the map's actual rotation.
+          this._map.center = this._map.screenToLatLon(w / 2 + dx, h / 2 + dy, this._map.getZoom(), 0);
           this._map.render();
         }
       }
