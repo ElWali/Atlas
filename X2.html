@@ -1982,16 +1982,16 @@
 
       _onKeyDown(e) {
         let dx = 0, dy = 0;
-        const step = 1;
+        const panStepPx = 100; // The distance to pan in pixels
 
         if (e.key === "ArrowUp") {
-          dy = step;
+          dy = -panStepPx;
         } else if (e.key === "ArrowDown") {
-          dy = -step;
+          dy = panStepPx;
         } else if (e.key === "ArrowLeft") {
-          dx = -step;
+          dx = -panStepPx;
         } else if (e.key === "ArrowRight") {
-          dx = step;
+          dx = panStepPx;
         } else if (e.key.toLowerCase() === "n") {
           const w = this._map.canvas.width / this._map.dpr, h = this._map.canvas.height / this._map.dpr;
           this._map.animateZoomRotateAbout(w / 2, h / 2, this._map.getZoom(), 0, SNAP_DURATION);
@@ -2035,10 +2035,11 @@
 
         if (dx !== 0 || dy !== 0) {
           this._map.stopAnimations();
-          this._map.center = {
-            lat: GISUtils.clampLatitude(this._map.getCenter().lat + dy),
-            lon: GISUtils.wrapLongitude(this._map.getCenter().lon + dx)
-          };
+          const w = this._map.canvas.width / this._map.dpr;
+          const h = this._map.canvas.height / this._map.dpr;
+          // Calculate the new center by finding the lat/lon of a point
+          // that is dx, dy pixels away from the current screen center.
+          this._map.center = this._map.screenToLatLon(w / 2 + dx, h / 2 + dy);
           this._map.render();
         }
       }
