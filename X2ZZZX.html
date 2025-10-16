@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Atlas.js - Advanced Mapping Library</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <style>
+    /**
+     * Atlas.js - Main Stylesheet
+     * @version 1.0.0
+     */
+
+    :root {
+      --atlas-primary: #3388ff;
+      --atlas-secondary: #1890ff;
+      --atlas-success: #52c41a;
+      --atlas-warning: #faad14;
+      --atlas-danger: #ff4d4f;
+      --atlas-text: #333;
+      --atlas-border: #d9d9d9;
+      --atlas-bg: #fff;
+      --atlas-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      --atlas-radius: 4px;
+      --atlas-duration: 0.3s;
+      --atlas-ease: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: #f5f5f5;
+    }
+
+    /* Container */
+    .atlas-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    .atlas-map {
+      width: 100% !important;
+      height: 100% !important;
+      background-color: #e1e5e9;
+    }
+
+    /* Leaflet overrides */
+    .leaflet-container {
+      background-color: #e1e5e9;
+      font-family: inherit;
+    }
+
+    /* Controls */
+    .leaflet-control {
+      border-radius: var(--atlas-radius);
+      box-shadow: var(--atlas-shadow);
+    }
+
+    .leaflet-control-zoom {
+      background: var(--atlas-bg) !important;
+    }
+
+    .leaflet-control-zoom a {
+      background-color: var(--atlas-bg) !important;
+      color: var(--atlas-text) !important;
+      border-bottom: 1px solid var(--atlas-border) !important;
+      width: 36px !important;
+      height: 36px !important;
+      line-height: 36px !important;
+      font-size: 16px !important;
+      font-weight: bold;
+      transition: background-color var(--atlas-duration) var(--atlas-ease);
+    }
+
+    .leaflet-control-zoom a:first-child {
+      border-radius: var(--atlas-radius) var(--atlas-radius) 0 0;
+    }
+
+    .leaflet-control-zoom a:last-child {
+      border-radius: 0 0 var(--atlas-radius) var(--atlas-radius);
+      border-bottom: none !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background-color: var(--atlas-primary) !important;
+      color: white !important;
+    }
+
+    .leaflet-control-zoom a:active {
+      background-color: var(--atlas-secondary) !important;
+    }
+
+    /* Scale control */
+    .leaflet-control-scale {
+      background: var(--atlas-bg) !important;
+      padding: 8px 10px !important;
+      border-radius: var(--atlas-radius);
+      border: 1px solid var(--atlas-border) !important;
+      box-shadow: var(--atlas-shadow);
+    }
+
+    .leaflet-control-scale-line {
+      border: 1px solid var(--atlas-text) !important;
+      border-top: none;
+      color: var(--atlas-text);
+      font-size: 12px;
+      text-align: center;
+      padding: 4px 0 0;
+    }
+
+    /* Attribution */
+    .leaflet-attribution {
+      background: rgba(255, 255, 255, 0.8) !important;
+      color: var(--atlas-text) !important;
+      font-size: 11px;
+    }
+
+    .leaflet-attribution a {
+      color: var(--atlas-primary);
+      text-decoration: none;
+    }
+
+    .leaflet-attribution a:hover {
+      text-decoration: underline;
+    }
+
+    /* Popups */
+    .leaflet-popup {
+      margin-bottom: 18px;
+    }
+
+    .leaflet-popup-content-wrapper {
+      background: var(--atlas-bg);
+      border-radius: var(--atlas-radius);
+      box-shadow: var(--atlas-shadow);
+    }
+
+    .leaflet-popup-content {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--atlas-text);
+      max-width: 300px;
+    }
+
+    .atlas-popup {
+      padding: 12px;
+    }
+
+    .atlas-popup p {
+      margin: 8px 0;
+    }
+
+    .atlas-popup p:first-child {
+      margin-top: 0;
+    }
+
+    .atlas-popup p:last-child {
+      margin-bottom: 0;
+    }
+
+    .atlas-popup strong {
+      color: var(--atlas-primary);
+    }
+
+    .atlas-geojson-popup {
+      padding: 8px;
+    }
+
+    .atlas-geojson-popup p {
+      margin: 4px 0;
+      font-size: 13px;
+    }
+
+    /* Tooltips */
+    .leaflet-tooltip {
+      background: rgba(51, 136, 255, 0.9);
+      color: white;
+      border-radius: var(--atlas-radius);
+      border: none;
+      padding: 8px 12px;
+      font-size: 12px;
+      box-shadow: var(--atlas-shadow);
+    }
+
+    /* Markers */
+    .leaflet-marker-icon {
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .leaflet-marker-icon:hover {
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Hover effects */
+    .leaflet-interactive:hover {
+      stroke-opacity: 1;
+    }
+
+    /* Demo Styles */
+    .demo-container {
+      display: flex;
+      height: 100vh;
+    }
+
+    .demo-sidebar {
+      width: 320px;
+      background: white;
+      padding: 20px;
+      overflow-y: auto;
+      box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+    }
+
+    .demo-map-container {
+      flex: 1;
+      position: relative;
+    }
+
+    .demo-map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .demo-sidebar h2 {
+      margin-bottom: 15px;
+      color: #333;
+      font-size: 18px;
+    }
+
+    .demo-sidebar h3 {
+      margin-top: 20px;
+      margin-bottom: 10px;
+      color: #666;
+      font-size: 14px;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .button-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    button {
+      padding: 10px 15px;
+      background: #3388ff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #1890ff;
+    }
+
+    button:active {
+      background: #0956b1;
+    }
+
+    button.secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    button.secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .info-box {
+      background: #f9f9f9;
+      border-left: 3px solid #3388ff;
+      padding: 12px;
+      margin-top: 10px;
+      border-radius: 3px;
+      font-size: 12px;
+      color: #666;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .status {
+      padding: 10px;
+      background: #e6f7ff;
+      color: #0050b3;
+      border-radius: 3px;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+      margin-bottom: 5px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #d9d9d9;
+      border-radius: 3px;
+      font-size: 13px;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #3388ff;
+      box-shadow: 0 0 0 2px rgba(51, 136, 255, 0.2);
+    }
+
+    .counter {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      background: #f5f5f5;
+      border-radius: 3px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .counter-label {
+      font-weight: 500;
+    }
+
+    .counter-value {
+      color: #3388ff;
+      font-weight: bold;
+    }
+
+    /* Animation */
+    @keyframes atlas-pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(51, 136, 255, 0.7);
+      }
+      70% {
+        box-shadow: 0 0 0 10px rgba(51, 136, 255, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(51, 136, 255, 0);
+      }
+    }
+
+    .atlas-pulse {
+      animation: atlas-pulse 2s infinite;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .demo-sidebar {
+        width: 100%;
+        max-height: 300px;
+        position: absolute;
+        bottom: 0;
+        box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .demo-map-container {
+        height: calc(100vh - 300px);
+      }
+    }
+
+    /* Print styles */
+    @media print {
+      .leaflet-control {
+        display: none;
+      }
+
+      .atlas-map {
+        background: white;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="demo-container">
+    <div class="demo-sidebar">
+      <h2>🗺️ Atlas.js</h2>
+      <p style="font-size: 12px; color: #999; margin-bottom: 15px;">Advanced Mapping Library v1.0</p>
+
+      <h3>📍 Markers</h3>
+      <div class="button-group">
+        <button onclick="atlasApp.addMarker()">➕ Add Marker</button>
+        <button onclick="atlasApp.addSampleMarkers()" class="secondary">Add Sample Markers</button>
+        <button onclick="atlasApp.clearMarkers()" class="secondary">Clear All</button>
+      </div>
+
+      <h3>🎨 Shapes</h3>
+      <div class="button-group">
+        <button onclick="atlasApp.addPolylineExample()">📍 Add Polyline</button>
+        <button onclick="atlasApp.addPolygonExample()">🔷 Add Polygon</button>
+        <button onclick="atlasApp.addCircleExample()">⭕ Add Circle</button>
+        <button onclick="atlasApp.clearShapes()" class="secondary">Clear Shapes</button>
+      </div>
+
+      <h3>📊 GeoJSON</h3>
+      <div class="button-group">
+        <button onclick="atlasApp.addGeoJSONExample()">Add GeoJSON</button>
+      </div>
+
+      <h3>🎯 Controls</h3>
+      <div class="button-group">
+        <button onclick="atlasApp.fitBounds()">Fit Bounds</button>
+        <button onclick="atlasApp.zoomToNYC()" class="secondary">NYC</button>
+        <button onclick="atlasApp.saveState()">Save State</button>
+        <button onclick="atlasApp.restoreState()" class="secondary">Restore</button>
+      </div>
+
+      <h3>📈 Info</h3>
+      <div class="counter">
+        <span class="counter-label">Markers:</span>
+        <span class="counter-value" id="marker-count">0</span>
+      </div>
+      <div class="counter">
+        <span class="counter-label">Shapes:</span>
+        <span class="counter-value" id="shape-count">0</span>
+      </div>
+
+      <div class="info-box" id="info">
+        Click on the map or use buttons to get started!
+      </div>
+
+      <div class="status" id="status">✓ Ready</div>
+    </div>
+
+    <div class="demo-map-container">
+      <div id="map" class="demo-map"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <script>
+    /**
+     * Atlas.js - Complete Implementation
+     * @version 1.0.0
+     * @license MIT
+     */
+
+    // ========== UTILITIES ==========
+
+    const Validators = {
+      isValidLatitude: (lat) => typeof lat === 'number' && lat >= -90 && lat <= 90,
+      isValidLongitude: (lng) => typeof lng === 'number' && lng >= -180 && lng <= 180,
+      isValidCoordinates: (lat, lng) => Validators.isValidLatitude(lat) && Validators.isValidLongitude(lng),
+      isValidCoordinateArray: (coordinates) => 
+        Array.isArray(coordinates) && 
+        coordinates.length === 2 && 
+        Validators.isValidCoordinates(coordinates[0], coordinates[1]),
+      isValidPolylineCoordinates: (coordinates) =>
+        Array.isArray(coordinates) &&
+        coordinates.length >= 2 &&
+        coordinates.every(coord => Validators.isValidCoordinateArray(coord)),
+      isValidPolygonCoordinates: (coordinates) =>
+        Array.isArray(coordinates) &&
+        coordinates.length >= 1 &&
+        coordinates.every(ring =>
+          Array.isArray(ring) &&
+          ring.length >= 3 &&
+          ring.every(coord => Validators.isValidCoordinateArray(coord))
+        ),
+      isValidGeoJSON: (geoJSON) => {
+        if (!geoJSON || typeof geoJSON !== 'object') return false;
+        if (!geoJSON.type) return false;
+        const validTypes = [
+          'Point', 'MultiPoint', 'LineString', 'MultiLineString',
+          'Polygon', 'MultiPolygon', 'GeometryCollection',
+          'Feature', 'FeatureCollection'
+        ];
+        return validTypes.includes(geoJSON.type);
+      },
+      isValidColor: (color) => {
+        if (/^#[0-9A-F]{6}$/i.test(color)) return true;
+        if (/^rgba?KATEX_INLINE_OPEN/.test(color)) return true;
+        const namedColors = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'white', 'black', 'gray', 'grey', 'transparent'];
+        return namedColors.includes(color.toLowerCase());
+      },
+      isValidZoom: (zoom, minZoom = 0, maxZoom = 28) =>
+        typeof zoom === 'number' && Number.isInteger(zoom) && zoom >= minZoom && zoom <= maxZoom,
+      isValidRadius: (radius) => typeof radius === 'number' && radius > 0 && radius < 40075000,
+      sanitizeHTML: (html) => {
+        if (typeof html !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = html;
+        return div.innerHTML;
+      }
+    };
+
+    const Helpers = {
+      generateUniqueId: (prefix = 'atlas') => `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      deepMerge: (target, source) => {
+        const output = { ...target };
+        if (target !== null && typeof target === 'object' && source !== null && typeof source === 'object') {
+          Object.keys(source).forEach(key => {
+            if (source[key] !== null && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+              if (!(key in target)) {
+                output[key] = source[key];
+              } else {
+                output[key] = Helpers.deepMerge(target[key], source[key]);
+              }
+            } else {
+              output[key] = source[key];
+            }
+          });
+        }
+        return output;
+      },
+      calculateDistance: (lat1, lng1, lat2, lng2) => {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * (Math.PI / 180);
+        const dLng = (lng2 - lng1) * (Math.PI / 180);
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+          Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      },
+      getBoundsFromCoordinates: (coordinates) => {
+        let minLat = coordinates[0][0], maxLat = coordinates[0][0], minLng = coordinates[0][1], maxLng = coordinates[0][1];
+        coordinates.forEach(([lat, lng]) => {
+          minLat = Math.min(minLat, lat);
+          maxLat = Math.max(maxLat, lat);
+          minLng = Math.min(minLng, lng);
+          maxLng = Math.max(maxLng, lng);
+        });
+        return { minLat, maxLat, minLng, maxLng, center: [(minLat + maxLat) / 2, (minLng + maxLng) / 2] };
+      },
+      createSafePopupContent: (content) => {
+        if (typeof content === 'function') return Helpers.createSafePopupContent(content());
+        if (content instanceof HTMLElement) return content.outerHTML;
+        if (typeof content === 'object' && content !== null) return Validators.sanitizeHTML(JSON.stringify(content));
+        return Validators.sanitizeHTML(String(content));
+      }
+    };
+
+    // ========== DEFAULT OPTIONS ==========
+
+    const DEFAULT_OPTIONS = {
+      controls: { zoom: true, attribution: true, scale: true, layers: false },
+      interactive: { dragging: true, touchZoom: true, doubleClickZoom: true, scrollWheelZoom: true, keyboard: true },
+      display: { zoom: 13, center: [51.505, -0.09], minZoom: 1, maxZoom: 18 },
+      tiles: {
+        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+        attribution: '© OpenStreetMap contributors',
+        maxNativeZoom: 18
+      },
+      popup: { maxWidth: 300, minWidth: 50, autoClose: true, closeButton: true, closeOnClick: true },
+      tooltip: { offset: [0, 0], direction: 'auto', permanent: false, sticky: false, interactive: false, opacity: 0.9 },
+      defaultIcon: {
+        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+        shadowAnchor: [12, 41]
+      },
+      featureDefaults: {
+        polyline: { color: '#3388ff', weight: 3, opacity: 0.8, lineCap: 'round', lineJoin: 'round' },
+        polygon: { color: '#3388ff', weight: 2, opacity: 0.8, fillColor: '#3388ff', fillOpacity: 0.2 },
+        circle: { color: '#3388ff', weight: 2, opacity: 0.8, fillColor: '#3388ff', fillOpacity: 0.2 }
+      }
+    };
+
+    const EVENT_TYPES = {
+      MAP: { CLICK: 'map:click', DBLCLICK: 'map:dblclick', CONTEXTMENU: 'map:contextmenu', MOUSEMOVE: 'map:mousemove' },
+      ZOOM: { START: 'map:zoomstart', ZOOM: 'map:zoom', END: 'map:zoomend' },
+      PAN: { START: 'map:movestart', MOVE: 'map:move', END: 'map:moveend' }
+    };
+
+    // ========== EVENT MANAGER ==========
+
+    class EventManager {
+      constructor(map) {
+        this.map = map;
+        this.handlers = new Map();
+        this.eventListeners = [];
+        this.setupMapEvents();
+      }
+
+      setupMapEvents() {
+        this.map.on('click', (e) => this.emit(EVENT_TYPES.MAP.CLICK, e));
+        this.map.on('dblclick', (e) => this.emit(EVENT_TYPES.MAP.DBLCLICK, e));
+        this.map.on('contextmenu', (e) => this.emit(EVENT_TYPES.MAP.CONTEXTMENU, e));
+        this.map.on('mousemove', (e) => this.emit(EVENT_TYPES.MAP.MOUSEMOVE, e));
+        this.map.on('zoomstart', (e) => this.emit(EVENT_TYPES.ZOOM.START, e));
+        this.map.on('zoom', (e) => this.emit(EVENT_TYPES.ZOOM.ZOOM, e));
+        this.map.on('zoomend', (e) => this.emit(EVENT_TYPES.ZOOM.END, e));
+        this.map.on('movestart', (e) => this.emit(EVENT_TYPES.PAN.START, e));
+        this.map.on('move', (e) => this.emit(EVENT_TYPES.PAN.MOVE, e));
+        this.map.on('moveend', (e) => this.emit(EVENT_TYPES.PAN.END, e));
+      }
+
+      on(eventName, callback) {
+        if (typeof callback !== 'function') throw new TypeError('Callback must be a function');
+        if (!this.handlers.has(eventName)) this.handlers.set(eventName, new Set());
+        this.handlers.get(eventName).add(callback);
+        this.eventListeners.push({ eventName, callback });
+        return () => this.off(eventName, callback);
+      }
+
+      once(eventName, callback) {
+        const wrappedCallback = (...args) => {
+          callback(...args);
+          this.off(eventName, wrappedCallback);
+        };
+        return this.on(eventName, wrappedCallback);
+      }
+
+      off(eventName, callback) {
+        if (!this.handlers.has(eventName)) return;
+        this.handlers.get(eventName).delete(callback);
+        const index = this.eventListeners.findIndex((l) => l.eventName === eventName && l.callback === callback);
+        if (index > -1) this.eventListeners.splice(index, 1);
+      }
+
+      emit(eventName, data) {
+        const callbacks = this.handlers.get(eventName);
+        if (!callbacks || callbacks.size === 0) return;
+        callbacks.forEach((callback) => {
+          try {
+            callback(data);
+          } catch (error) {
+            console.error(`Error in event handler for ${eventName}:`, error);
+          }
+        });
+      }
+
+      getCenter() {
+        const center = this.map.getCenter();
+        return { lat: center.lat, lng: center.lng };
+      }
+
+      getZoom() {
+        return this.map.getZoom();
+      }
+
+      getBounds() {
+        const bounds = this.map.getBounds();
+        return {
+          northEast: { lat: bounds.getNorthEast().lat, lng: bounds.getNorthEast().lng },
+          southWest: { lat: bounds.getSouthWest().lat, lng: bounds.getSouthWest().lng }
+        };
+      }
+    }
+
+    // ========== LAYER MANAGER ==========
+
+    class LayerManager {
+      constructor(map, options = {}) {
+        this.map = map;
+        this.options = Helpers.deepMerge(DEFAULT_OPTIONS, options);
+        this.markers = new Map();
+        this.featureGroups = new Map();
+      }
+
+      addMarker(lat, lng, options = {}) {
+        if (!Validators.isValidCoordinates(lat, lng)) throw new Error('Invalid coordinates provided');
+
+        const markerConfig = {
+          draggable: options.draggable === true,
+          riseOnHover: options.riseOnHover !== false
+        };
+
+        if (options.icon) {
+          markerConfig.icon = this._createIcon(options.icon);
+        } else {
+          markerConfig.icon = this._createDefaultIcon();
+        }
+
+        const marker = L.marker([lat, lng], markerConfig).addTo(this.map);
+
+        if (options.id) this.markers.set(options.id, marker);
+
+        if (options.popup) {
+          const popupContent = Helpers.createSafePopupContent(options.popup);
+          marker.bindPopup(popupContent, this.options.popup);
+          marker.on('popupopen', () => options.onPopupOpen && options.onPopupOpen(marker));
+          marker.on('popupclose', () => options.onPopupClose && options.onPopupClose(marker));
+        }
+
+        if (options.tooltip) {
+          marker.bindTooltip(options.tooltip, this.options.tooltip);
+        }
+
+        marker.data = options.data || {};
+
+        if (options.onClick) marker.on('click', () => options.onClick(marker));
+
+        if (options.draggable) {
+          if (options.onDragStart) marker.on('dragstart', () => options.onDragStart(marker));
+          if (options.onDrag) marker.on('drag', () => options.onDrag(marker));
+          if (options.onDragEnd) marker.on('dragend', () => options.onDragEnd(marker));
+        }
+
+        if (options.onContextMenu) marker.on('contextmenu', () => options.onContextMenu(marker));
+
+        return marker;
+      }
+
+      addMarkers(locations, options = {}) {
+        if (!Array.isArray(locations)) throw new Error('Locations must be an array');
+        if (locations.length === 0) return L.featureGroup();
+
+        const featureGroup = L.featureGroup();
+        const addedMarkers = [];
+
+        locations.forEach((location, index) => {
+          try {
+            const { lat, lng } = location;
+            if (!Validators.isValidCoordinates(lat, lng)) {
+              console.warn(`Invalid coordinates at index ${index}:`, location);
+              return;
+            }
+
+            const markerOptions = {
+              id: options.idField ? location[options.idField] : `marker_${index}`,
+              popup: location.popup,
+              tooltip: location.tooltip,
+              icon: location.icon,
+              data: location.data,
+              draggable: options.draggable,
+              ...options.markerOptions
+            };
+
+            const marker = this.addMarker(lat, lng, markerOptions);
+            featureGroup.addLayer(marker);
+            addedMarkers.push(marker);
+          } catch (error) {
+            console.error(`Error adding marker at index ${index}:`, error);
+          }
+        });
+
+        if (options.groupId) {
+          this.featureGroups.set(options.groupId, { group: featureGroup, markers: addedMarkers });
+        }
+
+        return featureGroup;
+      }
+
+      removeMarker(markerId) {
+        const marker = this.markers.get(markerId);
+        if (!marker) return false;
+        this.map.removeLayer(marker);
+        this.markers.delete(markerId);
+        return true;
+      }
+
+      getMarker(markerId) {
+        return this.markers.get(markerId) || null;
+      }
+
+      clearMarkers() {
+        this.markers.forEach((marker) => this.map.removeLayer(marker));
+        this.markers.clear();
+      }
+
+      fitBounds(groupId = null) {
+        let layers = [];
+        if (groupId) {
+          const groupData = this.featureGroups.get(groupId);
+          if (groupData) layers = groupData.markers;
+        } else {
+          layers = Array.from(this.markers.values());
+        }
+
+        if (layers.length === 0) return;
+        if (layers.length === 1) {
+          this.map.setView(layers[0].getLatLng(), 15);
+          return;
+        }
+
+        const bounds = L.latLngBounds(layers.map((m) => m.getLatLng()));
+        if (bounds.isValid()) {
+          this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+        }
+      }
+
+      getMarkerCount() {
+        return this.markers.size;
+      }
+
+      _createDefaultIcon() {
+        return L.icon(this.options.defaultIcon);
+      }
+
+      _createIcon(iconConfig) {
+        if (!iconConfig) return this._createDefaultIcon();
+        const config = Helpers.deepMerge(this.options.defaultIcon, iconConfig);
+        return L.icon({
+          iconUrl: config.iconUrl,
+          shadowUrl: config.shadowUrl,
+          iconSize: config.iconSize,
+          iconAnchor: config.iconAnchor,
+          popupAnchor: config.popupAnchor,
+          shadowSize: config.shadowSize,
+          shadowAnchor: config.shadowAnchor
+        });
+      }
+    }
+
+    // ========== SHAPE MANAGER ==========
+
+    class ShapeManager {
+      constructor(map, options = {}) {
+        this.map = map;
+        this.options = Helpers.deepMerge(DEFAULT_OPTIONS, options);
+        this.shapes = new Map();
+      }
+
+      addPolyline(coordinates, options = {}) {
+        if (!Validators.isValidPolylineCoordinates(coordinates)) throw new Error('Invalid polyline coordinates');
+
+        const config = Helpers.deepMerge(this.options.featureDefaults.polyline, options);
+
+        const polyline = L.polyline(coordinates, config).addTo(this.map);
+
+        if (options.id) this.shapes.set(options.id, polyline);
+
+        if (options.popup) {
+          const popupContent = Helpers.createSafePopupContent(options.popup);
+          polyline.bindPopup(popupContent, this.options.popup);
+        }
+
+        if (options.tooltip) {
+          polyline.bindTooltip(options.tooltip, this.options.tooltip);
+        }
+
+        if (options.onClick) polyline.on('click', () => options.onClick(polyline));
+
+        polyline.on('mouseover', function() {
+          if (options.onMouseOver) options.onMouseOver(polyline);
+          this.setStyle({ weight: config.weight + 2, opacity: 1 });
+        });
+
+        polyline.on('mouseout', function() {
+          if (options.onMouseOut) options.onMouseOut(polyline);
+          this.setStyle({ weight: config.weight, opacity: config.opacity });
+        });
+
+        polyline.data = options.data || {};
+        return polyline;
+      }
+
+      addPolygon(coordinates, options = {}) {
+        if (!Validators.isValidPolygonCoordinates(coordinates)) throw new Error('Invalid polygon coordinates');
+
+        const config = Helpers.deepMerge(this.options.featureDefaults.polygon, options);
+
+        const polygon = L.polygon(coordinates, config).addTo(this.map);
+
+        if (options.id) this.shapes.set(options.id, polygon);
+
+        if (options.popup) {
+          const popupContent = Helpers.createSafePopupContent(options.popup);
+          polygon.bindPopup(popupContent, this.options.popup);
+        }
+
+        if (options.tooltip) {
+          polygon.bindTooltip(options.tooltip, this.options.tooltip);
+        }
+
+        if (options.onClick) polygon.on('click', () => options.onClick(polygon));
+
+        polygon.on('mouseover', function() {
+          if (options.onMouseOver) options.onMouseOver(polygon);
+          this.setStyle({ weight: config.weight + 1, opacity: 1, fillOpacity: Math.min(config.fillOpacity + 0.2, 1) });
+        });
+
+        polygon.on('mouseout', function() {
+          if (options.onMouseOut) options.onMouseOut(polygon);
+          this.setStyle({ weight: config.weight, opacity: config.opacity, fillOpacity: config.fillOpacity });
+        });
+
+        polygon.data = options.data || {};
+        return polygon;
+      }
+
+      addCircle(lat, lng, radius, options = {}) {
+        if (!Validators.isValidCoordinates(lat, lng)) throw new Error('Invalid coordinates provided');
+        if (!Validators.isValidRadius(radius)) throw new Error('Invalid radius provided');
+
+        const config = Helpers.deepMerge(this.options.featureDefaults.circle, options);
+
+        const circle = L.circle([lat, lng], { radius, ...config }).addTo(this.map);
+
+        if (options.id) this.shapes.set(options.id, circle);
+
+        if (options.popup) {
+          const popupContent = Helpers.createSafePopupContent(options.popup);
+          circle.bindPopup(popupContent, this.options.popup);
+        }
+
+        if (options.tooltip) {
+          circle.bindTooltip(options.tooltip, this.options.tooltip);
+        }
+
+        if (options.onClick) circle.on('click', () => options.onClick(circle));
+
+        circle.data = options.data || {};
+        return circle;
+      }
+
+      addCircleMarker(lat, lng, options = {}) {
+        if (!Validators.isValidCoordinates(lat, lng)) throw new Error('Invalid coordinates provided');
+
+        const config = Helpers.deepMerge({ radius: 8, fillColor: '#3388ff', color: '#000', weight: 2 }, options);
+
+        const circleMarker = L.circleMarker([lat, lng], config).addTo(this.map);
+
+        if (options.id) this.shapes.set(options.id, circleMarker);
+
+        circleMarker.data = options.data || {};
+        return circleMarker;
+      }
+
+      addRectangle(bounds, options = {}) {
+        if (!Array.isArray(bounds) || bounds.length !== 2) throw new Error('Invalid rectangle bounds');
+
+        const config = Helpers.deepMerge(this.options.featureDefaults.polygon, options);
+        const rectangle = L.rectangle(bounds, config).addTo(this.map);
+
+        if (options.id) this.shapes.set(options.id, rectangle);
+
+        rectangle.data = options.data || {};
+        return rectangle;
+      }
+
+      removeShape(shapeId) {
+        const shape = this.shapes.get(shapeId);
+        if (!shape) return false;
+        this.map.removeLayer(shape);
+        this.shapes.delete(shapeId);
+        return true;
+      }
+
+      clearShapes() {
+        this.shapes.forEach((shape) => this.map.removeLayer(shape));
+        this.shapes.clear();
+      }
+
+      getShapeCount() {
+        return this.shapes.size;
+      }
+    }
+
+    // ========== GEOJSON MANAGER ==========
+
+    class GeoJSONManager {
+      constructor(map, options = {}) {
+        this.map = map;
+        this.options = Helpers.deepMerge(DEFAULT_OPTIONS, options);
+        this.geoJSONLayers = new Map();
+        this.cache = new Map();
+      }
+
+      addGeoJSON(geoJSON, options = {}) {
+        if (!Validators.isValidGeoJSON(geoJSON)) throw new Error('Invalid GeoJSON format');
+
+        const geoJSONLayer = L.geoJSON(geoJSON, {
+          style: (feature) => this._getFeatureStyle(feature, options.style),
+          onEachFeature: (feature, layer) => this._handleFeatureInteraction(feature, layer, options),
+          filter: options.filter || (() => true),
+          pointToLayer: options.pointToLayer || ((feature, latlng) => L.circleMarker(latlng, { radius: 8, fillColor: '#3388ff', color: '#000', weight: 2 }))
+        }).addTo(this.map);
+
+        if (options.id) {
+          this.geoJSONLayers.set(options.id, { layer: geoJSONLayer, geoJSON, options });
+        }
+
+        return geoJSONLayer;
+      }
+
+      async loadGeoJSON(url, options = {}) {
+        if (this.cache.has(url)) {
+          return this.addGeoJSON(this.cache.get(url), options);
+        }
+
+        try {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+          const geoJSON = await response.json();
+          if (!Validators.isValidGeoJSON(geoJSON)) throw new Error('Invalid GeoJSON format from URL');
+
+          if (options.cache !== false) {
+            this.cache.set(url, geoJSON);
+          }
+
+          return this.addGeoJSON(geoJSON, options);
+        } catch (error) {
+          console.error('Error loading GeoJSON from URL:', error);
+          throw error;
+        }
+      }
+
+      _getFeatureStyle(feature, styleConfig) {
+        if (typeof styleConfig === 'function') return styleConfig(feature);
+        if (!styleConfig) return this.options.featureDefaults.geojson || this.options.featureDefaults.polygon;
+        return Helpers.deepMerge(this.options.featureDefaults.polygon || {}, styleConfig);
+      }
+
+      _handleFeatureInteraction(feature, layer, options) {
+        const popupContent = this._createFeaturePopup(feature, options);
+        if (popupContent) layer.bindPopup(popupContent, this.options.popup);
+
+        layer.on('mouseover', function() {
+          if (this.setStyle) this.setStyle({ weight: 4, opacity: 1, fillOpacity: 0.4 });
+          this.bringToFront();
+        });
+
+        layer.on('mouseout', function() {
+          if (this.setStyle) this.setStyle({ weight: 2, opacity: 0.8, fillOpacity: 0.2 });
+        });
+
+        if (options.onFeatureClick) {
+          layer.on('click', () => options.onFeatureClick(feature, layer));
+        }
+
+        if (options.onEachFeature) {
+          options.onEachFeature(feature, layer);
+        }
+
+        layer.data = feature.properties || {};
+      }
+
+      _createFeaturePopup(feature, options) {
+        if (options.popupContent) {
+          if (typeof options.popupContent === 'function') return options.popupContent(feature);
+          return Helpers.createSafePopupContent(options.popupContent);
+        }
+
+        const properties = feature.properties;
+        if (!properties || Object.keys(properties).length === 0) return null;
+
+        let html = '<div class="atlas-geojson-popup">';
+        Object.entries(properties).forEach(([key, value]) => {
+          const displayKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+          html += `<p><strong>${displayKey}:</strong> ${Helpers.createSafePopupContent(String(value))}</p>`;
+        });
+        html += '</div>';
+
+        return html;
+      }
+
+      removeGeoJSON(layerId) {
+        const layerData = this.geoJSONLayers.get(layerId);
+        if (!layerData) return false;
+        this.map.removeLayer(layerData.layer);
+        this.geoJSONLayers.delete(layerId);
+        return true;
+      }
+
+      clearAll() {
+        this.geoJSONLayers.forEach((layerData) => {
+          this.map.removeLayer(layerData.layer);
+        });
+        this.geoJSONLayers.clear();
+      }
+    }
+
+    // ========== ATLAS MAIN CLASS ==========
+
+    class Atlas {
+      constructor(container, options = {}) {
+        if (typeof container === 'string') {
+          this.container = document.getElementById(container);
+        } else {
+          this.container = container;
+        }
+
+        if (!this.container) throw new Error('Container element not found');
+
+        this.options = Helpers.deepMerge(DEFAULT_OPTIONS, options);
+
+        if (this.container.style.height === '') {
+          this.container.style.height = '100%';
+        }
+
+        this._initializeMap();
+        this.layers = new LayerManager(this.map, this.options);
+        this.shapes = new ShapeManager(this.map, this.options);
+        this.geoJSON = new GeoJSONManager(this.map, this.options);
+        this.events = new EventManager(this.map);
+
+        this._setupControls();
+        this._setupResponsive();
+
+        this.initialized = true;
+      }
+
+      _initializeMap() {
+        this.map = L.map(this.container, {
+          dragging: this.options.interactive.dragging,
+          touchZoom: this.options.interactive.touchZoom,
+          doubleClickZoom: this.options.interactive.doubleClickZoom,
+          scrollWheelZoom: this.options.interactive.scrollWheelZoom,
+          keyboard: this.options.interactive.keyboard,
+          zoomControl: false
+        }).setView(this.options.display.center, this.options.display.zoom);
+
+        L.tileLayer(this.options.tiles.url, {
+          attribution: this.options.tiles.attribution,
+          maxZoom: this.options.tiles.maxNativeZoom
+        }).addTo(this.map);
+
+        this.container.classList.add('atlas-container');
+        this.map._container.classList.add('atlas-map');
+      }
+
+      _setupControls() {
+        const { controls } = this.options;
+        this.map.zoomControl.remove();
+
+        if (controls.zoom) {
+          L.control.zoom({ position: 'topleft' }).addTo(this.map);
+        }
+
+        if (controls.scale) {
+          L.control.scale({ position: 'bottomleft' }).addTo(this.map);
+        }
+      }
+
+      _setupResponsive() {
+        if (window.ResizeObserver) {
+          const resizeObserver = new ResizeObserver(() => {
+            this.map.invalidateSize();
+          });
+          resizeObserver.observe(this.container);
+        }
+      }
+
+      // Marker methods
+      addMarker(lat, lng, options = {}) {
+        return this.layers.addMarker(lat, lng, options);
+      }
+
+      addMarkers(locations, options = {}) {
+        return this.layers.addMarkers(locations, options);
+      }
+
+      removeMarker(markerId) {
+        return this.layers.removeMarker(markerId);
+      }
+
+      getMarker(markerId) {
+        return this.layers.getMarker(markerId);
+      }
+
+      clearMarkers() {
+        this.layers.clearMarkers();
+      }
+
+      // Shape methods
+      addPolyline(coordinates, options = {}) {
+        return this.shapes.addPolyline(coordinates, options);
+      }
+
+      addPolygon(coordinates, options = {}) {
+        return this.shapes.addPolygon(coordinates, options);
+      }
+
+      addCircle(lat, lng, radius, options = {}) {
+        return this.shapes.addCircle(lat, lng, radius, options);
+      }
+
+      addCircleMarker(lat, lng, options = {}) {
+        return this.shapes.addCircleMarker(lat, lng, options);
+      }
+
+      addRectangle(bounds, options = {}) {
+        return this.shapes.addRectangle(bounds, options);
+      }
+
+      clearShapes() {
+        this.shapes.clearShapes();
+      }
+
+      // GeoJSON methods
+      addGeoJSON(geoJSON, options = {}) {
+        return this.geoJSON.addGeoJSON(geoJSON, options);
+      }
+
+      loadGeoJSON(url, options = {}) {
+        return this.geoJSON.loadGeoJSON(url, options);
+      }
+
+      // Map control methods
+      getCenter() {
+        return this.events.getCenter();
+      }
+
+      setCenter(lat, lng, zoom = null) {
+        if (zoom !== null) {
+          this.map.setView([lat, lng], zoom);
+        } else {
+          this.map.panTo([lat, lng]);
+        }
+      }
+
+      getZoom() {
+        return this.events.getZoom();
+      }
+
+      setZoom(zoom) {
+        if (!Validators.isValidZoom(zoom)) throw new Error('Invalid zoom level');
+        this.map.setZoom(zoom);
+      }
+
+      getBounds() {
+        return this.events.getBounds();
+      }
+
+      fitBounds(groupId = null) {
+        this.layers.fitBounds(groupId);
+      }
+
+      panTo(lat, lng, duration = 0.25) {
+        this.map.panTo([lat, lng], { duration });
+      }
+
+      zoomIn(delta = 1) {
+        this.map.setZoom(this.map.getZoom() + delta);
+      }
+
+      zoomOut(delta = 1) {
+        this.map.setZoom(this.map.getZoom() - delta);
+      }
+
+      // Event methods
+      on(eventName, callback) {
+        return this.events.on(eventName, callback);
+      }
+
+      once(eventName, callback) {
+        return this.events.once(eventName, callback);
+      }
+
+      off(eventName, callback) {
+        this.events.off(eventName, callback);
+      }
+
+      // Utility methods
+      remove(id) {
+        return this.layers.removeMarker(id) || this.shapes.removeShape(id) || this.geoJSON.removeGeoJSON(id);
+      }
+
+      clearAll() {
+        this.clearMarkers();
+        this.clearShapes();
+        this.geoJSON.clearAll();
+      }
+
+      getMap() {
+        return this.map;
+      }
+
+      getState() {
+        return {
+          center: this.getCenter(),
+          zoom: this.getZoom(),
+          bounds: this.getBounds(),
+          markerCount: this.layers.getMarkerCount(),
+          shapeCount: this.shapes.getShapeCount()
+        };
+      }
+
+      restoreState(state) {
+        if (state.center && state.zoom) {
+          this.setCenter(state.center.lat, state.center.lng, state.zoom);
+        }
+      }
+
+      destroy() {
+        this.events.removeAllListeners ? this.events.removeAllListeners() : null;
+        this.clearAll();
+        this.map.remove();
+        this.initialized = false;
+      }
+    }
+
+    // ========== DEMO APPLICATION ==========
+
+    const atlasApp = {
+      map: null,
+      savedState: null,
+
+      init() {
+        this.map = new Atlas('map', {
+          controls: { zoom: true, scale: true, attribution: true },
+          display: { center: [40.7128, -74.006], zoom: 13 },
+          interactive: { dragging: true, touchZoom: true, doubleClickZoom: true, scrollWheelZoom: true }
+        });
+
+        // Event listeners
+        this.map.on('map:click', (e) => {
+          const lat = e.latlng.lat.toFixed(4);
+          const lng = e.latlng.lng.toFixed(4);
+          document.getElementById('info').textContent = `Clicked: ${lat}, ${lng}`;
+        });
+
+        this.map.on('map:zoomend', () => {
+          this.updateStatus(`Zoom level: ${this.map.getZoom()}`);
+        });
+
+        this.updateCounters();
+      },
+
+      updateCounters() {
+        document.getElementById('marker-count').textContent = this.map.layers.getMarkerCount();
+        document.getElementById('shape-count').textContent = this.map.shapes.getShapeCount();
+      },
+
+      updateStatus(message) {
+        document.getElementById('status').textContent = '✓ ' + message;
+      },
+
+      addMarker() {
+        const lat = 40.7128 + (Math.random() - 0.5) * 0.1;
+        const lng = -74.006 + (Math.random() - 0.5) * 0.1;
+
+        this.map.addMarker(lat, lng, {
+          id: 'marker_' + Date.now(),
+          popup: `<h3>Marker</h3><p>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}</p>`,
+          tooltip: 'Click for details',
+          data: { createdAt: new Date().toLocaleTimeString() }
+        });
+
+        this.updateCounters();
+        this.updateStatus('Marker added');
+      },
+
+      addSampleMarkers() {
+        const landmarks = [
+          { lat: 40.7128, lng: -74.006, name: 'Statue of Liberty' },
+          { lat: 40.758, lng: -73.9855, name: 'Times Square' },
+          { lat: 40.7489, lng: -73.968, name: 'Grand Central' },
+          { lat: 40.7282, lng: -73.7949, name: 'Queens Museum' },
+          { lat: 40.6892, lng: -74.0445, name: 'Staten Island Ferry' }
+        ];
+
+        this.map.addMarkers(
+          landmarks.map((l) => ({
+            lat: l.lat,
+            lng: l.lng,
+            popup: `<h3>${l.name}</h3>`,
+            tooltip: l.name
+          })),
+          { groupId: 'landmarks' }
+        );
+
+        this.updateCounters();
+        this.updateStatus('Sample markers added');
+      },
+
+      clearMarkers() {
+        this.map.clearMarkers();
+        this.updateCounters();
+        this.updateStatus('All markers cleared');
+      },
+
+      addPolylineExample() {
+        this.map.addPolyline(
+          [[40.7128, -74.006], [40.758, -73.9855], [40.7489, -73.968]],
+          { id: 'polyline_' + Date.now(), color: '#ff0000', weight: 3, popup: 'Sample polyline' }
+        );
+
+        this.updateCounters();
+        this.updateStatus('Polyline added');
+      },
+
+      addPolygonExample() {
+        this.map.addPolygon(
+          [[[40.7128, -74.006], [40.758, -73.9855], [40.7489, -73.968], [40.7128, -74.006]]],
+          { id: 'polygon_' + Date.now(), color: '#3388ff', fillOpacity: 0.2, popup: 'Sample polygon' }
+        );
+
+        this.updateCounters();
+        this.updateStatus('Polygon added');
+      },
+
+      addCircleExample() {
+        this.map.addCircle(40.7128, -74.006, 2000, {
+          id: 'circle_' + Date.now(),
+          color: '#00ff00',
+          fillOpacity: 0.1,
+          popup: 'Radius: 2km'
+        });
+
+        this.updateCounters();
+        this.updateStatus('Circle added');
+      },
+
+      clearShapes() {
+        this.map.clearShapes();
+        this.updateCounters();
+        this.updateStatus('All shapes cleared');
+      },
+
+      addGeoJSONExample() {
+        const geoJSON = {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [-74.006, 40.7128] },
+              properties: { name: 'Statue of Liberty', type: 'monument' }
+            },
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [-73.9855, 40.758] },
+              properties: { name: 'Times Square', type: 'district' }
+            }
+          ]
+        };
+
+        this.map.addGeoJSON(geoJSON, {
+          id: 'geojson_' + Date.now(),
+          popupContent: (feature) => `<h3>${feature.properties.name}</h3><p>${feature.properties.type}</p>`
+        });
+
+        this.updateStatus('GeoJSON layer added');
+      },
+
+      fitBounds() {
+        this.map.fitBounds();
+        this.updateStatus('Fitted to bounds');
+      },
+
+      zoomToNYC() {
+        this.map.setCenter(40.7128, -74.006, 13);
+        this.updateStatus('Zoomed to NYC');
+      },
+
+      saveState() {
+        this.savedState = this.map.getState();
+        this.updateStatus('Map state saved');
+      },
+
+      restoreState() {
+        if (this.savedState) {
+          this.map.restoreState(this.savedState);
+          this.updateStatus('Map state restored');
+        } else {
+          this.updateStatus('No saved state');
+        }
+      }
+    };
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+      atlasApp.init();
+    });
+  </script>
+</body>
+</html>
