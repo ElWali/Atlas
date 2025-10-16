@@ -352,6 +352,50 @@
       border: 8px solid transparent;
       border-right-color: white;
     }
+    .atlas-notification-container {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        pointer-events: none;
+    }
+
+    .atlas-notification {
+        background-color: rgba(40, 40, 40, 0.85);
+        color: white;
+        padding: 10px 18px;
+        border-radius: 20px;
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        animation: atlas-notification-fade-in-out 5s ease-in-out forwards;
+        pointer-events: auto;
+        max-width: 80vw;
+        text-align: center;
+    }
+
+    @keyframes atlas-notification-fade-in-out {
+        0% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        10% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        90% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        100% {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+    }
   </style>
 </head>
 <body>
@@ -361,6 +405,7 @@
     <div id="zoom-overlay" aria-live="polite"></div>
     <div id="coords" aria-live="polite"></div>
     <div id="attribution"></div>
+    <div class="atlas-notification-container"></div>
   </div>
   <script>
     // --- Constants ---
@@ -1697,6 +1742,30 @@
       }
     }
 
+    class NotificationControl {
+        constructor(map) {
+            this._map = map;
+            this._container = map.container.querySelector('.atlas-notification-container');
+            if (!this._container) {
+                this._container = document.createElement('div');
+                this._container.className = 'atlas-notification-container';
+                this._map.container.appendChild(this._container);
+            }
+        }
+
+        show(message, duration = 5000) {
+            const notification = document.createElement('div');
+            notification.className = 'atlas-notification';
+            notification.textContent = message;
+
+            this._container.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, duration);
+        }
+    }
+
     // --- Base Handler Class ---
     class Handler {
       constructor(map) {
@@ -2729,6 +2798,8 @@
         this.addHandler('touchZoomRotate', TouchZoomRotateHandler);
         this.addHandler('keyboardPan', KeyboardPanHandler);
 
+        this.notifications = new NotificationControl(this);
+
         console.warn(
           `%c[Atlas] You are using map tiles.
 %cPlease comply with the respective tile usage policies.
@@ -3260,6 +3331,31 @@
     window.GeoJSONLayer = GeoJSONLayer;
     window.Layer = Layer;
 
+    function handleGeolocationError(message) {
+        console.warn(message);
+
+        if (!atlasInstance) {
+            atlasInstance = new Atlas("map");
+        }
+
+        atlasInstance.notifications.show("Could not determine location. Showing default map.");
+
+        const subdomains = ['a', 'b', 'c'];
+        const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
+        const osmLayer = new TileLayer(
+            `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
+            {
+                minZoom: 0,
+                maxZoom: 19,
+                attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+                background: "#e6e6e6",
+                supportsRetina: true,
+                maxCacheSize: 500
+            }
+        );
+        atlasInstance.setBaseLayer(osmLayer);
+    }
+
     function initializeAtlas() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
@@ -3333,42 +3429,10 @@
           atlasInstance.addLayer(geojsonLayer);
 
         }, (error) => {
-          console.warn("[Atlas] Geolocation failed:", error.message);
-          alert("Could not determine your location. Loading map with default view.");
-          atlasInstance = new Atlas("map");
-          const subdomains = ['a', 'b', 'c'];
-          const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-          const osmLayer = new TileLayer(
-            `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-            {
-              minZoom: 0,
-              maxZoom: 19,
-              attribution: '© <a href="https://www.openstreetMap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-              background: "#e6e6e6",
-              supportsRetina: true,
-              maxCacheSize: 500
-            }
-          );
-          atlasInstance.setBaseLayer(osmLayer);
+            handleGeolocationError(`[Atlas] Geolocation failed: ${error.message}. Loading map with default view.`);
         }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
       } else {
-        console.warn("[Atlas] Geolocation is not supported by this browser.");
-        alert("Geolocation is not supported by your browser. Loading map with default view.");
-        atlasInstance = new Atlas("map");
-        const subdomains = ['a', 'b', 'c'];
-        const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-        const osmLayer = new TileLayer(
-          `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-          {
-            minZoom: 0,
-            maxZoom: 19,
-            attribution: '© <a href="https://www.openstreetMap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-            background: "#e6e6e6",
-            supportsRetina: true,
-            maxCacheSize: 500
-          }
-        );
-        atlasInstance.setBaseLayer(osmLayer);
+        handleGeolocationError("[Atlas] Geolocation is not supported by this browser. Loading map with default view.");
       }
     }
 
