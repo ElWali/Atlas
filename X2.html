@@ -921,6 +921,7 @@
         this._onMouseMove = this._onMouseMove.bind(this);
         this._onMouseOut = this._onMouseOut.bind(this);
         this._onClick = this._onClick.bind(this);
+        this._hoveredFeature = null;
       }
 
       _normalizeGeoJSON(input) {
@@ -1144,18 +1145,29 @@
         const y = e.clientY - rect.top;
         const feature = this._hitDetect(x, y);
 
-        if (feature) {
-          this._map.canvas.style.cursor = 'pointer';
-          this.fire('mousemove', { originalEvent: e, feature });
-        } else {
+        if (this._hoveredFeature && this._hoveredFeature !== feature) {
+          this.fire('mouseout', { originalEvent: e, feature: this._hoveredFeature });
+          this._hoveredFeature = null;
           this._map.canvas.style.cursor = 'grab';
-          this.fire('mouseout', { originalEvent: e });
+        }
+
+        if (feature && this._hoveredFeature !== feature) {
+          this.fire('mouseover', { originalEvent: e, feature: feature });
+          this._hoveredFeature = feature;
+          this._map.canvas.style.cursor = 'pointer';
+        }
+
+        if (feature) {
+          this.fire('mousemove', { originalEvent: e, feature });
         }
       }
 
       _onMouseOut(e) {
-        this._map.canvas.style.cursor = 'grab';
-        this.fire('mouseout', { originalEvent: e });
+        if (this._hoveredFeature) {
+          this.fire('mouseout', { originalEvent: e, feature: this._hoveredFeature });
+          this._hoveredFeature = null;
+          this._map.canvas.style.cursor = 'grab';
+        }
       }
 
       _onClick(e) {
@@ -3243,6 +3255,10 @@
     }
 
     let atlasInstance = null;
+    window.Atlas = Atlas;
+    window.TileLayer = TileLayer;
+    window.GeoJSONLayer = GeoJSONLayer;
+    window.Layer = Layer;
 
     function initializeAtlas() {
       if (navigator.geolocation) {

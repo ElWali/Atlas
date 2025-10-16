@@ -1,5 +1,15 @@
 {
-  "dependencies": {
+  "name": "atlas-project",
+  "version": "1.0.0",
+  "description": "Testing for Atlas.js",
+  "main": "X2.html",
+  "scripts": {
+    "test": "npx playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
     "@playwright/test": "^1.56.0"
   }
 }
