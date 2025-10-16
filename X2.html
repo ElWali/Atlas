@@ -684,8 +684,9 @@
           img.src = url;
         });
 
+        let timeoutId;
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => {
+          timeoutId = setTimeout(() => {
             if (this.loadingTiles.has(key)) {
               controller.abort();
               console.warn(`[Atlas] Tile load timeout for: ${url}`);
@@ -699,6 +700,37 @@
             }
           }, TILE_LOAD_TIMEOUT_MS);
         });
+
+        img.onload = () => {
+          clearTimeout(timeoutId);
+          const loadTime = performance.now() - start;
+          console.log(`[Atlas] Tile ${key} loaded in ${loadTime.toFixed(2)}ms`);
+          tile.loaded = true;
+          tile.loadedAt = Date.now();
+          this.loadingTiles.delete(key);
+          this.loadingControllers.delete(key);
+          if (this._map) {
+            this._map.scheduleRender();
+          }
+          this.fire('tileload', { tile: key, url });
+          // Resolve the loadPromise here
+        };
+
+        img.onerror = (e) => {
+          clearTimeout(timeoutId);
+          if (signal.aborted) return;
+          console.warn(`[Atlas] Failed to load tile: ${url}`, e);
+          if (this.options.supportsRetina && url.includes(CONFIG.retinaSuffix)) {
+            this._retinaAvailable = false;
+            const nonRetinaUrl = url.replace(CONFIG.retinaSuffix, "");
+            img.src = nonRetinaUrl;
+            return;
+          }
+          this.loadingTiles.delete(key);
+          this.loadingControllers.delete(key);
+          this.fire('tileerror', { tile: key, url, error: e });
+          // Reject the loadPromise here
+        };
 
         try {
           await Promise.race([loadPromise, timeoutPromise]);
@@ -1060,7 +1092,23 @@
         }
       }
 
-      _pointInPolygon(x, y, ring) {
+      _pointInPolygon(x, y, rings) {
+        let inside = false;
+        // Check the outer ring first
+        if (this._pointInRing(x, y, rings[0])) {
+          inside = true;
+          // Now check the inner rings (holes)
+          for (let i = 1; i < rings.length; i++) {
+            if (this._pointInRing(x, y, rings[i])) {
+              inside = false; // Point is in a hole
+              break;
+            }
+          }
+        }
+        return inside;
+      }
+
+      _pointInRing(x, y, ring) {
         let inside = false;
         for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
           const xi = ring[i].x, yi = ring[i].y;
@@ -1071,35 +1119,52 @@
         return inside;
       }
 
-      _hitDetect(x, y) {
-        const viewKey = `${this._map.zoom.toFixed(6)}_${this._map.bearing}_${this._map.center.lon}_${this._map.center.lat}`;
-        if (!this._hitCache.has(viewKey)) {
-          const hitMap = new Map();
-          for (const feature of this._features) {
-            const geom = feature.geometry;
-            const processed = this._processFeature(feature);
-            if (!processed) continue;
-
-            switch (processed.type) {
-              case 'Point':
-                const dist = Math.hypot(x - processed.coordinates.x, y - processed.coordinates.y);
-                if (dist <= (this._getFeatureStyle(feature).radius || 5) + 5) {
-                  hitMap.set(`${x}_${y}`, feature);
-                }
-                break;
-              case 'Polygon':
-                for (const ring of processed.coordinates) {
-                  if (this._pointInPolygon(x, y, ring)) {
-                    hitMap.set(`${x}_${y}`, feature);
-                    break;
-                  }
-                }
-                break;
-            }
-          }
-          this._hitCache.set(viewKey, hitMap);
+      _pointOnLine(x, y, line, width) {
+        for (let i = 0; i < line.length - 1; i++) {
+          const p1 = line[i];
+          const p2 = line[i + 1];
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const lenSq = dx * dx + dy * dy;
+          if (lenSq === 0) continue;
+          let t = ((x - p1.x) * dx + (y - p1.y) * dy) / lenSq;
+          t = Math.max(0, Math.min(1, t));
+          const closeX = p1.x + t * dx;
+          const closeY = p1.y + t * dy;
+          const distSq = (x - closeX) * (x - closeX) + (y - closeY) * (y - closeY);
+          if (distSq < (width / 2) * (width / 2)) return true;
         }
-        return this._hitCache.get(viewKey).get(`${x}_${y}`) || null;
+        return false;
+      }
+
+      _hitDetect(x, y) {
+        // Iterate backwards to prioritize features rendered on top
+        for (let i = this._features.length - 1; i >= 0; i--) {
+          const feature = this._features[i];
+          const processed = this._processFeature(feature);
+          if (!processed) continue;
+          const style = this._getFeatureStyle(feature);
+
+          switch (processed.type) {
+            case 'Point':
+              const dist = Math.hypot(x - processed.coordinates.x, y - processed.coordinates.y);
+              if (dist <= (style.radius || 5) + 5) { // Add a 5px buffer
+                return feature;
+              }
+              break;
+            case 'LineString':
+              if (this._pointOnLine(x, y, processed.coordinates, (style.weight || 3) + 10)) { // Add a 10px buffer
+                return feature;
+              }
+              break;
+            case 'Polygon':
+              if (this._pointInPolygon(x, y, processed.coordinates)) {
+                return feature;
+              }
+              break;
+          }
+        }
+        return null;
       }
 
       _onMouseMove(e) {
@@ -1372,6 +1437,31 @@
         const container = document.createElement('div');
         container.className = 'atlas-layer-control';
 
+        const subdomains = ['a', 'b', 'c'];
+        const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
+        this._osmLayer = new TileLayer(
+          `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
+          {
+            minZoom: 0,
+            maxZoom: 19,
+            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
+            background: "#e6e6e6",
+            supportsRetina: true,
+            maxCacheSize: 500
+          }
+        );
+        this._esriLayer = new TileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            minZoom: 0,
+            maxZoom: 19,
+            attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener noreferrer">Esri World Imagery</a>',
+            background: "#000000",
+            supportsRetina: false,
+            maxCacheSize: 400
+          }
+        );
+
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'control-btn';
         toggleBtn.title = this.options.title;
@@ -1380,34 +1470,10 @@
         toggleBtn.onclick = () => {
           if (this._map) {
             const current = this._map.getBaseLayer();
-            if (!current || (current.urlTemplate && !current.urlTemplate.includes('arcgisonline'))) {
-              const esriLayer = new TileLayer(
-                "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-                {
-                  minZoom: 0,
-                  maxZoom: 19,
-                  attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener noreferrer">Esri World Imagery</a>',
-                  background: "#000000",
-                  supportsRetina: false,
-                  maxCacheSize: 400
-                }
-              );
-              this._map.setBaseLayer(esriLayer);
+            if (current === this._osmLayer) {
+              this._map.setBaseLayer(this._esriLayer);
             } else {
-              const subdomains = ['a', 'b', 'c'];
-              const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-              const osmLayer = new TileLayer(
-                `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-                {
-                  minZoom: 0,
-                  maxZoom: 19,
-                  attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-                  background: "#e6e6e6",
-                  supportsRetina: true,
-                  maxCacheSize: 500
-                }
-              );
-              this._map.setBaseLayer(osmLayer);
+              this._map.setBaseLayer(this._osmLayer);
             }
           }
         };
@@ -1486,17 +1552,18 @@
         container.appendChild(this._scaleBar);
         container.appendChild(this._scaleText);
 
-        this._scaleText.addEventListener('click', () => {
+        this._toggleUnit = () => {
           this._scaleText.dataset.unit = this._scaleText.dataset.unit === 'metric' ? 'imperial' : 'metric';
           this._update();
-        });
+        };
+        this._scaleText.addEventListener('click', this._toggleUnit);
 
         return container;
       }
 
       onRemove() {
         if (this._scaleText) {
-          this._scaleText.removeEventListener('click', this._update);
+          this._scaleText.removeEventListener('click', this._toggleUnit);
         }
       }
 
@@ -1957,13 +2024,16 @@
       _onTouchEnd(e) {
         if (!this._isPinching) return;
         const dt = performance.now() - this._pinchStartTime;
-        if (dt <= TWO_FINGER_TAP_MAX_DELAY && !this._pinchMoved) {
+        // Only fire two-finger tap if all fingers are lifted
+        if (e.touches.length === 0 && dt <= TWO_FINGER_TAP_MAX_DELAY && !this._pinchMoved) {
           const ax = this._pinchLastCenter ? this._pinchLastCenter.x : (this._map.canvas.width / this._map.dpr) / 2;
           const ay = this._pinchLastCenter ? this._pinchLastCenter.y : (this._map.canvas.height / this._map.dpr) / 2;
           this._map.animateZoomRotateAbout(ax, ay, this._map.getZoom() - 1, this._map.getBearing(), TAP_ZOOM_DURATION);
         }
-        this._isPinching = false;
-        this._removeMoveEvents();
+        if (e.touches.length < 2) {
+          this._isPinching = false;
+          this._removeMoveEvents();
+        }
       }
     }
 
@@ -1985,13 +2055,13 @@
         const panStepPx = 100; // The distance to pan in pixels
 
         if (e.key === "ArrowUp") {
-          dy = -panStepPx;
-        } else if (e.key === "ArrowDown") {
           dy = panStepPx;
+        } else if (e.key === "ArrowDown") {
+          dy = -panStepPx;
         } else if (e.key === "ArrowLeft") {
-          dx = -panStepPx;
-        } else if (e.key === "ArrowRight") {
           dx = panStepPx;
+        } else if (e.key === "ArrowRight") {
+          dx = -panStepPx;
         } else if (e.key.toLowerCase() === "n") {
           const w = this._map.canvas.width / this._map.dpr, h = this._map.canvas.height / this._map.dpr;
           this._map.animateZoomRotateAbout(w / 2, h / 2, this._map.getZoom(), 0, SNAP_DURATION);
@@ -2037,11 +2107,8 @@
           this._map.stopAnimations();
           const w = this._map.canvas.width / this._map.dpr;
           const h = this._map.canvas.height / this._map.dpr;
-          // Calculate the new center by finding the lat/lon of a point
-          // that is dx, dy pixels away from the current screen center.
-          // The bearing is forced to 0 to ensure the pan is geographic (North, South, etc.)
-          // regardless of the map's actual rotation.
-          this._map.center = this._map.screenToLatLon(w / 2 + dx, h / 2 + dy, this._map.getZoom(), 0);
+          // Pan relative to the screen, not geographically, by passing the current bearing.
+          this._map.center = this._map.screenToLatLon(w / 2 + dx, h / 2 + dy, this._map.getZoom(), this._map.getBearing());
           this._map.render();
         }
       }
@@ -2247,18 +2314,8 @@
 
       _updatePosition() {
         if (!this._iconElement || !this._map) return;
-
         const point = this._map.latLngToContainerPoint(this._latlng);
         this._iconElement.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, -100%)`;
-
-        if (this._isDragging) {
-          const newLatLng = this._map.screenToLatLon(point.x, point.y);
-          this._latlng = {
-            lat: GISUtils.clampLatitude(newLatLng.lat),
-            lon: GISUtils.wrapLongitude(newLatLng.lon)
-          };
-          this.fire('drag', { latlng: { ...this._latlng } });
-        }
       }
 
       _updateZIndex() {
@@ -2336,18 +2393,32 @@
         this.fire('dragstart');
       }
 
+      _onDragMove(clientX, clientY) {
+        const startPoint = this._map.latLngToContainerPoint(this._dragStart.latlng);
+        const dx = clientX - this._dragStart.x;
+        const dy = clientY - this._dragStart.y;
+        const newPoint = { x: startPoint.x + dx, y: startPoint.y + dy };
+        const newLatLng = this._map.screenToLatLon(newPoint.x, newPoint.y);
+
+        this._latlng = {
+          lat: GISUtils.clampLatitude(newLatLng.lat),
+          lon: GISUtils.wrapLongitude(newLatLng.lon)
+        };
+
+        this.fire('drag', { latlng: { ...this._latlng } });
+        this.render();
+      }
+
       _onMouseMove(e) {
         if (!this._isDragging) return;
         e.preventDefault();
-        this.render();
-        this._map.render();
+        this._onDragMove(e.clientX, e.clientY);
       }
 
       _onTouchMove(e) {
         if (!this._isDragging || e.touches.length !== 1) return;
         e.preventDefault();
-        this.render();
-        this._map.render();
+        this._onDragMove(e.touches[0].clientX, e.touches[0].clientY);
       }
 
       _onMouseUp() {
@@ -2632,10 +2703,17 @@
     // --- Professional Atlas Class (Updated to use Projection System) ---
     class Atlas {
       constructor(id, options = {}) {
-        Object.assign(CONFIG, options);
-        this.canvas = document.getElementById(id);
-        this.ctx = this.canvas.getContext("2d");
         this.container = document.getElementById("map-container");
+        if (!this.container) {
+          throw new Error('[Atlas] The required "map-container" element was not found in the DOM.');
+        }
+        this.canvas = document.getElementById(id);
+        if (!this.canvas) {
+          throw new Error(`[Atlas] The required canvas element with id "${id}" was not found in the DOM.`);
+        }
+        this.ctx = this.canvas.getContext("2d");
+
+        Object.assign(CONFIG, options);
         this.center = {
           lon: GISUtils.wrapLongitude(CONFIG.defaultCenter.lon),
           lat: GISUtils.clampLatitude(CONFIG.defaultCenter.lat)
@@ -3126,7 +3204,7 @@
         this.stopAnimations();
         const startT = performance.now();
         const sC = { ...this.center };
-        const eC = { ...center };
+        const eC = { lon: GISUtils.wrapLongitude(center.lon), lat: center.lat };
         const dLon = wrapDeltaLon(eC.lon - sC.lon);
         const dLat = eC.lat - sC.lat;
         const sZ = this.zoom, eZ = targetZoom;
@@ -3134,8 +3212,9 @@
         const step = () => {
           const t = (performance.now() - startT) / Math.max(1, duration);
           const p = t >= 1 ? 1 : easing(Math.max(0, Math.min(1, t)));
+          const currentLon = sC.lon + dLon * p;
           this.center = {
-            lon: GISUtils.wrapLongitude(sC.lon + dLon * p),
+            lon: t >= 1 ? GISUtils.wrapLongitude(currentLon) : currentLon,
             lat: GISUtils.clampLatitude(sC.lat + dLat * p)
           };
           this.zoom = sZ + (eZ - sZ) * p;
@@ -3187,6 +3266,7 @@
         }
 
         this.fire('unload');
+        this._events = {}; // Clear all event listeners
         console.log("[Atlas] Instance destroyed.");
       }
     }
