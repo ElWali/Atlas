@@ -476,23 +476,14 @@
     const DEG2RAD = Math.PI / 180;
 
     // --- Utility Functions ---
-    function normalizeAngle(rad) {
-      return Math.atan2(Math.sin(rad), Math.cos(rad));
-    }
-
-    function shortestAngleDiff(from, to) {
-      return normalizeAngle(to - from);
-    }
-
-    function wrapDeltaLon(delta) {
-      delta = ((delta + 180) % 360 + 360) % 360 - 180;
-      return delta;
-    }
-
-    function rot(x, y, ang) {
-      const c = Math.cos(ang), s = Math.sin(ang);
-      return { x: x * c - y * s, y: x * s + y * c };
-    }
+    const normalizeAngle = rad => Math.atan2(Math.sin(rad), Math.cos(rad));
+    const shortestAngleDiff = (from, to) => normalizeAngle(to - from);
+    const wrapDeltaLon = delta => (((delta + 180) % 360) + 360) % 360 - 180;
+    const rot = (x, y, ang) => {
+        const c = Math.cos(ang);
+        const s = Math.sin(ang);
+        return { x: x * c - y * s, y: x * s + y * c };
+    };
 
     // --- NEW: Projection System ---
     // Base Projection Class
@@ -1466,30 +1457,8 @@
         const container = document.createElement('div');
         container.className = 'atlas-layer-control';
 
-        const subdomains = ['a', 'b', 'c'];
-        const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-        this._osmLayer = new TileLayer(
-          `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-          {
-            minZoom: 0,
-            maxZoom: 19,
-            attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-            background: "#e6e6e6",
-            supportsRetina: true,
-            maxCacheSize: 500
-          }
-        );
-        this._esriLayer = new TileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          {
-            minZoom: 0,
-            maxZoom: 19,
-            attribution: 'Tiles © <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener noreferrer">Esri World Imagery</a>',
-            background: "#000000",
-            supportsRetina: false,
-            maxCacheSize: 400
-          }
-        );
+        this._osmLayer = TILE_LAYERS.OSM;
+        this._esriLayer = TILE_LAYERS.ESRI;
 
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'control-btn';
@@ -1497,14 +1466,14 @@
         toggleBtn.setAttribute('aria-label', this.options.title);
         toggleBtn.textContent = '🌐';
         toggleBtn.onclick = () => {
-          if (this._map) {
-            const current = this._map.getBaseLayer();
-            if (current === this._osmLayer) {
-              this._map.setBaseLayer(this._esriLayer);
-            } else {
-              this._map.setBaseLayer(this._osmLayer);
+            if (this._map) {
+                const current = this._map.getBaseLayer();
+                if (current === this._osmLayer) {
+                    this._map.setBaseLayer(this._esriLayer);
+                } else {
+                    this._map.setBaseLayer(this._osmLayer);
+                }
             }
-          }
         };
 
         container.appendChild(toggleBtn);
@@ -1821,8 +1790,8 @@
       }
 
       _addEvents() {
-        this._map.canvas.addEventListener('mousedown', this._onMouseDown = this._onMouseDown.bind(this));
-        this._map.canvas.addEventListener('touchstart', this._onTouchStart = this._onTouchStart.bind(this), { passive: false });
+        this._map.canvas.addEventListener('mousedown', this._onMouseDown);
+        this._map.canvas.addEventListener('touchstart', this._onTouchStart, { passive: false });
       }
 
       _removeEvents() {
@@ -1839,14 +1808,14 @@
         document.removeEventListener('touchcancel', this._onTouchEnd);
       }
 
-      _onMouseDown(e) {
+      _onMouseDown = (e) => {
         if (e.button !== 0) return; // Only left mouse button
         this._startDrag(e.clientX, e.clientY);
-        document.addEventListener('mousemove', this._onMouseMove = this._onMouseMove.bind(this));
-        document.addEventListener('mouseup', this._onMouseUp = this._onMouseUp.bind(this));
+        document.addEventListener('mousemove', this._onMouseMove);
+        document.addEventListener('mouseup', this._onMouseUp);
       }
 
-      _onMouseMove(e) {
+      _onMouseMove = (e) => {
         if (!this._isDragging) return;
         e.preventDefault();
         const dx = e.clientX - this._dragStart.x;
@@ -1858,20 +1827,20 @@
         this._map.render();
       }
 
-      _onMouseUp() {
+      _onMouseUp = () => {
         this._endDrag();
       }
 
-      _onTouchStart(e) {
+      _onTouchStart = (e) => {
         if (e.touches.length !== 1) return;
         e.preventDefault();
         this._startDrag(e.touches[0].clientX, e.touches[0].clientY);
-        document.addEventListener('touchmove', this._onTouchMove = this._onTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this._onTouchEnd = this._onTouchEnd.bind(this));
+        document.addEventListener('touchmove', this._onTouchMove, { passive: false });
+        document.addEventListener('touchend', this._onTouchEnd);
         document.addEventListener('touchcancel', this._onTouchEnd);
       }
 
-      _onTouchMove(e) {
+      _onTouchMove = (e) => {
         if (!this._isDragging || e.touches.length !== 1) return;
         e.preventDefault();
         const dx = e.touches[0].clientX - this._dragStart.x;
@@ -1883,7 +1852,7 @@
         this._map.render();
       }
 
-      _onTouchEnd() {
+      _onTouchEnd = () => {
         this._endDrag();
       }
 
@@ -1966,14 +1935,14 @@
       }
 
       _addEvents() {
-        this._map.canvas.addEventListener('wheel', this._onWheel = this._onWheel.bind(this), { passive: false });
+        this._map.canvas.addEventListener('wheel', this._onWheel, { passive: false });
       }
 
       _removeEvents() {
         this._map.canvas.removeEventListener('wheel', this._onWheel);
       }
 
-      _onWheel(e) {
+      _onWheel = (e) => {
         e.preventDefault();
         const dz = (e.deltaY < 0 ? WHEEL_ZOOM_STEP : -WHEEL_ZOOM_STEP);
         this._map.smoothZoomAt(e.clientX, e.clientY, dz);
@@ -1988,14 +1957,14 @@
       }
 
       _addEvents() {
-        this._map.canvas.addEventListener('dblclick', this._onDoubleClick = this._onDoubleClick.bind(this));
+        this._map.canvas.addEventListener('dblclick', this._onDoubleClick);
       }
 
       _removeEvents() {
         this._map.canvas.removeEventListener('dblclick', this._onDoubleClick);
       }
 
-      _onDoubleClick(e) {
+      _onDoubleClick = (e) => {
         e.preventDefault();
         this._map.animateZoomRotateAbout(e.clientX, e.clientY, this._map.getZoom() + 1, this._map.getBearing(), TAP_ZOOM_DURATION);
       }
@@ -2016,7 +1985,7 @@
       }
 
       _addEvents() {
-        this._map.canvas.addEventListener('touchstart', this._onTouchStart = this._onTouchStart.bind(this), { passive: false });
+        this._map.canvas.addEventListener('touchstart', this._onTouchStart, { passive: false });
       }
 
       _removeEvents() {
@@ -2030,16 +1999,16 @@
         document.removeEventListener('touchcancel', this._onTouchEnd);
       }
 
-      _onTouchStart(e) {
+      _onTouchStart = (e) => {
         if (e.touches.length < 2) return;
         e.preventDefault();
         this._startPinch(e);
-        document.addEventListener('touchmove', this._onTouchMove = this._onTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this._onTouchEnd = this._onTouchEnd.bind(this));
+        document.addEventListener('touchmove', this._onTouchMove, { passive: false });
+        document.addEventListener('touchend', this._onTouchEnd);
         document.addEventListener('touchcancel', this._onTouchEnd);
       }
 
-      _startPinch(e) {
+      _startPinch = (e) => {
         this._map.stopAnimations();
         this._isPinching = true;
         const t1 = e.touches[0], t2 = e.touches[1];
@@ -2053,7 +2022,7 @@
         this._pinchMoved = false;
       }
 
-      _onTouchMove(e) {
+      _onTouchMove = (e) => {
         if (!this._isPinching || e.touches.length < 2) return;
         e.preventDefault();
         const t1 = e.touches[0], t2 = e.touches[1];
@@ -2065,8 +2034,8 @@
         const targetBearing = normalizeAngle(this._pinchStartBearing + deltaAngle);
 
         if (Math.abs(Math.log(dist / Math.max(1, this._pinchStartDist))) > Math.log(1 + TWO_FINGER_TAP_MOVE_THRESH / Math.max(1, this._pinchStartDist)) ||
-          Math.abs(deltaAngle) > ROTATE_MOVE_THRESH_RAD) {
-          this._pinchMoved = true;
+            Math.abs(deltaAngle) > ROTATE_MOVE_THRESH_RAD) {
+            this._pinchMoved = true;
         }
 
         this._map.applyZoomRotateAbout(center.x, center.y, targetZoom, targetBearing, this._pinchAnchorLL);
@@ -2074,18 +2043,18 @@
         this._map.render();
       }
 
-      _onTouchEnd(e) {
+      _onTouchEnd = (e) => {
         if (!this._isPinching) return;
         const dt = performance.now() - this._pinchStartTime;
         // Only fire two-finger tap if all fingers are lifted
         if (e.touches.length === 0 && dt <= TWO_FINGER_TAP_MAX_DELAY && !this._pinchMoved) {
-          const ax = this._pinchLastCenter ? this._pinchLastCenter.x : (this._map.canvas.width / this._map.dpr) / 2;
-          const ay = this._pinchLastCenter ? this._pinchLastCenter.y : (this._map.canvas.height / this._map.dpr) / 2;
-          this._map.animateZoomRotateAbout(ax, ay, this._map.getZoom() - 1, this._map.getBearing(), TAP_ZOOM_DURATION);
+            const ax = this._pinchLastCenter ? this._pinchLastCenter.x : (this._map.canvas.width / this._map.dpr) / 2;
+            const ay = this._pinchLastCenter ? this._pinchLastCenter.y : (this._map.canvas.height / this._map.dpr) / 2;
+            this._map.animateZoomRotateAbout(ax, ay, this._map.getZoom() - 1, this._map.getBearing(), TAP_ZOOM_DURATION);
         }
         if (e.touches.length < 2) {
-          this._isPinching = false;
-          this._removeMoveEvents();
+            this._isPinching = false;
+            this._removeMoveEvents();
         }
       }
     }
@@ -2096,14 +2065,14 @@
       }
 
       _addEvents() {
-        window.addEventListener('keydown', this._onKeyDown = this._onKeyDown.bind(this));
+        window.addEventListener('keydown', this._onKeyDown);
       }
 
       _removeEvents() {
         window.removeEventListener('keydown', this._onKeyDown);
       }
 
-      _onKeyDown(e) {
+      _onKeyDown = (e) => {
         let dx = 0, dy = 0;
         const panStepPx = 100; // The distance to pan in pixels
 
@@ -2126,24 +2095,11 @@
           this._map.setBearing(this._map.getBearing() - DEG2RAD * 15);
           return;
         } else if (e.key === "s") {
-          const nextLayer = this._map.getBaseLayer() && this._map.getBaseLayer().urlTemplate && this._map.getBaseLayer().urlTemplate.includes('arcgisonline') ? 'OSM' : 'ESRI';
-          const layerConfig = LAYERS[nextLayer];
-          if (layerConfig) {
-            const urlTemplate = nextLayer === "ESRI" ?
-              "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" :
-              "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-            const subdomains = ['a', 'b', 'c'];
-            const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-            const finalUrl = urlTemplate.replace('{s}', randomSubdomain);
-            const newLayer = new TileLayer(finalUrl, {
-              minZoom: layerConfig.minZoom,
-              maxZoom: layerConfig.maxZoom,
-              attribution: layerConfig.attribution,
-              background: layerConfig.background,
-              supportsRetina: layerConfig.supportsRetina,
-              maxCacheSize: layerConfig.maxCacheSize
-            });
-            this._map.setBaseLayer(newLayer);
+          const current = this._map.getBaseLayer();
+          if (current === TILE_LAYERS.ESRI) {
+            this._map.setBaseLayer(TILE_LAYERS.OSM);
+          } else {
+            this._map.setBaseLayer(TILE_LAYERS.ESRI);
           }
           return;
         } else if (e.key === "+" || e.key === "=") {
@@ -3332,7 +3288,23 @@
     window.GeoJSONLayer = GeoJSONLayer;
     window.Layer = Layer;
 
-    function handleGeolocationError(message) {
+    // --- Shared Tile Layer Instances ---
+    const TILE_LAYERS = {
+        OSM: (() => {
+            const subdomains = ['a', 'b', 'c'];
+            const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
+            return new TileLayer(
+                `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
+                LAYERS.OSM
+            );
+        })(),
+        ESRI: new TileLayer(
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            LAYERS.ESRI
+        )
+    };
+
+    const handleGeolocationError = message => {
         console.warn(message);
 
         if (!atlasInstance) {
@@ -3340,24 +3312,10 @@
         }
 
         atlasInstance.notifications.show("Could not determine location. Showing default map.");
+        atlasInstance.setBaseLayer(TILE_LAYERS.OSM);
+    };
 
-        const subdomains = ['a', 'b', 'c'];
-        const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-        const osmLayer = new TileLayer(
-            `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-            {
-                minZoom: 0,
-                maxZoom: 19,
-                attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-                background: "#e6e6e6",
-                supportsRetina: true,
-                maxCacheSize: 500
-            }
-        );
-        atlasInstance.setBaseLayer(osmLayer);
-    }
-
-    function initializeAtlas() {
+    const initializeAtlas = () => {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(pos => {
           atlasInstance = new Atlas("map");
@@ -3365,21 +3323,7 @@
           const lon = pos.coords.longitude;
 
           atlasInstance.flyTo({ center: { lat, lon }, zoom: 10 });
-
-          const subdomains = ['a', 'b', 'c'];
-          const randomSubdomain = subdomains[Math.floor(Math.random() * subdomains.length)];
-          const osmLayer = new TileLayer(
-            `https://${randomSubdomain}.tile.openstreetmap.org/{z}/{x}/{y}.png`,
-            {
-              minZoom: 0,
-              maxZoom: 19,
-              attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>',
-              background: "#e6e6e6",
-              supportsRetina: true,
-              maxCacheSize: 500
-            }
-          );
-          atlasInstance.setBaseLayer(osmLayer);
+          atlasInstance.setBaseLayer(TILE_LAYERS.OSM);
 
           // Create a professional marker with popup
           const userMarker = new AtlasMarker({ lat, lon }, {
