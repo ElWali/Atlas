@@ -5,7 +5,7 @@ const path = require('path');
 test('the _loadTile promise should reject on failure', async ({ page }) => {
   // Load the HTML file to get the TileLayer class definition
   const html = fs.readFileSync(path.join(__dirname, '../X2.html'), 'utf-8');
-  await page.setContent(html);
+  await page.setContent(html, { waitUntil: 'load' });
 
   // Set a short timeout for the tile loading for this test
   await page.evaluate(() => {
@@ -13,7 +13,7 @@ test('the _loadTile promise should reject on failure', async ({ page }) => {
   });
 
   const promiseRejected = await page.evaluate(async () => {
-    const layer = new TileLayer('https://non-existent-domain.com/{z}/{x}/{y}.png');
+    const layer = new window.TileLayer('https://non-existent-domain.com/{z}/{x}/{y}.png');
     layer._map = { scheduleRender: () => {} }; // Mock the map object
 
     try {

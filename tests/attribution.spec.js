@@ -8,10 +8,10 @@ test('OpenStreetMap attribution link should be correct on initial load', async (
 
   // Load the HTML file
   const html = fs.readFileSync(path.join(__dirname, '../X2.html'), 'utf-8');
-  await page.setContent(html);
+  await page.setContent(html, { waitUntil: 'load' });
 
   // Wait for the map and attribution to be initialized
-  await page.waitForSelector('#attribution a');
+  await page.waitForSelector('#attribution a', { timeout: 30000 });
 
   // Get the href attribute of the OpenStreetMap link
   const attributionLink = await page.$eval('#attribution a', el => el.getAttribute('href'));

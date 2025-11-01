@@ -1,15 +1,21 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 
 test.describe('GeoJSONLayer Event Handling', () => {
   let page;
 
   test.beforeEach(async ({ browser }) => {
     page = await browser.newPage();
-    await page.goto('http://localhost:8000/X2.html');
+    const html = fs.readFileSync(path.join(__dirname, '../X2.html'), 'utf-8');
+    await page.setContent(html, { waitUntil: 'load' });
 
     // Manually initialize the map, centered on our test feature
     await page.evaluate(() => {
+      if (window.atlasInstance) {
+        window.atlasInstance.destroy();
+      }
       window.atlasInstance = new window.Atlas('map', {
         defaultCenter: { lon: -74.005, lat: 40.715 },
         defaultZoom: 15
