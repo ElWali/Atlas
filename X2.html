@@ -754,6 +754,7 @@
           if (!signal.aborted) {
             console.error("[Atlas] Tile loading failed or timed out:", error.message);
           }
+          throw error;
         }
 
         return tile;
