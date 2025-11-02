@@ -659,10 +659,7 @@
         let wrappedX = ((x % scale) + scale) % scale;
         const intX = Math.floor(wrappedX);
         const intY = Math.max(0, Math.min(scale - 1, Math.floor(y)));
-        let url = this.urlTemplate
-          .replace('{z}', z)
-          .replace('{x}', intX)
-          .replace('{y}', intY);
+        let url = this.urlTemplate.replace('{z}', z).replace('{x}', intX).replace('{y}', intY);
         if (this.options.supportsRetina && this._shouldRequestRetina()) {
           url += CONFIG.retinaSuffix;
         }
@@ -777,7 +774,7 @@
             this.loadingTiles.delete(token);
           };
 
-          img.src = url + (url.includes("?") ? "&" : "?") + "v=" + Date.now();
+          img.src = `${url}${url.includes("?") ? "&" : "?"}v=${Date.now()}`;
         };
 
         if ('requestIdleCallback' in window) {
@@ -3052,8 +3049,7 @@
         }
         this.loadingEl.classList.toggle("visible", loadingCount > 0);
         this.loadingCountEl.textContent = loadingCount;
-        this.coordsEl.textContent =
-          `${this.center.lat.toFixed(6)}°, ${this.center.lon.toFixed(6)}° | Z: ${this.zoom.toFixed(2)} | Bearing: ${(this.bearing * RAD2DEG).toFixed(1)}° | Layer: ${this._baseLayer ? 'Custom' : 'None'}`;
+        this.coordsEl.textContent = `${this.center.lat.toFixed(6)}°, ${this.center.lon.toFixed(6)}° | Z: ${this.zoom.toFixed(2)} | Bearing: ${(this.bearing * RAD2DEG).toFixed(1)}° | Layer: ${this._baseLayer ? 'Custom' : 'None'}`;
 
         this.updateControlsUI();
         this.fire('moveend');
@@ -3208,7 +3204,12 @@
         this.animateZoomRotateAbout(ax, ay, target, this.bearing, WHEEL_ZOOM_DURATION, EASING.easeInOutCubic);
       }
 
-      flyTo({ center = this.center, zoom = this.zoom, bearing = this.bearing, duration = FLYTO_DURATION, easing = EASING.easeInOutCubic } = {}) {
+      flyTo({ center, zoom, bearing, duration, easing } = {}) {
+        center = center || this.center;
+        zoom = zoom || this.zoom;
+        bearing = bearing || this.bearing;
+        duration = duration || FLYTO_DURATION;
+        easing = easing || EASING.easeInOutCubic;
         const minZoom = this._baseLayer ? this._baseLayer.getMinZoom() : 0;
         const maxZoom = this._baseLayer ? this._baseLayer.getMaxZoom() : 18;
         const targetZoom = Math.max(minZoom, Math.min(maxZoom, zoom));
