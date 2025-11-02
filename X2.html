@@ -1829,7 +1829,12 @@
       }
 
       _onTouchStart = (e) => {
-        if (e.touches.length !== 1) return;
+        if (e.touches.length !== 1) {
+          if (this._isDragging) {
+            this._endDrag();
+          }
+          return;
+        }
         e.preventDefault();
         this._startDrag(e.touches[0].clientX, e.touches[0].clientY);
         document.addEventListener('touchmove', this._onTouchMove, { passive: false });
@@ -1998,6 +2003,10 @@
 
       _onTouchStart = (e) => {
         if (e.touches.length < 2) return;
+        const dragPanHandler = this._map.getHandler('dragPan');
+        if (dragPanHandler && dragPanHandler._isDragging) {
+          dragPanHandler._endDrag();
+        }
         e.preventDefault();
         this._startPinch(e);
         document.addEventListener('touchmove', this._onTouchMove, { passive: false });
